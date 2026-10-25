@@ -146,3 +146,44 @@ describe("Scan-Wächter: keine ausgeschriebene Kopie des Direktaufruf-Vergleichs
     expect(treffer.map((t) => t.split(":")[0])).toEqual(["a", "a", "b", "b", "c"]);
   });
 });
+
+/** Geschlossene Musterliste für den Importweg: `import { …istDirektaufruf… } from "<Pfad>"` und `export { …istDirektaufruf… } from`. */
+const IMPORTWEG = /import\s*\{[^}]*\bistDirektaufruf\b[^}]*\}\s*from\s*["']([^"']+)["']/g;
+const REEXPORT = /export\s*\{[^}]*\bistDirektaufruf\b[^}]*\}\s*from/;
+
+/**
+ * Dateien, die `istDirektaufruf` aus einem anderen Modul als `direktaufruf.mjs` importieren oder weiterreichen (ein Importweg, kein Re-Export).
+ * Bekannte Grenze: nur die genannten Schreibweisen; die umgekehrte Schreibweise des Vergleichs (`process.argv[1] === fileURLToPath(…)`)
+ * erkennt der Scan oben nicht, ebenso keinen Import mit Alias (`istDirektaufruf as x`) oder `import()`.
+ */
+export function fremdeImportwege(dateien: string[], lies: (p: string) => string = (p) => readFileSync(p, "utf8")): string[] {
+  const treffer: string[] = [];
+  for (const d of dateien) {
+    const text = lies(d);
+    const name = d.slice(WURZEL.length).replaceAll("\\", "/");
+    for (const m of text.matchAll(IMPORTWEG)) if (!/(?:^|\/)direktaufruf\.mjs$/.test(m[1])) treffer.push(`${name}: importiert aus ${m[1]}`);
+    if (REEXPORT.test(text)) treffer.push(`${name}: reicht istDirektaufruf weiter`);
+  }
+  return treffer.sort();
+}
+
+describe("Scan-Wächter: ein Importweg für istDirektaufruf", () => {
+  const dateien = skriptDateien().filter((d) => !d.replaceAll("\\", "/").endsWith("scripts/direktaufruf.mjs"));
+
+  test("kein Skript importiert istDirektaufruf aus einem anderen Modul als direktaufruf.mjs, keines reicht es weiter", () => {
+    expect(fremdeImportwege(dateien)).toEqual([]);
+  });
+
+  test("Gegenprobe: fremder Importweg, Re-Export und mehrzeiliger Import werden erkannt, der richtige Weg nicht", () => {
+    const text: Record<string, string> = {
+      a: 'import { emit, istDirektaufruf } from "./hook-io.mjs";',
+      b: 'export { istDirektaufruf } from "./direktaufruf.mjs";',
+      c: 'import {\n  istDirektaufruf,\n  readStdin,\n} from "../hook-io.mjs";',
+      d: 'import { istDirektaufruf } from "./direktaufruf.mjs";',
+      e: 'import { istDirektaufruf } from "../direktaufruf.mjs";',
+      f: 'import { emit } from "./hook-io.mjs";',
+    };
+    const treffer = fremdeImportwege(Object.keys(text).map((k) => join(WURZEL, k)), (p) => text[p.slice(WURZEL.length)] ?? "");
+    expect(treffer).toEqual(["a: importiert aus ./hook-io.mjs", "b: reicht istDirektaufruf weiter", "c: importiert aus ../hook-io.mjs"]);
+  });
+});

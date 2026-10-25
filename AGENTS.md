@@ -6,7 +6,7 @@
 
 ## Kern-Regeln (Factory-Besitz)
 
-Projektneutraler Factory-Besitz: Änderungen nur upstream (`npm run check:factorydrift` nennt den Weg). Der Projekt-Block ergänzt und streicht nie; über allem steht dessen Projekt-Leitfrage („Oberste Regel“). Platzhalter `<gruppe.schlüssel>` setzt die Tabelle darunter ein.
+Projektneutraler Factory-Besitz: Änderungen nur upstream (`npm run check:factorydrift` nennt den Weg; ohne `.factory/sync-stand.json` ist dieses Repo selbst upstream). Der Projekt-Block ergänzt und streicht nie; über allem steht dessen Projekt-Leitfrage („Oberste Regel“). Platzhalter `<gruppe.schlüssel>` setzt die Tabelle darunter ein.
 
 <!-- factory:projektwerte:start -->
 Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwerte.mjs --write`, nicht von Hand ändern).

@@ -16,7 +16,8 @@
  */
 import { tmpdir } from "node:os";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
-import { emit, istDirektaufruf, liegtUnter, normalisierePfad, readStdin, toolGuardHook } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { emit, liegtUnter, normalisierePfad, readStdin, toolGuardHook } from "./hook-io.mjs";
 
 const istAbsolut = (p) => /^([a-z]:)?\//i.test(p);
 

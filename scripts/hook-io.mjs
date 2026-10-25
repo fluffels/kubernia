@@ -9,7 +9,6 @@
  */
 import { readFileSync } from "node:fs";
 import { posix } from "node:path";
-export { istDirektaufruf } from "./direktaufruf.mjs";
 
 /** Liest stdin komplett; bei Fehler (kein stdin) leerer Text. */
 export function readStdin() {

@@ -47,7 +47,8 @@ import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { diagnoseOrphans, entferneLensWorktrees, entferneVerwaisteDateien, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./worktree-aufraeumen.mjs";
-import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen)
 import { namenOderGrund, worktreeNamenOderGrund } from "./ticket-namen.mjs";
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 

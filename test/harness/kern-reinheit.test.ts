@@ -433,6 +433,16 @@ describe("begriffeAus", () => {
     assert.deepEqual(zaehle("Motorx xmotor motor_x 1motor", b2), {});
     assert.deepEqual(zaehle("Motor motor-frei Motor.Scene (Motor) MOTOR", b2), { Motor: 5 });
   });
+  test("projektliterale können keine Präfixe ausdrücken (Grenze): ein Wert mit Bindestrich oder Unterstrich am Ende trifft nie, Präfixe deckt Praefix/Env", () => {
+    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Bindestrich: "ZD-", Unterstrich: "ZD_" } });
+    assert.deepEqual(zaehle("ZD-12 ZD_X", b2), { Praefix: 1, Env: 1 });
+    assert.equal(b2.Bindestrich.test("ZD-12"), false);
+    assert.equal(b2.Unterstrich.test("ZD_X"), false);
+  });
+  test("projektliterale mit Bindestrich mitten im Wort (Unicode-Modus): zählt ganz, baut ohne SyntaxError", () => {
+    const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Doppel: "foo-bar" } });
+    assert.deepEqual(zaehle("foo-bar foo-barx xfoo-bar foo_bar", b2), { Doppel: 1 });
+  });
   test("projektliterale: ein Umlaut grenzt als Buchstabe, Nicht-Buchstaben davor und dahinter nicht", () => {
     const b2 = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, projektliterale: { Hof: "hof" } });
     assert.deepEqual(zaehle("Schöhof hofä", b2), {});

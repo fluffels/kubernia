@@ -7,7 +7,7 @@
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "../flag-lib.mjs";
-import { istDirektaufruf } from "../hook-io.mjs";
+import { istDirektaufruf } from "../direktaufruf.mjs";
 import { laufe } from "./lauf.mjs";
 import { QUELLEN } from "./registry.mjs";
 import { starteServer as starteServerStandard } from "./server.mjs";

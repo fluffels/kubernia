@@ -19,7 +19,8 @@
  */
 import { SHELL_VON_TOOL } from "./shell-tabellen.mjs";
 import { bewerte as bewerteGh } from "./gh-guard-hook.mjs";
-import { buildDenyOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { buildDenyOutput, emit, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 import { holdoutAuftragBlockade, parseHoldoutInput } from "./holdout-auftrag-guard.mjs";
 import { lensAuftragBlockade, parseAgentInput } from "./lens-auftrag-guard.mjs";
 import { bewerteStdinSkript } from "./stdin-skript-guard.mjs";

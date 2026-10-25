@@ -693,7 +693,7 @@ const boardIdRegex = (config) => {
 
 /** Die Projektliterale, die ein Kern nicht tragen soll, aus der Projekt-Config (#1611, #1741): Owner (Repo-Owner und Board-Besitzer),
  * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
- * wie `forum` zählt nie), Agentennamen, Skill-Namen (`skills`, ganze Wörter ohne Bindestrich-Anschluss) und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen). Präfix, Branch, Worktree, Label und Agent zählen
+ * wie `forum` zählt nie), Agentennamen, Skill-Namen (`skills`, ganze Wörter ohne Bindestrich-Anschluss) und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen; ein Wert, der auf `-` oder `_` endet, trifft darum nie: Präfixe decken `Praefix` und `Env` aus `praefixe.commitZeile` ab). Präfix, Branch, Worktree, Label und Agent zählen
  * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix).
  * @param {{ repo: string, boards: { besitzer: string, statusFeldId?: string | number }[], praefixe: { commitZeile: string, branch: string, worktree: string },
  *   labels: Record<string, string>, agenten: Record<string, string>, skills?: Record<string, string>, projektliterale?: Record<string, string> }} config
@@ -719,6 +719,7 @@ export function begriffeAus(config) {
   out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
   const skills = Object.values(config.skills ?? {});
   if (skills.length > 0) out.Skill = new RegExp(`(?<![\\w-])(?:${alternative(skills)})(?![\\w-])`, "g");
-  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(literal)}(?![\\p{L}\\p{N}_])`, "giu");
+  // Das `u`-Flag lehnt `\-` außerhalb einer Zeichenklasse ab, darum bleibt der Bindestrich unmaskiert.
+  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(literal).replaceAll(String.raw`\-`, "-")}(?![\\p{L}\\p{N}_])`, "giu");
   return out;
 }
