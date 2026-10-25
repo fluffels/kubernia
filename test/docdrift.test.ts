@@ -187,6 +187,7 @@ describe("Harness-Doku-Drift (#529)", () => {
     assert.equal(linkZiel("docs/adr/0009.md", "/AGENTS.md"), "AGENTS.md");
     assert.equal(linkZiel("AGENTS.md", "scripts/x.mjs:42"), "scripts/x.mjs");
     assert.equal(linkZiel("docs/a.md", "ordner/"), "docs/ordner", "Schrägstrich am Ende entfällt");
+    assert.equal(linkZiel("docs/a.md", ".."), "", "die Wurzel selbst ist der leere Pfad");
     assert.equal(linkZiel("docs/a.md", "../../x.md"), "../x.md", "über die Wurzel hinaus bleibt sichtbar");
   });
 

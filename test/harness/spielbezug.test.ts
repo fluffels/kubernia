@@ -53,7 +53,7 @@ describe("Projekt-Block der AGENTS.md (#1709, #1903)", () => {
   });
   test("die Spielquote im Projekt-Block ist an die Konstante der Auswahl gebunden (#1663 T5, #1935)", () => {
     const quote = SPIEL_QUOTE as number;
-    const zahlen = (re: RegExp): number[] => [...agents.matchAll(re)].map((m) => Number(m[1]));
+    const zahlen = (re: RegExp): number[] => [...projektBlock.matchAll(re)].map((m) => Number(m[1]));
     for (const re of [/nach (\d+) Produkt-Merges \(Spielquote 1:\d+/g, /Spielquote 1:(\d+)/g]) {
       const z = zahlen(re);
       assert.ok(z.length >= 1, `Muster ${re} trifft zu selten`);

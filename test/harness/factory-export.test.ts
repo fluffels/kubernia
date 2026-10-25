@@ -223,17 +223,23 @@ describe("entlinke (#1935)", () => {
   const e = (text: string) => lib.entlinke(text, SEITE, h);
 
   test("ein Link auf ein Ziel außerhalb des Exports wird zu seinem Text, ein Bild zu seinem Alt-Text", () => {
-    const r = e("Siehe [Spiel](../src/x.ts) und ![Skizze](tot.png) sowie [ok](b.md).");
-    assert.equal(r.text, "Siehe Spiel und Skizze sowie [ok](b.md).");
+    const r = e("Siehe ![Skizze](tot.png) und [Spiel](../src/x.ts) sowie [ok](b.md).");
+    assert.equal(r.text, "Siehe Skizze und Spiel sowie [ok](b.md).");
     assert.equal(r.links, 2);
     assert.equal(r.anker, 0);
-    assert.deepEqual([...r.ziele], [["src/x.ts", 1], ["docs/tot.png", 1]].sort(([a], [b]) => (String(a) < String(b) ? -1 : 1)));
+    assert.deepEqual([...r.ziele], [["docs/tot.png", 1], ["src/x.ts", 1]], "sortiert, obwohl die Einfüge-Reihenfolge eine andere ist");
   });
   test("ein toter Anker auf eine Export-Datei wird gestrichen, der Link bleibt (mit Titel erhalten)", () => {
     const r = e('[a](b.md#gibt-es-nicht) [b](b.md#titel "T") [c](b.md#zweiter-abschnitt)');
     assert.equal(r.text, '[a](b.md) [b](b.md#titel "T") [c](b.md#zweiter-abschnitt)');
     assert.equal(r.anker, 1);
     assert.equal(r.links, 0);
+  });
+  test("Links mit Titel: ein totes Ziel wird Text, ein toter Anker fällt weg und der Titel bleibt", () => {
+    const r = e('[t](tot.md "T") und [a](b.md#gibt-es-nicht "T2")');
+    assert.equal(r.text, 't und [a](b.md "T2")');
+    assert.equal(r.links, 1);
+    assert.equal(r.anker, 1);
   });
   test("ein toter Selbst-Anker macht den Link zum Text, ein lebender bleibt", () => {
     const r = e("# Kopf\n\n[x](#weg) und [y](#kopf)");
@@ -539,6 +545,22 @@ describe("Export aus HEAD", () => {
       assert.equal(r.bericht.entlinkt.anker, echt.bericht.entlinkt.anker + 1);
       assert.ok(r.bericht.entlinkt.ziele.some(([z, n]) => z === "docs/src/gibt-es-nicht-1935.ts" && n === 1));
     });
+    test("das Ziel-Prüfen des Einbaus: Ordner, Wurzel und Anker auf Nicht-Markdown bleiben unberührt", () => {
+      const zeile = "[O](../.claude/agents/) [W](../) [Z](../scripts/besitz-lib.mjs#L3)";
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, zeile) }) });
+      assert.deepEqual(r.befunde, []);
+      assert.ok(r.dateien.get(SEITE)?.text.includes(zeile));
+      assert.equal(r.bericht.entlinkt.links, echt.bericht.entlinkt.links);
+      assert.equal(r.bericht.entlinkt.anker, echt.bericht.entlinkt.anker);
+    });
+    test("dieselbe Zeile in einer Besitz-Markdown-Datei bleibt stehen", () => {
+      const md = ".agents/skills/review-lenses/SKILL.md";
+      const zeile = "[Probe](src/gibt-es-nicht-1935.ts)";
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [md]: zusatz(md, zeile) }) });
+      assert.deepEqual(r.befunde, []);
+      assert.ok(r.dateien.get(md)?.text.includes(zeile));
+      assert.equal(r.bericht.entlinkt.links, echt.bericht.entlinkt.links);
+    });
     test("dieselbe Zeile in einer Besitz-Datei bleibt stehen (nur Factory-Seiten werden entlinkt)", () => {
       const zeile = "// [Probe](src/gibt-es-nicht-1935.ts)";
       const r = ex.baueExport({ leser: mitAenderung(leser, { [KERN]: zusatz(KERN, zeile) }) });
@@ -548,8 +570,12 @@ describe("Export aus HEAD", () => {
     });
     test("der echte Export entlinkt Links (Zahl und Ziele im Bericht) und der Lauf nennt sie", () => {
       assert.ok(echt.bericht.entlinkt.links > 0);
+      const namen = echt.bericht.entlinkt.ziele.map(([z]) => z);
+      assert.deepEqual(namen, [...namen].sort((a, b) => (a < b ? -1 : 1)), "Ziele im Bericht sind sortiert");
       assert.equal(echt.bericht.entlinkt.ziele.reduce((s, [, n]) => s + n, 0), echt.bericht.entlinkt.links);
       const out = lauf(["--ziel", leerOrdner()], leser).out;
+      const [z0, n0] = echt.bericht.entlinkt.ziele[0] ?? ["", 0];
+      assert.ok(out.includes(`\n  ${z0}: ${n0}\n`), "je Ziel eine Zeile mit Anzahl");
       assert.match(out, new RegExp(`Factory-Seiten entlinkt: ${echt.bericht.entlinkt.links} Links auf ${echt.bericht.entlinkt.ziele.length} Ziele, ${echt.bericht.entlinkt.anker} Anker gestrichen`));
     });
   });

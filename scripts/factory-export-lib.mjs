@@ -78,7 +78,7 @@ export function entlinke(text, seitePfad, { gibt, ueberschriften }) {
         else {
           const orig = text.slice(s.start, s.ende);
           const i = orig.indexOf("](");
-          ersatz = orig.slice(0, i) + orig.slice(i).replace(s.target, s.path);
+          ersatz = orig.slice(0, i) + orig.slice(i).replace(s.target, () => s.path);
         }
       }
     }
