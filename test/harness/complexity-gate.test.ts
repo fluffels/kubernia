@@ -38,10 +38,10 @@ describe("Komplexitäts-Gate #502: Regel-Konfiguration bleibt scharf", () => {
 
   const gate = gateBlocks[0];
 
-  it("gilt NUR für Produktionscode (src/**), nicht für Tests/Tooling", () => {
+  it("gilt NUR für Produktionscode (src/**) und Tooling-Skripte (scripts/**), nicht für Tests", () => {
     // Test-Callbacks (describe/it) sind legitim lang – die Metrik zielt auf
-    // die Spiel-/Sim-/Wirtschaftslogik in src/, den Ort der God-Functions.
-    expect(gate.files).toEqual(["src/**/*.ts"]);
+    // die Spiel-/Sim-/Wirtschaftslogik in src/ und die Harness-Skripte in scripts/.
+    expect(gate.files).toEqual(["src/**/*.ts", "scripts/**/*.{js,mjs,cjs}"]);
   });
 
   it("hält complexity als Fehler bei höchstens 15 (Ticket-Vorgabe ~12-15)", () => {
@@ -112,13 +112,13 @@ describe("Komplexitäts-Gate #502: Suppressions-Baseline ist ehrlich", () => {
     expect(leaked, `Fremde Regel(n) in der Baseline: ${leaked.join(", ")}`).toEqual([]);
   });
 
-  it("Komplexitäts-Familie bleibt auf Produktionscode (src/**) beschränkt – kein Test/Tooling", () => {
-    const nonSrcWithComplexity = Object.entries(suppressions).filter(
-      ([file, rules]) => !file.startsWith("src/") && Object.keys(rules).some((r) => COMPLEXITY_RULES.has(r)),
+  it("Komplexitäts-Familie bleibt auf src/** und scripts/** beschränkt – kein Test", () => {
+    const ausserhalb = Object.entries(suppressions).filter(
+      ([file, rules]) => !file.startsWith("src/") && !file.startsWith("scripts/") && Object.keys(rules).some((r) => COMPLEXITY_RULES.has(r)),
     );
     expect(
-      nonSrcWithComplexity.map(([f]) => f),
-      `Komplexitäts-Suppression außerhalb src/**: ${nonSrcWithComplexity.map(([f]) => f).join(", ")}`,
+      ausserhalb.map(([f]) => f),
+      `Komplexitäts-Suppression außerhalb src/** und scripts/**: ${ausserhalb.map(([f]) => f).join(", ")}`,
     ).toEqual([]);
   });
 });
