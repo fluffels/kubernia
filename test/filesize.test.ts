@@ -24,7 +24,9 @@ import * as checkSize from "../scripts/check-size.mjs";
 import * as pcl from "../scripts/projekt-config-lib.mjs";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { listTrackedFiles } from "../scripts/check-basis.mjs";
+import * as rawBasis from "../scripts/check-basis.mjs";
+const listTrackedFiles = (rawBasis as unknown as { listTrackedFiles: (rootDir?: string) => string[] }).listTrackedFiles;
+const quelleDerConfig = (): string => (pcl as unknown as { strukturAus: (c: unknown) => { quelle: string }; ladeProjektConfig: () => unknown }).strukturAus((pcl as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig()).quelle;
 
 type Sized ={ file: string; loc: number; chars?: number };
 type Allow = { datei: string; grund: string };
@@ -91,7 +93,7 @@ describe("Dateigröße-Budget (#390)", () => {
   });
 
   test("Leerlauf-Schutz: jede getrackte, existierende .ts-Datei der Quellwurzel steht in der Messung", () => {
-    const quelle = pcl.strukturAus(pcl.ladeProjektConfig()).quelle;
+    const quelle = quelleDerConfig();
     const wurzel = fileURLToPath(new URL("../", import.meta.url));
     const gemessen = new Set(sizes.map((s) => s.file));
     const erwartet = listTrackedFiles(wurzel).filter((f) => f.startsWith(`${quelle}/`) && f.endsWith(".ts") && existsSync(`${wurzel}${f}`));
@@ -216,6 +218,6 @@ describe("Quellwurzel aus der Config (#1843)", () => {
   });
 
   test("ohne Quellwurzel gilt die der Projekt-Config (struktur.quelle), nicht ein fester Name", () => {
-    assert.deepEqual(collectSizes(), collectSizes(undefined, pcl.strukturAus(pcl.ladeProjektConfig()).quelle));
+    assert.deepEqual(collectSizes(), collectSizes(undefined, quelleDerConfig()));
   });
 });

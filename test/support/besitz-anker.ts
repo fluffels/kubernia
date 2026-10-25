@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 
-const { wirdVerteilt } = rawBesitz as unknown as { wirdVerteilt(e: { ring: string }): boolean };
+const { wirdVerteilt } = rawBesitz as unknown as { wirdVerteilt: (e: { ring: string }) => boolean };
 
 export interface BesitzEintragKurz {
   pfad: string;

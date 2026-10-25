@@ -27,7 +27,7 @@ import { escapeRe } from "../support/regex";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 
-const strukturAus = (rawPc as unknown as { strukturAus(config: unknown): { quelle: string } }).strukturAus;
+const strukturAus = (rawPc as unknown as { strukturAus: (config: unknown) => { quelle: string } }).strukturAus;
 
 const W = FREMD.praefixe.worktree;
 
