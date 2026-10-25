@@ -31,8 +31,11 @@
  * test/harness/agents-md-native.test.ts. Ausführen mit:  npm test
  */
 import { execFileSync } from "node:child_process";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { besitzAnker } from "../support/besitz-anker";
+import { fixture } from "../support/tmp-fixture";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const git = (args: string[], input?: string) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8", input });
@@ -127,24 +130,42 @@ describe(".claude/ wird mit LF ausgecheckt (#1026)", () => {
     const eol = git(["ls-files", "--eol"]).split("\n").filter(Boolean);
     const binaer = new Set(eol.filter((z) => z.startsWith("i/-text")).map((z) => z.split("\t")[1]));
     const text = alle.filter((p) => !binaer.has(p));
-    expect(text.length).toBeGreaterThan(500);
+    // Leerlauf-Schutz (#1933): jede verteilte Besitz-Datei liegt im Scan (statt einer Größenschwelle des Projekts).
+    const anker = besitzAnker(() => true);
+    const alleSet = new Set(text);
+    for (const a of anker) expect(alleSet.has(a), `${a} fehlt im Scan`).toBe(true);
     expect(eolOhneLf(text)).toEqual([]);
   });
 
   it("deckt auch künftige Pfade außerhalb von .claude/ ab (#1476)", () => {
-    expect(eolOhneLf(["docs/neu.md", "src/neu.ts", "test/neu.test.ts"])).toEqual([]);
+    expect(eolOhneLf(["docs/neu.md", "neu/modul.ts", "test/neu.test.ts"])).toEqual([]);
   });
 
-  it("Binär-Assets bleiben i/-text (text=auto fasst sie nicht an)", () => {
-    const png = git(["ls-files", "--eol", "--", "assets/pixellab/*.png"]).split("\n").filter(Boolean);
-    expect(png.length).toBeGreaterThan(0);
-    for (const zeile of png) expect(zeile.startsWith("i/-text")).toBe(true);
-    // `i/-text` ist nur die Inhaltserkennung des Blobs; dass Git die Dateien auch künftig nicht als Text
-    // normalisiert, hängt an `text=auto` (ein `* text` würde sie beim nächsten `git add` anfassen).
-    const pfade = git(["ls-files", "-z", "--", "assets/pixellab/*.png"]).split("\0").filter(Boolean);
-    expect(pfade.length).toBe(png.length);
-    const werte = attrWerte("text", pfade);
-    expect(werte.size).toBe(pfade.length);
+  it("Binärdateien des Index (i/-text) haben text=auto (die Menge darf leer sein)", () => {
+    const eol = git(["ls-files", "--eol"]).split("\n").filter(Boolean);
+    const binaer = eol.filter((z) => z.startsWith("i/-text")).map((z) => z.split("\t")[1]);
+    const werte = attrWerte("text", binaer);
+    expect(werte.size).toBe(binaer.length);
+    for (const wert of werte.values()) expect(wert).toBe("auto");
+  });
+
+  it("Fixture: eine Binärdatei bleibt i/-text und text=auto (Leerlauf-Schutz des Binär-Checks)", () => {
+    const wurzel = fixture({ bild: "" });
+    const repo = `${wurzel}/repo`;
+    mkdirSync(repo);
+    copyFileSync(`${REPO_ROOT}.gitattributes`, `${repo}/.gitattributes`);
+    writeFileSync(`${repo}/bild.png`, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d, 0x0a, 0x00, 0x1a, 0x0a]));
+    const gitIn = (args: string[], input?: string) => execFileSync("git", args, { cwd: repo, encoding: "utf8", input });
+    gitIn(["init", "-q"]);
+    gitIn(["add", "-A"]);
+    const zeile = gitIn(["ls-files", "--eol", "--", "bild.png"]);
+    expect(zeile.startsWith("i/-text"), zeile).toBe(true);
+    expect(gitIn(["check-attr", "text", "--", "bild.png"]).trim().endsWith(": text: auto")).toBe(true);
+  });
+
+  it("text=auto gilt auch für hypothetische Bildpfade (Wurzel und Unterordner)", () => {
+    const werte = attrWerte("text", ["bild.png", "x/bild.png"]);
+    expect(werte.size).toBe(2);
     for (const wert of werte.values()) expect(wert).toBe("auto");
   });
 

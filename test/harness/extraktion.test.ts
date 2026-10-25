@@ -63,7 +63,6 @@ const PROJEKT_CONFIG = ".factory/projekt.json";
 const DATEN_DATEI = "Daten-Datei des Kern-Wächters (Baseline oder Abdeckung): ihre Werte sind Projektzustand, der Export entscheidet über Mitgabe oder Neuerzeugung (#1880)";
 /** Offene Ausnahmen der Test-Hülle: "<von> -> <nach>" → Grund mit Ticket (K6 #1876 bis #1879, K7 #1880). Darf nur schrumpfen. */
 export const TEST_HUELLE_AUSNAHMEN: Record<string, string> = {
-  "test/harness/emoji-ratchet.test.ts -> test/harness/emoji-baseline.json": DATEN_DATEI,
   "test/harness/harness-inventar.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,
   "test/harness/kern-links.test.ts -> test/harness/kern-links-baseline.json": DATEN_DATEI,
   "test/harness/kern-reinheit.test.ts -> test/harness/kern-abdeckung.json": DATEN_DATEI,

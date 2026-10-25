@@ -22,6 +22,12 @@ import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
 import { echteConfig, umschriftAus } from "../support/echte-sprache";
 import { FREMD } from "../support/fremd-config";
+import { besitzAnker } from "../support/besitz-anker";
+import { escapeRe } from "../support/regex";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPc from "../../scripts/projekt-config-lib.mjs";
+
+const strukturAus = (rawPc as unknown as { strukturAus(config: unknown): { quelle: string } }).strukturAus;
 
 const W = FREMD.praefixe.worktree;
 
@@ -29,10 +35,11 @@ const listTrackedFiles = (checkBasis as unknown as { listTrackedFiles: (rootDir?
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 
-const IM_SCOPE = (f: string): boolean =>
+/** Im Scan: Docs ohne ADRs, Wurzeldateien, Modul-AGENTS unter der Quellwurzel (`struktur.quelle`), Agenten und Skills. */
+const imScope = (quelle: string) => (f: string): boolean =>
   /^docs\/(?!adr\/).+\.md$/.test(f) ||
   /^(?:AGENTS|README|CONTRIBUTING)\.md$/.test(f) ||
-  /^src\/(?:.+\/)?AGENTS\.md$/.test(f) ||
+  new RegExp(`^${escapeRe(quelle)}/(?:.+/)?AGENTS\\.md$`).test(f) ||
   /^\.claude\/agents\/[^/]+\.md$/.test(f) ||
   /^\.claude\/skills\/[^/]+\/[^/]+\.md$/.test(f) ||
   /^\.agents\/skills\/[^/]+\/[^/]+\.md$/.test(f);
@@ -96,10 +103,12 @@ describe("findeUmschrift: Muster und Negativfälle", () => {
 
 describe("Scan-Umfang", () => {
   test("geschlossene Liste: Docs ohne ADRs, Wurzeldateien, Modul-AGENTS, Agenten und Skills", () => {
-    for (const f of ["docs/referenz/befehle.md", "docs/agent-harness.md", "AGENTS.md", "README.md", "CONTRIBUTING.md", "src/AGENTS.md", "src/content/AGENTS.md", ".claude/agents/factory-lens.md", ".agents/skills/review-lenses/SKILL.md", ".agents/skills/forum/SKILL.md"]) {
+    const q = "zz-quelle";
+    const IM_SCOPE = imScope(q);
+    for (const f of ["docs/referenz/befehle.md", "docs/agent-harness.md", "AGENTS.md", "README.md", "CONTRIBUTING.md", `${q}/AGENTS.md`, `${q}/content/AGENTS.md`, ".claude/agents/factory-lens.md", ".agents/skills/review-lenses/SKILL.md", ".agents/skills/beispiel/SKILL.md"]) {
       assert.equal(IM_SCOPE(f), true, f);
     }
-    for (const f of ["docs/adr/0022-x.md", "docs/x.json", "src/ui/x.ts", "src/content/data/quests/knut.json", "CHANGELOG.md", `.claude/worktrees/${W}1/AGENTS.md`, ".claude/agents/x/y.md", ".claude/skills/x/y/z.md", ".agents/skills/x/y/z.md", ".agents/skills/x.md", ".claude/skills/x.md", `.claude/worktrees/${W}1/.agents/skills/a/b.md`, `.claude/worktrees/${W}1/.claude/skills/a/b.md`, `.claude/worktrees/${W}1/.claude/agents/a.md`]) {
+    for (const f of ["docs/adr/0022-x.md", "docs/x.json", `${q}/ui/x.ts`, `${q}/content/data/quests/knut.json`, "src/AGENTS.md", "CHANGELOG.md", `.claude/worktrees/${W}1/AGENTS.md`, ".claude/agents/x/y.md", ".claude/skills/x/y/z.md", ".agents/skills/x/y/z.md", ".agents/skills/x.md", ".claude/skills/x.md", `.claude/worktrees/${W}1/.agents/skills/a/b.md`, `.claude/worktrees/${W}1/.claude/skills/a/b.md`, `.claude/worktrees/${W}1/.claude/agents/a.md`]) {
       assert.equal(IM_SCOPE(f), false, f);
     }
   });
@@ -108,9 +117,10 @@ describe("Scan-Umfang", () => {
 describe("Umlaut-Wächter über die echte Fläche", () => {
   test("keine ASCII-Umschrift aus sprache.umschrift in Docs, Agenten und Skills", () => {
     const woerter = umschriftAus(echteConfig());
-    const dateien = listTrackedFiles(WURZEL).filter(IM_SCOPE);
-    assert.ok(dateien.length > 50, "Dateiliste unerwartet klein: git ls-files fehlgeschlagen?");
-    assert.ok(dateien.includes(".agents/skills/forum/SKILL.md"), "Leerlauf-Schutz: die Skill-Quelle von forum liegt im Scan");
+    const imScopeEcht = imScope(strukturAus(echteConfig()).quelle);
+    const dateien = listTrackedFiles(WURZEL).filter(imScopeEcht);
+    // Leerlauf-Schutz: jede verteilte Besitz-Datei im Scope liegt im Scan (statt einer Größenschwelle des Projekts).
+    for (const anker of besitzAnker(imScopeEcht)) assert.ok(dateien.includes(anker), `Leerlauf-Schutz: ${anker} liegt im Scan`);
     const meldungen = dateien.flatMap((f) => findeUmschrift(readFileSync(WURZEL + f, "utf8"), woerter).map((x) => `${f}:${x.zeile}: ${x.wort}`));
     assert.deepEqual(meldungen, [], `ASCII-Umschrift statt Umlaut (Regel: Deutsch mit echten Umlauten):\n${meldungen.join("\n")}\nFix: den Umlaut setzen; ein Bezeichner oder Pfad gehört in Backticks.`);
   });

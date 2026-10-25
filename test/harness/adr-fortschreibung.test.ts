@@ -32,7 +32,11 @@ describe("ADR-Fortschreibungen: Überschriftenform (#1663 L51)", () => {
   const adrs = readdirSync(dir).filter((n) => /^\d{4}-.*\.md$/.test(n));
 
   test("es gibt ADRs und mindestens eine Fortschreibung zu prüfen (kein leerer Lauf)", () => {
-    expect(adrs.length).toBeGreaterThan(20);
+    // Leerlauf-Schutz (#1933): jedes ADR, das eine Fortschreibungs-Datei fortschreibt, liegt im Scan (statt einer Mengenschwelle des Projekts).
+    const fortDir = join(dir, "fortschreibungen");
+    const fortgeschrieben = [...new Set(readdirSync(fortDir).map((n) => /^(\d{4})-/.exec(n)?.[1]).filter((n): n is string => n !== undefined))];
+    expect(fortgeschrieben.length).toBeGreaterThan(0);
+    for (const nr of fortgeschrieben) expect(adrs.some((n) => n.startsWith(`${nr}-`)), `ADR ${nr} fehlt im Scan`).toBe(true);
     expect(adrs.some((n) => readFileSync(join(dir, n), "utf8").includes("\n## Fortschreibung #"))).toBe(true);
   });
 

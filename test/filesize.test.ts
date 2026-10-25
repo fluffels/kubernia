@@ -12,6 +12,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { fixture } from "./support/tmp-fixture";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs ist aus, scripts/ nicht im
 // tsconfig-include) – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -20,7 +23,10 @@ import * as checkSize from "../scripts/check-size.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as pcl from "../scripts/projekt-config-lib.mjs";
 
-type Sized = { file: string; loc: number; chars?: number };
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { listTrackedFiles } from "../scripts/check-basis.mjs";
+
+type Sized ={ file: string; loc: number; chars?: number };
 type Allow = { datei: string; grund: string };
 
 const LOC_BUDGET: number = checkSize.LOC_BUDGET;
@@ -71,12 +77,25 @@ describe("Dateigröße-Budget (#390)", () => {
   test("Detektion greift wirklich (Red-Green): mehr Budget ergibt nie mehr Treffer", () => {
     // No-op-Schutz: ein Wächter, der immer grün ist, wäre wertlos. Bei kleinem Budget
     // MÜSSEN Treffer kommen, bei unerreichbar großem KEINE – und monoton dazwischen.
-    const small = findOversized(sizes, 50).length;
-    const mid = findOversized(sizes, 500).length;
-    const huge = findOversized(sizes, 100000).length;
-    assert.ok(small > 0, "Budget 50 sollte Treffer liefern – sonst misst der Wächter nicht.");
-    assert.ok(small >= mid && mid >= huge, "Höheres Budget darf nie MEHR Treffer ergeben.");
-    assert.equal(huge, 0, "Budget 100000 sollte in der heutigen Codebasis nichts melden.");
+    // Läuft auf einer Fixture (#1933): die Treffer hängen nicht an der Größe des Projekts, das den Test fährt.
+    const wurzel = fixture({
+      "lib/klein.ts": "x\n".repeat(10),
+      "lib/mittel.ts": "x\n".repeat(60),
+      "lib/gross.ts": "x\n".repeat(600),
+    });
+    const probe = collectSizes(wurzel, "lib");
+    assert.equal(findOversized(probe, 50).length, 2, "Budget 50 trifft die Dateien mit 60 und 600 Zeilen.");
+    assert.equal(findOversized(probe, 500).length, 1, "Budget 500 trifft nur die Datei mit 600 Zeilen.");
+    assert.equal(findOversized(probe, 100000).length, 0, "Budget 100000 trifft nichts.");
+    assert.equal(findOversized(sizes, 100000).length, 0, "Budget 100000 sollte in der heutigen Codebasis nichts melden.");
+  });
+
+  test("Leerlauf-Schutz: jede getrackte, existierende .ts-Datei der Quellwurzel steht in der Messung", () => {
+    const quelle = pcl.strukturAus(pcl.ladeProjektConfig()).quelle;
+    const wurzel = fileURLToPath(new URL("../", import.meta.url));
+    const gemessen = new Set(sizes.map((s) => s.file));
+    const erwartet = listTrackedFiles(wurzel).filter((f) => f.startsWith(`${quelle}/`) && f.endsWith(".ts") && existsSync(`${wurzel}${f}`));
+    for (const f of erwartet) assert.ok(gemessen.has(f), `${f} fehlt in der Messung von collectSizes()`);
   });
 
   test("countLines zählt physische Zeilen wie wc -l", () => {
@@ -197,6 +216,6 @@ describe("Quellwurzel aus der Config (#1843)", () => {
   });
 
   test("ohne Quellwurzel gilt die der Projekt-Config (struktur.quelle), nicht ein fester Name", () => {
-    assert.deepEqual(collectSizes(), collectSizes(undefined, "src"));
+    assert.deepEqual(collectSizes(), collectSizes(undefined, pcl.strukturAus(pcl.ladeProjektConfig()).quelle));
   });
 });

@@ -63,7 +63,6 @@ export const WAECHTER_DATEN = {
   ".factory/besitz.json": (text) => text,
   [EXTRAKTION_PFAD]: (text) => json({ ...JSON.parse(text), eintraege: JSON.parse(text).eintraege.filter((e) => LISTEN_ARTEN.includes(e.art)) }),
   "test/harness/kern-abdeckung.json": (text, pfade) => nurSchluessel(text, (k) => [...pfade].some((p) => musterRegex(k).test(p))),
-  "test/harness/emoji-baseline.json": (text, pfade) => nurSchluessel(text, (k) => pfade.has(k)),
   "eslint-suppressions.json": (text, pfade) => nurSchluessel(text, (k) => pfade.has(k)),
   "any-suppressions.json": (text, pfade) => nurSchluessel(text, (k) => pfade.has(k)),
   "test/harness/kern-literale-baseline.json": () => "{}\n",
