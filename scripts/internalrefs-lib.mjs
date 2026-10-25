@@ -8,7 +8,7 @@ export const PLATZHALTER_NUTZER = ["x", "y", "z", "u", "Max", "agent", "nutzer",
 /** Erlaubte Fixture-Wurzeln: erstes Segment eines Laufwerkspfads in test/** und scripts/** (klein geschrieben verglichen). */
 export const FIXTURE_WURZELN = [
   "a", "a.ts", "andere", "b.txt", "daten", "dev", "docs", "eigen.jsonl", "foo", "gibt-es-nicht", "git", "h", "ignoriert", "msys",
-  "n", "other", "pfad", "program", "projekt", "python", "r", "repo", "root", "src", "temp", "temp2", "tempo", "tmp", "tools", "users", "w", "windows", "work", "wt", "x", "…",
+  "other", "pfad", "program", "projekt", "python", "r", "repo", "root", "src", "temp", "temp2", "tempo", "tmp", "tools", "users", "w", "windows", "work", "wt", "x", "…",
 ];
 
 const NUTZER_MUSTER = /(?:(?<![\w])[A-Z]:[\\/]+Users|(?<![\w.:/\\])\/(?:Users|home))[\\/]+([^\\/\s"'`<>*|]+)/g;

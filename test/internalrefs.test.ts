@@ -129,24 +129,24 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
   });
 
   test("Wortgrenzen verhindern Zufallstreffer in base64-Blobs", () => {
-    // Das ist kein Feinschliff, sondern notwendig: ohne Wortgrenzen wäre das Gate auf dem
-    // aktuellen Stand sofort rot, weil fonts.css eine base64-`@font-face` enthält, in der
-    // zufällig ein Listenbegriff als Substring steckt (siehe nächster Test).
+    // Das ist kein Feinschliff, sondern notwendig: ohne Wortgrenzen wäre das Gate sofort rot, sobald
+    // eine CSS-Datei eine base64-`@font-face` enthält, in der zufällig ein Listenbegriff als
+    // Substring steckt (siehe nächster Test).
     assert.equal(buildTermPattern(DUMMY).test(`AA${DUMMY}BB`), false, "Substring ohne Wortgrenzen: kein Treffer.");
     assert.equal(buildTermPattern(DUMMY).test(`ein ${DUMMY}.`), true, "Als eigenes Wort: Treffer.");
     assert.equal(buildTermPattern(DUMMY).test(DUMMY.toUpperCase()), true, "Case-insensitive.");
   });
 
-  test("fonts.css bleibt in der Prüfung und ist trotz base64-Zufall grün", () => {
-    // Regressionsschutz für die Design-Entscheidung oben: die Datei wird NICHT ausgeschlossen,
+  test("eine CSS-Datei mit base64-Zufallstreffer bleibt in der Prüfung und ist grün", () => {
+    // Regressionsschutz für die Design-Entscheidung oben: CSS-Dateien werden NICHT ausgeschlossen,
     // sondern korrekt bewertet. Die echten Begriffe kommen dekodiert aus dem Skript, damit
-    // hier kein Klartext steht.
-    assert.equal(isCheckable("fonts.css"), true, "fonts.css darf nicht pauschal ausgeschlossen werden.");
-    const raw = readRepo("fonts.css");
+    // hier kein Klartext steht; die Datei ist eine Fixture (kein Projektinhalt).
+    assert.equal(isCheckable("x.css"), true, "CSS-Dateien dürfen nicht pauschal ausgeschlossen werden.");
     const terms = decodeTerms();
+    const raw = "@font-face{src:url(data:font/woff2;base64,AA" + (terms[0] ?? "") + "BB)}";
     const naive = terms.some((t) => raw.toLowerCase().includes(t.toLowerCase()));
     assert.equal(naive, true, "Annahme dieses Tests: ein naiver Substring-Match würde hier treffen.");
-    assert.deepEqual(findViolations(["fonts.css"], terms, () => raw), [], "Mit Wortgrenzen muss es grün sein.");
+    assert.deepEqual(findViolations(["x.css"], terms, () => raw), [], "Mit Wortgrenzen muss es grün sein.");
   });
 
   test("die Begriffsliste ist nicht leer und steht nirgends im Klartext im Repo", () => {
@@ -368,7 +368,7 @@ describe("CLI-Flags (#1837)", () => {
 // Die Beispielpfade werden aus Teilen gebaut: ein Literal träfe die Pfadregel in dieser Testdatei selbst.
 describe("Pfadregel (#1888)", () => {
   /** Ratchet der Fixture-Wurzeln: der Stand beim Einführen der Pfadregel. Neue Wurzeln heben ihn nicht still an (den Pfad stattdessen aus Teilen bauen); nach dem Streichen von Einträgen den Deckel auf die neue Länge senken. */
-  const FIXTURE_WURZELN_DECKEL = 36;
+  const FIXTURE_WURZELN_DECKEL = 35;
   const win = (...teile: string[]) => teile.join("\\");
   const fremderRepo = FREMD.repo.split("/")[1] ?? "";
   const befund = (datei: string, zeile: string, repo: string | null = fremderRepo) => pfadBefunde([datei], () => zeile, { repo }).map((b) => b.term);
