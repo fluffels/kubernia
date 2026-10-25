@@ -41,6 +41,17 @@ const fm = parseFrontmatter as (md: string) => Record<string, string>;
 const WURZEL = "C:/dev/repo/.claude/worktrees/kq-1435";
 const DATEI = `${WURZEL}/.claude/forum-quarantaene/forum-1435.txt`;
 
+describe("Guard-Konventionen des Forum-Guards (#1934)", () => {
+  // Der Kern-Test `pretooluse-hook.test.ts` prüft nur die Kern-Guards; dieser Projekt-Guard folgt denselben Konventionen.
+  test("forum-leser-guard.mjs ist als Direktaufruf gekennzeichnet und trägt im ersten Kommentarblock genau einmal `Bewusste Grenzen:`", () => {
+    const text = read("scripts/forum-leser-guard.mjs");
+    expect(text).toContain("istDirektaufruf(import.meta.url)");
+    const kopf = /\/\*\*[\s\S]*?\*\//.exec(text)?.[0] ?? "";
+    expect(kopf.split("\n").filter((z) => /^ \* Bewusste Grenzen:\s*$/.test(z))).toHaveLength(1);
+    expect(kopf).not.toMatch(/Ehrliche Grenze|Verbleibende Grenze|ehrlich, wie/);
+  });
+});
+
 describe("bewerteForumLeserRead", () => {
   test("die Quarantäne-Datei: erlaubt als absoluter Slash-/Backslash-Pfad, in anderer Schreibung und relativ gegen cwd", () => {
     expect(G.bewerteForumLeserRead(DATEI).block).toBe(false);

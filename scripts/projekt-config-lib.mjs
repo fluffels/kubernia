@@ -165,10 +165,35 @@ export function strukturAus(config) {
 /** Pur: prüft `struktur` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `strukturAus` verlangt ihn beim Gebrauch). */
 function pruefeStruktur(s) {
   if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
-  return ["quelle", "moduldoku"].flatMap((k) => {
+  const pfade = ["quelle", "moduldoku"].flatMap((k) => {
     if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
     return istRepoRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
   });
+  return [...pfade, ...pruefeEscapeKopien(s.escapeKopien)];
+}
+
+/** Pur: prüft den optionalen Schlüssel `struktur.escapeKopien` (Liste repo-relativer POSIX-Pfade ohne Doppelte); fehlt er, ist nichts zu prüfen. */
+function pruefeEscapeKopien(liste) {
+  if (liste === undefined) return [];
+  if (!Array.isArray(liste)) return ["struktur.escapeKopien muss eine Liste repo-relativer Pfade sein"];
+  const fehler = liste.flatMap((p, i) => {
+    if (!istText(p)) return [`struktur.escapeKopien[${i}] muss ein nicht-leerer String (repo-relativer Pfad) sein`];
+    return istRepoRelativPosix(p) ? [] : [`struktur.escapeKopien[${i}] muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(p)}`];
+  });
+  const doppelt = liste.filter((p, i) => istText(p) && liste.indexOf(p) !== i);
+  return [...fehler, ...[...new Set(doppelt)].map((p) => `struktur.escapeKopien enthält ${p} doppelt`)];
+}
+
+/**
+ * Pur: die Dateien, die den Escape-Zeichensatz des Ticket-Namen-Kerns bewusst als Kopie tragen (`struktur.escapeKopien`, repo-relative POSIX-Pfade); ohne Schlüssel leer.
+ * Eine kaputte Liste wirft (kein stiller Standardwert); die Kern-Prüfung `test/harness/ticket-namen.test.ts` addiert sie zu ihrer festen Kern-Liste.
+ */
+export function escapeKopienAus(config) {
+  const wert = config?.struktur?.escapeKopien;
+  const form = pruefeEscapeKopien(wert);
+  if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}
+Fix: struktur.escapeKopien als Liste repo-relativer POSIX-Pfade eintragen`);
+  return wert === undefined ? [] : [...wert];
 }
 
 /** Pur: ein repo-relativer POSIX-Pfad (`src`, `docs/module`): kein absoluter Pfad, kein Laufwerk, keine `.`/`..`-Segmente, kein Backslash, kein End- oder Doppel-Slash. */

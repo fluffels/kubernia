@@ -46,7 +46,8 @@
   },
   "struktur": {
     "quelle": "src",
-    "moduldoku": "docs/module"
+    "moduldoku": "docs/module",
+    "escapeKopien": [".dependency-cruiser.cjs", "src/content/drills/shared.ts"]
   },
   "ausnahmen": {
     "groesse": [

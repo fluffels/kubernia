@@ -2,27 +2,15 @@
  * unbekanntem Flag, mit einem Flag ohne Wert und mit einem doppelten Einzel-Flag. Geprüft werden Exit-Code und der
  * stderr-Rahmen (Präfix, Meldung, Aufrufzeile). PATH enthält nur den Ordner von node: ohne gh, git und Netz. */
 import { describe, expect, test } from "vitest";
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { faelleAus, maskiere, nurSchalter, pruefeFall, STD, starte, type Zeile } from "./support/flag-aufruf";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
-interface Zeile {
-  skript: string;
-  exit: number;
-  /** Erste Zeile von stderr: Rahmen samt Meldung. */
-  erste: (meldung: string) => string;
-  /** Rest von stderr (Aufrufzeile); leer, wenn der Rahmen einzeilig ist. */
-  aufruf: RegExp;
-  faelle: { unbekannt: string[]; ohneWert: string[]; doppelt: string[] };
-  meldungen: { unbekannt: string; ohneWert: string; doppelt: string };
-}
-
 const BEIDE = ["--von", "2026-01-01", "--bis", "2026-02-01"];
-const STD = { unbekannt: "Unbekanntes Argument: --bogus" };
 const BOARD_USAGE = "Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)";
 const SAMMEL_USAGE = "Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run]";
 const SPEZ_AUFRUF = [
@@ -37,19 +25,6 @@ const ABNAHME_AUFRUF = [
   "  node scripts/abnahme.mjs kriterien <nr>",
   "  node scripts/abnahme.mjs auswerten <nr> --pr <pr> --bericht <datei> --worktree <pfad> --head <sha>",
 ].join("\n");
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../scripts/ticket-namen.mjs";
-const maskiere = escapeRegex as (s: string) => string;
-/** Skripte mit nur booleschen Flags: der Fall „fehlender Wert“ ist ein Wert an einem Schalter (`--x=wert`), ein unbekanntes Argument. */
-const nurSchalter = (skript: string, flag: string, aufrufZeile: string, rahmen: Zeile["erste"] = (m) => m): Zeile => ({
-  skript,
-  exit: 2,
-  erste: rahmen,
-  aufruf: new RegExp(`^${maskiere(aufrufZeile)}`, "m"),
-  faelle: { unbekannt: ["--bogus"], ohneWert: [`${flag}=x`], doppelt: [flag, flag] },
-  meldungen: { unbekannt: STD.unbekannt, ohneWert: `Unbekanntes Argument: ${flag}=x`, doppelt: `${flag} ist doppelt angegeben` },
-});
-const SBOM_USAGE = "Aufruf: node scripts/sbom.mjs [--aus <pfad>]";
 
 const ZEILEN: Zeile[] = [
   {
@@ -133,14 +108,6 @@ const ZEILEN: Zeile[] = [
     meldungen: { unbekannt: SAMMEL_USAGE, ohneWert: SAMMEL_USAGE, doppelt: SAMMEL_USAGE },
   },
   {
-    skript: "sbom",
-    exit: 2,
-    erste: (m) => m,
-    aufruf: /^Aufruf: node scripts\/sbom\.mjs \[--aus <pfad>\]$/m,
-    faelle: { unbekannt: ["--bogus"], ohneWert: ["--aus"], doppelt: ["--aus", "a", "--aus", "b"] },
-    meldungen: { unbekannt: SBOM_USAGE, ohneWert: SBOM_USAGE, doppelt: SBOM_USAGE },
-  },
-  {
     skript: "hauptchat-zerlegung",
     exit: 2,
     erste: (m) => m,
@@ -220,13 +187,10 @@ const ZEILEN: Zeile[] = [
     faelle: { unbekannt: ["claim", "999999", "--bogus"], ohneWert: ["pruefe", "999999", "--nonce"], doppelt: ["pruefe", "999999", "--nonce", "a", "--nonce", "b"] },
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "--nonce braucht einen Wert", doppelt: "--nonce ist doppelt angegeben" },
   },
-  nurSchalter("audit-einordnung", "--dry-run", "Aufruf: node scripts/audit-einordnung.mjs [--dry-run]"),
-  nurSchalter("codescanning-inbox", "--dry-run", "Aufruf: node scripts/codescanning-inbox.mjs [--dry-run]"),
   nurSchalter("wiedervorlage", "--dry-run", "Aufruf: node scripts/wiedervorlage.mjs [--dry-run]"),
   nurSchalter("budget-pacing", "--json", "Aufruf: node scripts/budget-pacing.mjs [--json] [--ohne-probe]"),
   nurSchalter("check-any-suppressions", "--write", "Aufruf: node scripts/check-any-suppressions.mjs [--write]"),
   nurSchalter("cleanup-worktrees", "--fix", "Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]"),
-  nurSchalter("forum-sanitize", "--body", "Aufruf: node scripts/forum-sanitize.mjs [--body]"),
   nurSchalter("gh-kontingent", "--bericht", "Aufruf: node scripts/gh-kontingent.mjs [--bericht]"),
   nurSchalter("verify-lauf", "--changed", "Aufruf: node scripts/verify-lauf.mjs [--changed]"),
   {
@@ -254,14 +218,6 @@ const ZEILEN: Zeile[] = [
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "--config braucht einen Wert", doppelt: "--write ist doppelt angegeben" },
   },
   {
-    skript: "mermaid-vorschau",
-    exit: 2,
-    erste: (m) => m,
-    aufruf: new RegExp(`^${maskiere("Aufruf: node scripts/mermaid-vorschau.mjs <datei.md> --mermaid <ordner-mit-node_modules/mermaid> [--port 4173]")}$`, "m"),
-    faelle: { unbekannt: ["x.md", "--bogus"], ohneWert: ["x.md", "--mermaid"], doppelt: ["x.md", "--mermaid", "a", "--mermaid", "b"] },
-    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--mermaid braucht einen Wert", doppelt: "--mermaid ist doppelt angegeben" },
-  },
-  {
     skript: "projekt-config",
     exit: 2,
     erste: (m) => `✖ ${m}`,
@@ -279,32 +235,11 @@ const ZEILEN: Zeile[] = [
   },
 ];
 
-/** Prozessumgebung ohne gh und git: PATH (jede Schreibweise) nur mit dem Ordner von node. */
-function umgebung(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const [k, v] of Object.entries(process.env)) if (k.toUpperCase() !== "PATH") env[k] = v;
-  env.PATH = dirname(process.execPath);
-  return env;
-}
-
-/** Startet `scripts/<skript>.mjs` mit absolutem Pfad; `cwd` ist standardmäßig die Repo-Wurzel, der Test hängt nicht vom Aufrufer-cwd ab. */
-function starte(skript: string, argv: string[], cwd: string = ROOT): { status: number | null; stderr: string; stdout: string } {
-  const env = umgebung();
-  if (skript === "board-takt") env.PROJECT_TOKEN = "x"; // mit Token ruft `main` `mitKontingent` auf: ein vorgezogener Aufruf stünde dann vor dem Fehler
-  const r = spawnSync(process.execPath, [join(ROOT, "scripts", `${skript}.mjs`), ...argv], { encoding: "utf8", env, timeout: 60_000, cwd });
-  return { status: r.status, stderr: r.stderr, stdout: r.stdout };
-}
-
-const FAELLE = ZEILEN.flatMap((z) => (["unbekannt", "ohneWert", "doppelt"] as const).map((fall) => [z.skript, fall, z] as const));
+const FAELLE = faelleAus(ZEILEN);
 
 describe("Aufruf-Fehler der migrierten Skripte", () => {
   test.concurrent.each(FAELLE)("%s: %s", { timeout: 60_000 }, (_skript, fall, z) => {
-    const r = starte(z.skript, z.faelle[fall]);
-    expect(r.status).toBe(z.exit);
-    const text = r.stderr;
-    expect(text.split("\n")[0]).toBe(z.erste(z.meldungen[fall]));
-    expect(text).toMatch(z.aufruf);
-    expect(r.stdout).toBe(""); // Aufruf-Fehler schreiben nichts auf stdout (sonst lief schon Arbeit vor dem Fehler)
+    pruefeFall(z, fall);
   });
 
   const ZUSATZ: [string, string[], number, string][] = [
@@ -337,11 +272,6 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["ticket-lock", ["__proto__", "1"], 2, "✖ ticket-lock: unbekannter Befehl __proto__"],
     ["ticket-lock", ["constructor", "1"], 2, "✖ ticket-lock: unbekannter Befehl constructor"],
     ["haupt-sync", ["x"], 2, "haupt-sync: Unbekanntes Argument: x"],
-    ["mermaid-vorschau", ["a.md", "b.md", "--mermaid", "x"], 2, "genau eine Markdown-Datei erwartet"],
-    ["mermaid-vorschau", ["a.md", "--mermaid", "x", "--port", "abc"], 2, "--port erwartet eine Portnummer, nicht abc"],
-    ["mermaid-vorschau", ["a.md", "--mermaid", "x", "--port", "65536"], 2, "--port erwartet eine Portnummer, nicht 65536"],
-    ["mermaid-vorschau", ["a.md", "--mermaid", "x", "--port=-1"], 2, "--port erwartet eine Portnummer, nicht -1"],
-    ["mermaid-vorschau", ["--mermaid", "x"], 2, "genau eine Markdown-Datei erwartet"],
     ["projekt-config", ["repo", "zwei"], 2, "✖ Unbekanntes Argument: zwei"],
     ["projekt-config", [], 2, "✖ Schlüssel fehlt"],
     ["board-takt", ["--bogus"], 2, "board-takt: Unbekanntes Argument: --bogus"],
@@ -352,13 +282,6 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     expect(r.status).toBe(exit);
     expect(r.stderr.split("\n")[0]).toBe(erste);
     expect(r.stdout).toBe("");
-  });
-
-  test.concurrent("mermaid-vorschau: --port 65535 (Obergrenze) ist gültig, scheitert erst am fehlenden mermaid-Ordner", { timeout: 60_000 }, () => {
-    const r = starte("mermaid-vorschau", ["a.md", "--mermaid", "x", "--port", "65535"]);
-    expect(r.status).toBe(2);
-    expect(r.stderr).toContain("mermaid fehlt unter");
-    expect(r.stderr).not.toContain("--port erwartet");
   });
 
   const WIEDERHOLBAR:[string, string[], number, RegExp][] = [
@@ -395,7 +318,6 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
       ["spezifikation", ["pruefen", "--"], 2, "✖ spezifikation: Unbekanntes Argument: --"],
       ["abnahme", ["kriterien", "--", "7"], 2, "✖ abnahme: Unbekanntes Argument: --"],
       ["sammelticket-anlegen", ["harness", "--"], 2, SAMMEL_USAGE],
-      ["sbom", ["--"], 2, SBOM_USAGE],
       ["claims-pruefen", ["--"], 2, "✖ claims-pruefen: Unbekanntes Argument: --"],
     ];
     for (const [skript, argv, exit, erste] of faelle) {
