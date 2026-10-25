@@ -80,6 +80,7 @@ describe("CI-Vorlage: Jobrümpfe von ci.yml und ci.yml.vorlage (#1921)", () => {
     const a = ["  # Kommentar", "", "    name: Job (#12)", "      issues: read  # warum", "      ALARM_LABEL: area:a", '      echo "x, #950)"'];
     const b = ["    name: Job", "      issues: read # anderer Text", "      ALARM_LABEL: area:b", '      echo "x)"'];
     expect(normalisiere(a)).toEqual(normalisiere(b));
+    expect(normalisiere(["      x: y   "])).toEqual(["      x: y"]);
     expect(normalisiere(["      issues: read"])).not.toEqual(normalisiere(["      issues: write"]));
     expect(normalisiere(["      run: echo # Zeilenend-Kommentar"])).toEqual(["      run: echo"]);
     expect(normalisiere(['      "ein # im Text"'])).toEqual(['      "ein # im Text"']);

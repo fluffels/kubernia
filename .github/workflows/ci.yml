@@ -443,12 +443,12 @@ jobs:
           else
             echo "Lege neues Alarm-Issue an."
             body=$(printf '%s\n' \
-              "Der CI-Lauf auf \`main\` ist **rot** — obwohl \`main\` seit #592 PR-gegated ist. Das ist die zweite Grenze aus #605: ein roter \`main\` trotz grüner PR-Checks (semantischer Merge zweier je grüner PRs, ein fehlkonfigurierter Required Check, ein Admin-/Force-Push)." \
+              "Der CI-Lauf auf \`main\` ist **rot**, obwohl \`main\` PR-gegated ist: ein semantischer Merge zweier je grüner PRs, ein fehlkonfigurierter Required Check oder ein Admin- oder Force-Push." \
               "" \
               "- Commit: [\`${short}\`](${COMMIT_URL})" \
               "- Fehlgeschlagener Lauf: ${RUN_URL}" \
               "" \
-              "**Zuerst behandeln** (main muss grün sein, bevor ein paralleler Agent darauf aufbaut): Ursache im Lauf ansehen → auf einem Fix-Branch reparieren → per PR mergen → dieses Issue schließen. Solange main rot bleibt, hängt jeder weitere rote Lauf nur einen Kommentar hier an (kein Issue-Spam).")
+              "**Zuerst behandeln** (main muss grün sein, bevor ein paralleler Agent darauf aufbaut): Ursache im Lauf ansehen, auf einem Fix-Branch reparieren, per PR mergen, dieses Issue schließen. Solange main rot bleibt, hängt jeder weitere rote Lauf nur einen Kommentar hier an (kein Issue-Spam).")
             new_url=$(gh issue create --repo "$REPO" \
               --title "${marker} (${short})" \
               --label "$ALARM_LABEL" \
