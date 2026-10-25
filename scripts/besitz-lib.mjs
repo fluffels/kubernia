@@ -291,6 +291,9 @@ const zeileVon = (e) => {
 /** Ist die Einheit eine ergänzbare? */
 export const istErgaenzbar = (e) => ergaenzbarVon(e) !== undefined;
 
+/** Name des Config-Blocks (`block` der Tabelle) der ergänzbaren Einheit `e`; `undefined`, wenn sie nicht ergänzbar ist. */
+export const ergaenzungsBlockVon = (e) => ergaenzbarVon(e)?.block;
+
 /** Zahl der Einträge der Ergänzung für die Einheit `e` (alle ihre Listen). */
 export const ergaenzungsAnzahlVon = (e, erg) => zeileVon(e).anzahl(erg);
 

@@ -416,6 +416,7 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
   const sb = lib as unknown as {
     ERGAENZBARE: { id: string; block: string; anzahl: unknown; kernAnteil: unknown; mitErgaenzung: unknown; befunde: unknown }[];
     istErgaenzbar(e: { pfad: string; schluessel?: string; block?: string }): boolean;
+    ergaenzungsBlockVon(e: { pfad: string; schluessel?: string; block?: string }): string | undefined;
     ergaenzungsAnzahlVon(e: Einheit, erg: unknown): number;
     kernAnteilVon(e: Einheit, wert: unknown, erg: unknown): unknown;
     mitErgaenzungVon(e: Einheit, kern: unknown, erg: unknown): unknown;
@@ -433,6 +434,11 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
     for (const x of sb.ERGAENZBARE) {
       for (const p of ["anzahl", "kernAnteil", "mitErgaenzung", "befunde"] as const) assert.equal(typeof x[p], "function", `${x.id}: ${p}`);
     }
+  });
+  test("ergaenzungsBlockVon nennt den Config-Block der ergänzbaren Einheit, sonst undefined (#1921)", () => {
+    assert.equal(sb.ergaenzungsBlockVon(E), "sandbox");
+    assert.equal(sb.ergaenzungsBlockVon({ pfad: SETTINGS, schluessel: "permissions" }), "berechtigungen");
+    assert.equal(sb.ergaenzungsBlockVon({ pfad: SETTINGS, schluessel: "hooks" }), undefined);
   });
   test("eine unbekannte Einheit ist nicht ergänzbar und wirft in den Primitiven (kein stiller Rückfall auf permissions)", () => {
     const fremd = { pfad: SETTINGS, schluessel: "hooks" };
