@@ -1,8 +1,9 @@
 // Kein Shebang (siehe docs-gen.mjs). Gemeinsame Markdown-/Frontmatter-Helfer der Generatoren und
 // des Doku-Drift-Wächters (#1355, #1392): Markdown sammeln, Code-Fences erkennen, Frontmatter lesen,
-// dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (nur Builtins).
+// dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (Builtins und `escapeRegex` aus `ticket-namen.mjs`, dem einzigen Ort der Definition).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
+import { escapeRegex } from "../ticket-namen.mjs";
 
 /**
  * Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). Richtlinie (Gegenstück: `zelle` in scripts/abnahme.mjs): `cell` maskiert generierte Zellen mit
@@ -125,11 +126,6 @@ export function mermaidText(s) {
     .replace(/</g, "#lt;")
     .replace(/>/g, "#gt;")
     .replace(/\r?\n/g, " ");
-}
-
-/** Maskiert die Regex-Metazeichen der Kern-Funktion ohne `/` und `-`, wie bisher in docs-gen (Kopie der Kern-Funktion: der docs-gen-Kern importiert nur `node:*` und sich selbst). Pur. */
-export function escapeRegex(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**

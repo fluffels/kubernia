@@ -5,7 +5,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { escapeRegex, MERMAID_FRONTMATTER } from "./markdown.mjs";
+import { MERMAID_FRONTMATTER } from "./markdown.mjs";
+import { escapeRegex } from "../ticket-namen.mjs";
 
 const kern = createRequire(import.meta.url)("../schichten-kern.cjs");
 

@@ -332,11 +332,10 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
   // Nadel per Verkettung gebaut, damit dieser Wächter sich nicht selbst trifft.
   // Bekannte Grenze: gefunden wird nur die wörtliche Zeichenklasse; eine umgestellte oder umgeordnete Klasse rutscht durch.
   const NADEL = "[.*+?^$" + "{}()|[\\]\\\\";
-  // Die erlaubten Quellen: Kern, docs-gen-Kern (darf nur node:* und sich selbst importieren) und die Produkt-Funktion;
+  // Die erlaubten Quellen: Kern und die Produkt-Funktion (docs-gen importiert den Kern);
   // `.dependency-cruiser.cjs` ist ein CommonJS-Config, die den ESM-Kern nicht laden kann.
   const ERLAUBT = [
     "scripts/ticket-namen.mjs",
-    "scripts/docs-gen/markdown.mjs",
     "src/content/drills/shared.ts",
     ".dependency-cruiser.cjs",
   ];
@@ -350,9 +349,9 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
     const inhalt: Record<string, string> = { "test/x.ts": `s.replace(/${NADEL}]/g, "")`, "scripts/ticket-namen.mjs": NADEL, "docs/a.md": NADEL };
     expect(kopien(Object.keys(inhalt), (p) => inhalt[p])).toEqual(["test/x.ts"]);
   });
-  test("docs-gen-Kopie maskiert dieselben Metazeichen wie der Kern (Drift-Schutz)", () => {
-    for (const z of ".*+?^$" + "{}()|[]\\") expect(docsGen.escapeRegex(z), z).toBe(N.escapeRegex(z));
-    expect(docsGen.escapeRegex("a/b-c")).toBe("a/b-c"); // wie bisher in docs-gen: `/` und `-` bleiben unmaskiert
+  test("docs-gen definiert keine eigene escapeRegex mehr: Export fehlt, Import kommt aus dem Kern", () => {
+    expect(docsGen.escapeRegex).toBeUndefined();
+    expect(lies("scripts/docs-gen/markdown.mjs")).toMatch(/import \{ escapeRegex \} from "\.\.\/ticket-namen\.mjs"/);
   });
   test("die erlaubten Quellen existieren und tragen die Zeichenklasse wirklich", () => {
     for (const f of ERLAUBT) expect(lies(f), f).toContain(NADEL);
