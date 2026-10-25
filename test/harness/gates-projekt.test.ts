@@ -54,3 +54,41 @@ describe("#658 Alarm-Issue bei rotem main", () => {
     expect(ci).toMatch(/ALARM_LABEL:\s*area:architektur/);
   });
 });
+
+/** Was der Projekt-Block der AGENTS.md hinter `verify:full` von Builds, Bundle-Budget und Smokes nennt: die fehlenden Begriffe. Pur. */
+function verifyFullFehlt(projektBlock: string): string[] {
+  const satz = /`npm run verify:full` ergänzt([^.]*)\./.exec(projektBlock)?.[1];
+  if (satz === undefined) return ["Satz „`npm run verify:full` ergänzt …“ fehlt"];
+  return ["Builds", "Bundle-Budget", "Smokes"].filter((begriff) => !satz.includes(begriff));
+}
+
+/** Der Projekt-Block (zwischen den Markern, die die Verteilung nie anfasst) einer AGENTS.md. Pur. */
+function projektBlockVon(agents: string): string {
+  const a = agents.indexOf("<!-- factory-projekt:start -->");
+  const b = agents.indexOf("<!-- factory-projekt:ende -->");
+  return a < 0 || b < a ? "" : agents.slice(a, b);
+}
+
+describe("verify:full im Projekt-Block der AGENTS.md nennt die Spielgates (#1932, #1921)", () => {
+  const block = projektBlockVon(readRepo("AGENTS.md"));
+  it("der echte Projekt-Block nennt Builds, Bundle-Budget und Smokes", () => {
+    expect(block.length).toBeGreaterThan(100);
+    expect(verifyFullFehlt(block)).toEqual([]);
+  });
+  it("Negativfälle: ohne „Builds“, ohne Bundle-Budget, ohne Smokes, ohne den Satz, Satz nur im Kern-Block", () => {
+    const satz = "`npm run verify:full` ergänzt Coverage, Builds, Bundle-Budget und Smokes.";
+    expect(verifyFullFehlt(satz)).toEqual([]);
+    expect(verifyFullFehlt(satz.replace("Builds, ", ""))).toEqual(["Builds"]);
+    expect(verifyFullFehlt(satz.replace("Bundle-Budget und ", ""))).toEqual(["Bundle-Budget"]);
+    expect(verifyFullFehlt(satz.replace(" und Smokes", ""))).toEqual(["Smokes"]);
+    expect(verifyFullFehlt("kein Satz")).toHaveLength(1);
+    const agents = `<!-- factory-besitz:start kern -->\n${satz}\n<!-- factory-projekt:start -->\nnichts\n<!-- factory-projekt:ende -->`;
+    expect(verifyFullFehlt(projektBlockVon(agents))).toHaveLength(1);
+    expect(projektBlockVon("ohne Marker")).toBe("");
+    const danach = `<!-- factory-projekt:start -->
+nichts
+<!-- factory-projekt:ende -->
+${satz}`;
+    expect(verifyFullFehlt(projektBlockVon(danach))).toHaveLength(1);
+  });
+});
