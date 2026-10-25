@@ -23,7 +23,7 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | PR + Merge, Festgefahren, Cleanup | `sonnet` | `medium` | im Umsetzer |
 | Explore / Recherche | `haiku` | `low` | Agent `Explore` (Projekt-Override des eingebauten Explore, Frontmatter); `low` wirkt, weil `haiku` auf der Anthropic-API auf Haiku 5.5 auflöst und Haiku 5.5 Effort unterstützt (Effort-Tabelle der Claude-Code-Modell-Doku, 2026-10-08); auf Cloud-Providern mit Haiku 4.5 wirkt es nicht (§2) |
 
-Platzhalter in spitzen Klammern: die Namen aus `.factory/projekt.json` (Tabelle im Kern-Block der AGENTS.md). Rollen eines Projekts, die nicht zum Kern gehören, stehen in einer eigenen Tabelle (geprüft vom `projekt-test` des Projekts, nicht vom Kern-Wächter der ersten Tabelle):
+Platzhalter in spitzen Klammern: die Namen aus `.factory/projekt.json` (Tabelle im Kern-Block der AGENTS.md). Rollen eines Projekts, die nicht zum Kern gehören, stehen in einer eigenen Tabelle „Projekt-Phase“ (die letzte Zelle nennt `Subagent <name>`, Alias und Effort prüft der Kern-Test generisch gegen `.claude/agents/<name>.md`; ohne Zeilen gibt es nichts zu prüfen):
 
 | Projekt-Phase | Alias | Effort Skill-Pfad | Skill-Pfad |
 |---|---|---|---|
