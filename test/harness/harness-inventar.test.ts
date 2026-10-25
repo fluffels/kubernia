@@ -155,8 +155,13 @@ describe("harness-inventar.md: Vollständigkeit gegen die generierte Tabelle (#1
   });
 
   test("Negativ: fehlende Zeile wird gemeldet, `demo` wird nicht durch `demo-lens` gedeckt", () => {
-    const zeilen: Zeile[] = [{ zellen: ["`demo-lens`, `Explore`", "", "", "behalten", "ja"] }];
-    expect(ohneZeile(["Explore", "demo", "demo-lens", "Stop"], zeilen)).toEqual(["demo", "Stop"]);
+    const zeilen: Zeile[] = [{ zellen: ["`demo-lens`", "", "", "behalten", "ja"] }];
+    expect(ohneZeile(["Explore", "demo", "demo-lens", "Stop"], zeilen)).toEqual(["Explore", "demo", "Stop"]);
+  });
+
+  test("Negativ: nur der erste Backtick-Name der ersten Zelle deckt (ein späterer Name in derselben Zelle nicht)", () => {
+    const zeilen: Zeile[] = [{ zellen: ["`sih-umsetzer`, Hinweis `sih-lens`", "", "", "behalten", "ja"] }];
+    expect(ohneZeile(["sih-umsetzer", "sih-lens"], zeilen)).toEqual(["sih-lens"]);
   });
 
   test("Negativ: der Parser findet nur Tabellen mit dem fünfspaltigen Kopf", () => {
