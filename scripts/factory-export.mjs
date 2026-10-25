@@ -137,17 +137,10 @@ function vorpruefung(leser, befunde) {
 }
 
 /**
- * Baut den Export im Speicher. `leser` ist der Rückgabewert von `leserVomCommit` (`commit`, `pfade`, `lies`, `ausfuehrbar`, `vorladen`).
- * Rückgabe `{ dateien: Map<Pfad, { text, ausfuehrbar }>, befunde, bericht }`; bei einem Befund ist `dateien` leer.
+ * Gemeinsamer Stand der Bau-Schritte von `baueExport`: Eingaben der Vorprüfung, die gesammelten Dateien und Befunde, `lege` als einziger Schreibweg.
+ * Ein Schritt ist `(k) => boolean`; `false` bricht den Bau ab (die Befunde stehen dann schon in `k.befunde`).
  */
-export function baueExport({ leser }) {
-  const befunde = [];
-  const bericht = { sha: leser.commit, anzahl: 0, herkunft: { besitz: 0, extraktion: 0, vorlage: 0, berechnet: 0 }, durchgelassen: 0, durchgelassenJeMuster: [], relativUnaufloesbar: 0, paketUnbekannt: [], literalRest: [], praefixUmgeschrieben: 0 };
-  const aus = () => ({ dateien: new Map(), befunde, bericht });
-  const eingabe = vorpruefung(leser, befunde);
-  if (eingabe === null) return aus();
-  const { manifest, liste, kubConfig, teile, vorlagen, anteil } = eingabe;
-  const lies = (p) => leser.lies(p);
+function bauStand(leser, eingabe, befunde, bericht) {
   const dateien = new Map();
   const lege = (pfad, text, herkunft, ausfuehrbar = false) => {
     if (text === null) befunde.push(`${pfad}: nicht lesbar`);
@@ -158,22 +151,30 @@ export function baueExport({ leser }) {
       bericht.herkunft[herkunft]++;
     }
   };
+  return { ...eingabe, leser, befunde, bericht, dateien, lege, lies: (p) => leser.lies(p) };
+}
 
-  // Config des Factory-Repos: die Config von kubernia mit den obersten Schlüsseln der Vorlage überschrieben.
+/** Schritt: Config des Factory-Repos (die Config von kubernia mit den obersten Schlüsseln der Vorlage überschrieben) samt Berechtigungs-Ergänzung. */
+function schrittConfig(k) {
+  const { befunde, vorlagen, kubConfig } = k;
   const vorlageConfig = parse(vorlagen.get(PROJEKT_CONFIG), `${vorlagenPfad(PROJEKT_CONFIG)}`, befunde);
-  if (vorlageConfig === null) return aus();
-  const factoryConfig = { ...kubConfig, ...vorlageConfig };
-  befunde.push(...pruefeProjektConfig(factoryConfig).map((m) => `${PROJEKT_CONFIG} des Exports: ${m}`));
-  const factoryText = json(factoryConfig);
-  let ergaenzung;
+  if (vorlageConfig === null) return false;
+  k.factoryConfig = { ...kubConfig, ...vorlageConfig };
+  befunde.push(...pruefeProjektConfig(k.factoryConfig).map((m) => `${PROJEKT_CONFIG} des Exports: ${m}`));
+  const factoryText = json(k.factoryConfig);
   try {
-    ergaenzung = { quelle: liesErgaenzung(lies), ziel: ergaenzungAusText(factoryText) };
+    k.ergaenzung = { quelle: liesErgaenzung(k.lies), ziel: ergaenzungAusText(factoryText) };
   } catch (err) {
     befunde.push(`Berechtigungs-Ergänzung: ${err.message}`);
-    return aus();
+    return false;
   }
-  lege(PROJEKT_CONFIG, factoryText, "berechnet");
+  k.lege(PROJEKT_CONFIG, factoryText, "berechnet");
+  return true;
+}
 
+/** Schritt: Besitz-Dateien, mitziehende Arten der Extraktionsliste, Vorlagen und der Zeiger des Ticket-Skills. */
+function schrittDateien(k) {
+  const { leser, liste, manifest, vorlagen, anteil, lege, lies } = k;
   for (const e of manifest.eintraege.filter(istGanzeDatei)) lege(e.pfad, lies(e.pfad), "besitz", leser.ausfuehrbar(e.pfad));
   for (const p of leser.pfade) {
     const art = artVon(liste, p);
@@ -182,16 +183,22 @@ export function baueExport({ leser }) {
   }
   for (const p of anteil) lege(p, vorlagen.get(p), "vorlage");
   const ticketQuelle = vorlagen.get(ROLLEN_PFADE.ticketSkill);
-  if (ticketQuelle === undefined) befunde.push(`${ROLLEN_PFADE.ticketSkill}: Vorlage der Rolle ticketSkill fehlt im Export`);
+  if (ticketQuelle === undefined) k.befunde.push(`${ROLLEN_PFADE.ticketSkill}: Vorlage der Rolle ticketSkill fehlt im Export`);
   else lege(TICKET_ZEIGER, zeigerText(TICKET_ORDNER, ticketQuelle), "berechnet");
+  return true;
+}
+
+/** Schritt: die Teil-Einheiten (Kern-Anteil plus Vorlage je Datei). */
+function schrittTeile(k) {
+  const { befunde, teile, vorlagen, factoryConfig, ergaenzung, lege, lies } = k;
   for (const [pfad, eintraege] of teile) {
     const vorlageLf = vorlagen.get(pfad);
     const quelleLf = normalisiereEol(lies(pfad));
     const eigene = eintraege.filter((e) => e.schluessel !== undefined).map((e) => e.schluessel);
     try {
       if (pfad.endsWith(".json")) {
-        const doppelt = Object.keys(JSON.parse(vorlageLf)).filter((k) => eigene.includes(k));
-        for (const k of doppelt) befunde.push(`${vorlagenPfad(pfad)}: Kern-Schlüssel '${k}' gehört nicht in die Vorlage`);
+        const doppelt = Object.keys(JSON.parse(vorlageLf)).filter((s) => eigene.includes(s));
+        for (const s of doppelt) befunde.push(`${vorlagenPfad(pfad)}: Kern-Schlüssel '${s}' gehört nicht in die Vorlage`);
       }
       const ergebnis = wendeTeileAn(eintraege, quelleLf, vorlageLf, factoryConfig, ergaenzung);
       befunde.push(...pruefeErgebnis(pfad, eintraege, quelleLf, vorlageLf, ergebnis, ergaenzung));
@@ -200,14 +207,28 @@ export function baueExport({ leser }) {
       befunde.push(err.message.startsWith(`${pfad}:`) ? err.message : `${pfad}: ${err.message}`);
     }
   }
+  return true;
+}
+
+/** Schritt: `package-lock.json` als Auszug; merkt sich `kubPkg` und `pkgVorlage` für die Paket-Prüfung. */
+function schrittLock(k) {
+  const { befunde, vorlagen, lege, lies } = k;
   const pkgVorlage = parse(vorlagen.get("package.json"), vorlagenPfad("package.json"), befunde);
   const kubPkg = parse(lies("package.json"), "package.json", befunde);
   const kubLock = parse(lies("package-lock.json"), "package-lock.json", befunde);
-  if (pkgVorlage === null || kubPkg === null || kubLock === null) return aus();
+  if (pkgVorlage === null || kubPkg === null || kubLock === null) return false;
+  Object.assign(k, { pkgVorlage, kubPkg });
   const lock = lockAuszug(kubLock, pkgVorlage);
   befunde.push(...lock.befunde);
   if (lock.lock !== null) lege("package-lock.json", json(lock.lock), "berechnet");
+  return true;
+}
+
+/** Schritt: die Daten-Dateien der Kern-Wächter (Kern-Anteil per Filter auf die exportierten Pfade). */
+function schrittWaechter(k) {
+  const { befunde, dateien, lege, lies } = k;
   const exportPfade = new Set([...dateien.keys(), ...Object.keys(WAECHTER_DATEN)]);
+  k.exportPfade = exportPfade;
   for (const [pfad, filter] of Object.entries(WAECHTER_DATEN)) {
     const text = lies(pfad);
     try {
@@ -216,6 +237,12 @@ export function baueExport({ leser }) {
       befunde.push(`${pfad}: Filter der Daten-Datei scheitert: ${err.message}`);
     }
   }
+  return true;
+}
+
+/** Schritt: Schutzliste und CODEOWNERS gegen die Quelle prüfen. */
+function schrittSchutzliste(k) {
+  const { befunde, dateien, exportPfade, lies } = k;
   const schutz = dateien.get(SCHUTZ_QUELLE);
   const eigner = dateien.get(CODEOWNERS);
   if (schutz === undefined || eigner === undefined) {
@@ -223,6 +250,12 @@ export function baueExport({ leser }) {
   } else {
     befunde.push(...pruefeSchutzliste({ vorlage: schutz.text, codeowners: eigner.text, quelle: lies(SCHUTZ_QUELLE), pfade: [...exportPfade] }));
   }
+  return true;
+}
+
+/** Schritt: Projektwert-Blöcke der Dateien rendern. */
+function schrittProjektwerte(k) {
+  const { befunde, dateien, manifest, factoryConfig } = k;
   const manifestPfade = manifest.eintraege.map((e) => e.pfad);
   for (const pfad of projektwertDateien(manifestPfade, [...dateien.keys()])) {
     const d = dateien.get(pfad);
@@ -232,28 +265,35 @@ export function baueExport({ leser }) {
       befunde.push(err.message);
     }
   }
-  if (befunde.length > 0) return aus();
+  return true;
+}
 
-  // Factory-Seiten: der Commit-Zeilen-Präfix der Quelle wird auf den der Factory-Config umgeschrieben (nur vor Großbuchstaben).
-  const seiten = new Set([...dateien.keys()].filter((p) => artVon(liste, p) === "factory-seite"));
-  let praefixUmgeschrieben = 0;
-  const [vonPraefix, nachPraefix] = [kubConfig.praefixe.commitZeile, factoryConfig.praefixe.commitZeile];
-  if (vonPraefix !== nachPraefix) {
-    for (const p of seiten) {
-      const d = dateien.get(p);
-      const r = schreibePraefixUm(d.text, vonPraefix, nachPraefix);
-      d.text = r.text;
-      praefixUmgeschrieben += r.anzahl;
-    }
+/** Bau-Schritte in Reihenfolge; jeder hängt an `k` an, was die folgenden brauchen. */
+const BAU_SCHRITTE = [schrittConfig, schrittDateien, schrittTeile, schrittLock, schrittWaechter, schrittSchutzliste, schrittProjektwerte];
+
+/** Factory-Seiten: der Commit-Zeilen-Präfix der Quelle wird auf den der Factory-Config umgeschrieben (nur vor Großbuchstaben); Rückgabe: Zahl der Stellen. */
+function schreibePraefixeUm(k, seiten) {
+  const [von, nach] = [k.kubConfig.praefixe.commitZeile, k.factoryConfig.praefixe.commitZeile];
+  if (von === nach) return 0;
+  let anzahl = 0;
+  for (const p of seiten) {
+    const d = k.dateien.get(p);
+    const r = schreibePraefixUm(d.text, von, nach);
+    d.text = r.text;
+    anzahl += r.anzahl;
   }
+  return anzahl;
+}
 
-  // Prüfungen auf dem zusammengebauten Stand.
+/** Prüfungen auf dem zusammengebauten Stand; schreibt Befunde und Zähler in `k`/`bericht`. */
+function pruefeZusammenbau(k, seiten, praefixUmgeschrieben) {
+  const { leser, dateien, kubConfig, factoryConfig, bericht } = k;
   const texte = new Map([...dateien].map(([p, d]) => [p, d.text]));
   const rel = pruefeRelativeImporte(texte, new Set(leser.pfade));
-  const pak = pruefePaketImporte(texte, kubPkg, pkgVorlage);
+  const pak = pruefePaketImporte(texte, k.kubPkg, k.pkgVorlage);
   const pfade = pruefeLokalePfade(texte, [repoName(factoryConfig), repoName(kubConfig)]);
   const lit = pruefeLiterale(texte, kuberniaBegriffe(kubConfig, factoryConfig), (p) => (p === LOCK ? "frei" : p === PROJEKT_CONFIG || seiten.has(p) ? "zaehlen" : null));
-  befunde.push(...rel.befunde, ...pak.befunde, ...pruefeSkriptBezuege(texte).befunde, ...pfade.befunde, ...lit.befunde);
+  k.befunde.push(...rel.befunde, ...pak.befunde, ...pruefeSkriptBezuege(texte).befunde, ...pfade.befunde, ...lit.befunde);
   Object.assign(bericht, {
     anzahl: dateien.size,
     durchgelassen: pfade.durchgelassen,
@@ -263,7 +303,24 @@ export function baueExport({ leser }) {
     literalRest: [...lit.rest].sort(([a], [b]) => (a < b ? -1 : 1)),
     praefixUmgeschrieben,
   });
-  return befunde.length > 0 ? aus() : { dateien, befunde, bericht };
+}
+
+/**
+ * Baut den Export im Speicher. `leser` ist der Rückgabewert von `leserVomCommit` (`commit`, `pfade`, `lies`, `ausfuehrbar`, `vorladen`).
+ * Rückgabe `{ dateien: Map<Pfad, { text, ausfuehrbar }>, befunde, bericht }`; bei einem Befund ist `dateien` leer.
+ */
+export function baueExport({ leser }) {
+  const befunde = [];
+  const bericht = { sha: leser.commit, anzahl: 0, herkunft: { besitz: 0, extraktion: 0, vorlage: 0, berechnet: 0 }, durchgelassen: 0, durchgelassenJeMuster: [], relativUnaufloesbar: 0, paketUnbekannt: [], literalRest: [], praefixUmgeschrieben: 0 };
+  const aus = () => ({ dateien: new Map(), befunde, bericht });
+  const eingabe = vorpruefung(leser, befunde);
+  if (eingabe === null) return aus();
+  const k = bauStand(leser, eingabe, befunde, bericht);
+  for (const schritt of BAU_SCHRITTE) if (!schritt(k)) return aus();
+  if (befunde.length > 0) return aus();
+  const seiten = new Set([...k.dateien.keys()].filter((p) => artVon(k.liste, p) === "factory-seite"));
+  pruefeZusammenbau(k, seiten, schreibePraefixeUm(k, seiten));
+  return befunde.length > 0 ? aus() : { dateien: k.dateien, befunde, bericht };
 }
 
 /** Zeilen des Berichts. */
