@@ -21,6 +21,8 @@ const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const EINSTIEG = "scripts/projekt-config.mjs";
 const LIB = "scripts/projekt-config-lib.mjs";
 const lies = (pfad: string): string => readFileSync(WURZEL + pfad, "utf8");
+/** Dateinamen der verteilten Besitz-Workflows (Leerlauf-Schutz-Anker; wirft, wenn das Manifest keinen nennt). */
+const besitzWorkflows = (): string[] => besitzAnker((p) => /^\.github\/workflows\/[^/]+\.yml$/.test(p)).map((p) => p.slice(".github/workflows/".length));
 
 /** Import-Hülle (Repo-Pfade) eines Skripts samt Einstieg; wirft bei einem Import, der weder `node:` noch relativ ist. Pur bis auf `leser`. */
 export function importHuelle(einstieg: string, leser: (pfad: string) => string): string[] {
@@ -135,7 +137,7 @@ describe("Sparse-Checkout der Workflows", () => {
     const vorhanden = readdirSync(WURZEL + ".github/workflows").filter((n) => n.endsWith(".yml"));
     const nutzer = vorhanden.filter((n) => lies(`.github/workflows/${n}`).includes("scripts/board-place.mjs"));
     // Leerlauf-Schutz (#1933): jeder verteilte Besitz-Workflow liegt im Scan, und jeder davon, der board-place.mjs nennt, ist unter den Nutzern (Menge nicht leer).
-    const besitz = besitzAnker((p) => /^\.github\/workflows\/[^/]+\.yml$/.test(p)).map((p) => p.slice(".github/workflows/".length));
+    const besitz = besitzWorkflows();
     for (const n of besitz) assert.ok(vorhanden.includes(n), `Leerlauf-Schutz: ${n} liegt im Scan`);
     const besitzNutzer = besitz.filter((n) => lies(`.github/workflows/${n}`).includes("scripts/board-place.mjs"));
     assert.ok(besitzNutzer.length > 0, "Leerlauf-Schutz: kein Besitz-Workflow nennt board-place.mjs");
@@ -149,7 +151,8 @@ describe("Sparse-Checkout der Workflows", () => {
   });
   test("alle echten Workflows: jede Sparse-Liste trägt die Import-Hülle ihrer Skripte", () => {
     const namen = readdirSync(WURZEL + ".github/workflows").filter((n) => n.endsWith(".yml"));
-    assert.ok(namen.length > 0, "keine Workflows gefunden");
+    // Leerlauf-Schutz (#1933): jeder verteilte Besitz-Workflow liegt im Scan, nicht nur der eine, der board-place.mjs nennt.
+    for (const n of besitzWorkflows()) assert.ok(namen.includes(n), `Leerlauf-Schutz: ${n} liegt im Scan`);
     const probleme = namen.flatMap((n) => sparseProbleme(lies(`.github/workflows/${n}`), lies).map((p) => `${n}: ${p}`));
     assert.deepEqual(probleme, []);
   });
