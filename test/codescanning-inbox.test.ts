@@ -100,6 +100,8 @@ describe("alertsAus", () => {
       C.alertsAus([roh({ number: 1, most_recent_instance: { location: loc } })]) as unknown as { ort: unknown }[];
     expect(ortFuer({ start_line: "13" })[0].ort).toBeNull();
     expect(ortFuer({ start_line: 1.5 })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: "13", end_line: 14 })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 1.5, end_line: 3 })[0].ort).toBeNull();
     expect(ortFuer({ start_line: 13, end_line: "14" })[0].ort).toBeNull();
     expect(ortFuer({ start_line: 13, end_line: 14.5 })[0].ort).toBeNull();
     expect(ortFuer({ start_line: 13, end_line: 14 })[0].ort).toEqual({ von: 13, bis: 14 });
