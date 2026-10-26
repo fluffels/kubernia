@@ -8,7 +8,9 @@
 // Projektwert-Blöcke, `package-lock.json` (Auszug) und die Daten-Dateien der Kern-Wächter (Kern-Anteil per Filter).
 // In den Factory-Seiten (Art `factory-seite`) wird der Commit-Zeilen-Präfix der Quelle auf den der Factory-Config umgeschrieben (`schreibePraefixUm`, #1932). Danach entlinkt `entlinke` dort jeden Link auf ein Ziel außerhalb des Exports (der Text bleibt) und streicht tote Anker (#1935); der Bericht nennt Zahl und Ziele.
 // Bekannte Muster der Prüfungen (Grenzen): siehe Kopf von `factory-export-lib.mjs`.
-import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -22,6 +24,8 @@ import {
   kuberniaBegriffe,
   lockAuszug,
   schreibePraefixUm,
+  schreibeRollenUm,
+  streicheProjektBloecke,
   pruefeLiterale,
   pruefeLokalePfade,
   pruefePaketImporte,
@@ -314,8 +318,76 @@ function entlinkeSeiten(k, seiten) {
   return { ...entlinkt, ziele: [...entlinkt.ziele].sort(([a], [b]) => (a < b ? -1 : 1)) };
 }
 
+/**
+ * Projekt-Blöcke (#1936): in den Factory-Seiten entfallen die Zeilen zwischen den `factory-projekt`-Markern (Spiel-Passagen); eine Besitz-Markdown-Datei darf
+ * keine Markerzeile allein auf einer Zeile tragen (ihr Block bliebe sonst im Export stehen). Rückgabe `{ bloecke, seiten }`; Befunde stehen in `k.befunde`.
+ */
+function streicheBloeckeInSeiten(k, seiten) {
+  const r = { bloecke: 0, seiten: 0 };
+  for (const pfad of [...seiten].sort()) {
+    const d = k.dateien.get(pfad);
+    const s = streicheProjektBloecke(d.text);
+    k.befunde.push(...s.befunde.map((b) => `${pfad}: ${b}`));
+    d.text = s.text;
+    r.bloecke += s.bloecke;
+    if (s.bloecke > 0) r.seiten++;
+  }
+  for (const e of k.manifest.eintraege.filter(istGanzeDatei).filter((x) => x.pfad.endsWith(".md"))) {
+    const roh = k.dateien.get(e.pfad)?.text ?? "";
+    if (streicheProjektBloecke(roh).bloecke > 0) k.befunde.push(`${e.pfad}: Besitz-Datei trägt einen Projekt-Block (nur Factory-Seiten dürfen Block-Marker tragen)`);
+  }
+  return r;
+}
+
+/** Rollen-Namen (#1936): in den Factory-Seiten steht der Name der Factory-Config statt dem der Quelle (Planer, Umsetzer, Lens, Gruppe; der Ticket-Skill nicht, er ist zugleich der Spielname). Rückgabe: Zahl der Stellen. */
+function schreibeRollenInSeiten(k, seiten) {
+  const paare = ["planer", "umsetzer", "lens", "gruppe"].map((r) => [k.kubConfig.agenten[r], k.factoryConfig.agenten[r]]);
+  let anzahl = 0;
+  for (const p of seiten) {
+    const d = k.dateien.get(p);
+    const r = schreibeRollenUm(d.text, paare);
+    d.text = r.text;
+    anzahl += r.anzahl;
+  }
+  return anzahl;
+}
+
+/**
+ * Generierte Abschnitte (#1936): die `GEN`-Blöcke der Doku beschreiben im Export das Factory-Repo, nicht die Quelle. Die Dateikarte des Exports geht in einen
+ * Staging-Ordner, dort läuft `scripts/docs-gen.mjs --write` als Kindprozess (der Generator des Exports, nicht der der Quelle), die geänderten Markdown-Dateien
+ * kommen zurück. Rückgabe: Zahl der geänderten Dateien; ein Fehlschlag ist ein Befund (dann bleibt der Stand unverändert).
+ */
+function generiereDoku(k) {
+  const staging = mkdtempSync(join(tmpdir(), "fexp-gen-"));
+  try {
+    for (const [pfad, d] of k.dateien) {
+      const voll = join(staging, ...pfad.split("/"));
+      mkdirSync(dirname(voll), { recursive: true });
+      writeFileSync(voll, d.text);
+    }
+    const lauf = spawnSync(process.execPath, ["scripts/docs-gen.mjs", "--write"], { cwd: staging, encoding: "utf8", timeout: 120_000 });
+    if (lauf.status !== 0) {
+      const zeile = `${lauf.stderr ?? ""}${lauf.stdout ?? ""}`.split("\n").find((z) => z.trim() !== "") ?? lauf.error?.message ?? `Exit ${lauf.status}`;
+      k.befunde.push(`docs-gen im Export scheitert: ${zeile.trim()}`);
+      return 0;
+    }
+    let anzahl = 0;
+    for (const [pfad, d] of k.dateien) {
+      if (!pfad.endsWith(".md")) continue;
+      const neu = readFileSync(join(staging, ...pfad.split("/")), "utf8");
+      if (neu !== d.text) {
+        d.text = neu;
+        anzahl++;
+      }
+    }
+    return anzahl;
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
+}
+
 /** Prüfungen auf dem zusammengebauten Stand; schreibt Befunde und Zähler in `k`/`bericht`. */
-function pruefeZusammenbau(k, seiten, praefixUmgeschrieben, entlinkt) {
+function pruefeZusammenbau(k, seiten, { praefixUmgeschrieben, entlinkt, gestrichen, rollenUmgeschrieben, generiert }) {
   const { leser, dateien, kubConfig, factoryConfig, bericht } = k;
   const texte = new Map([...dateien].map(([p, d]) => [p, d.text]));
   const rel = pruefeRelativeImporte(texte, new Set(leser.pfade));
@@ -332,6 +404,9 @@ function pruefeZusammenbau(k, seiten, praefixUmgeschrieben, entlinkt) {
     literalRest: [...lit.rest].sort(([a], [b]) => (a < b ? -1 : 1)),
     praefixUmgeschrieben,
     entlinkt,
+    gestrichen,
+    rollenUmgeschrieben,
+    generiert,
   });
 }
 
@@ -341,7 +416,7 @@ function pruefeZusammenbau(k, seiten, praefixUmgeschrieben, entlinkt) {
  */
 export function baueExport({ leser }) {
   const befunde = [];
-  const bericht = { sha: leser.commit, anzahl: 0, herkunft: { besitz: 0, extraktion: 0, vorlage: 0, berechnet: 0 }, durchgelassen: 0, durchgelassenJeMuster: [], relativUnaufloesbar: 0, paketUnbekannt: [], literalRest: [], praefixUmgeschrieben: 0 };
+  const bericht = { sha: leser.commit, anzahl: 0, herkunft: { besitz: 0, extraktion: 0, vorlage: 0, berechnet: 0 }, durchgelassen: 0, durchgelassenJeMuster: [], relativUnaufloesbar: 0, paketUnbekannt: [], literalRest: [], praefixUmgeschrieben: 0, gestrichen: { bloecke: 0, seiten: 0 }, rollenUmgeschrieben: 0, generiert: 0 };
   const aus = () => ({ dateien: new Map(), befunde, bericht });
   const eingabe = vorpruefung(leser, befunde);
   if (eingabe === null) return aus();
@@ -349,8 +424,13 @@ export function baueExport({ leser }) {
   for (const schritt of BAU_SCHRITTE) if (!schritt(k)) return aus();
   if (befunde.length > 0) return aus();
   const seiten = new Set([...k.dateien.keys()].filter((p) => artVon(k.liste, p) === "factory-seite"));
+  const gestrichen = streicheBloeckeInSeiten(k, seiten);
+  if (befunde.length > 0) return aus();
+  const rollenUmgeschrieben = schreibeRollenInSeiten(k, seiten);
   const praefixUmgeschrieben = schreibePraefixeUm(k, seiten);
-  pruefeZusammenbau(k, seiten, praefixUmgeschrieben, entlinkeSeiten(k, seiten));
+  const entlinkt = entlinkeSeiten(k, seiten);
+  const generiert = generiereDoku(k);
+  pruefeZusammenbau(k, seiten, { praefixUmgeschrieben, entlinkt, gestrichen, rollenUmgeschrieben, generiert });
   return befunde.length > 0 ? aus() : { dateien: k.dateien, befunde, bericht };
 }
 
@@ -363,7 +443,10 @@ function berichtZeilen(b) {
     `Lokale Pfade durchgelassen (Zeilen mit Platzhalter oder Fixture-Wurzel, ohne Befund; eine Zeile kann mehrere Muster treffen, darum ist die Summe je Muster größer): ${b.durchgelassen}; je Muster ${KANDIDATEN.map((re, k) => `${re.source} = ${b.durchgelassenJeMuster[k]}`).join("; ")}`,
     `Relative Importe, in der Quelle schon unauflösbar (Fixture-Text): ${b.relativUnaufloesbar}`,
     `Paket-Spezifizierer, die kubernia nicht kennt (Fixture-Text): ${b.paketUnbekannt.length} (Namen: ${b.paketUnbekannt.filter((n) => !n.startsWith("?")).join(", ")}; ${b.paketUnbekannt.filter((n) => n.startsWith("?")).length} Texte, die kein Paketname sind)`,
+    `Projekt-Blöcke in Factory-Seiten gestrichen: ${b.gestrichen.bloecke} in ${b.gestrichen.seiten} Seiten`,
+    `Rollen-Namen in Factory-Seiten umgeschrieben: ${b.rollenUmgeschrieben}`,
     `Commit-Präfix in Factory-Seiten umgeschrieben: ${b.praefixUmgeschrieben}`,
+    `Generierte Abschnitte neu erzeugt: ${b.generiert} Dateien`,
     `Factory-Seiten entlinkt: ${b.entlinkt.links} Links auf ${b.entlinkt.ziele.length} Ziele, ${b.entlinkt.anker} Anker gestrichen`,
     ...b.entlinkt.ziele.map(([z, n]) => `  ${z}: ${n}`),
     `kubernia-Rest (Factory-Seiten und .factory/projekt.json, ganze Wörter, überlappende Treffer zählen einmal): ${b.literalRest.reduce((s, [, n]) => s + n, 0)} in ${b.literalRest.length} Dateien`,

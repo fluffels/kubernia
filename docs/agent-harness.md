@@ -434,10 +434,19 @@ Der Harness setzt nur den Sandbox-Vertrag voraus ([ADR 0025](adr/0025-sandbox-al
 | `codeload.github.com` | Archiv-Downloads (`gh`, Actions-Artefakte) | Projekt |
 | `objects.githubusercontent.com` | Release-/Artefakt-Downloads | Projekt |
 | `raw.githubusercontent.com` | Rohdateien | Projekt |
-| `*.pixellab.ai` | PixelLab-Asset-Download per Shell (Download-Host je Probe in #1434 bestätigt) | Ergänzung |
 | `cdn.playwright.dev` | `npx playwright install` (Browser-Download) | Projekt |
 | `playwright.download.prss.microsoft.com` | `npx playwright install` (Spiegel) | Projekt |
 | `<Host aus LANGFUSE_BASE_URL>` | `node scripts/token-baseline.mjs --langfuse` | nur User-Vorlage |
+
+<!-- factory-projekt:start -->
+
+Ergänzung des Projekts:
+
+| Domain | Wofür (Shell-Befehl) | Quelle |
+|---|---|---|
+| `*.pixellab.ai` | PixelLab-Asset-Download per Shell (Download-Host je Probe in #1434 bestätigt) | Ergänzung |
+
+<!-- factory-projekt:ende -->
 
 **Gesperrte Pfade:** `filesystem.denyRead` sperrt `/mnt` (Windows-Laufwerke) und die Secret-Pfade im Home (gh-Konfiguration, `~/.ssh`, Claude-Credentials, `~/.claude.json`, `~/.config/agent-secrets.env`, `~/.langfuse-secret`) sowie `./.env`, `./.env.local` und die Vite-Varianten `./.env.{development,production,test}.local` (zusätzlich `Read(/.env.*)` als Glob; die Sperre gilt für den Projekt-Root der Session, nicht für ein `.env` in einem Worktree darunter); dieselben Pfade stehen als `Read(...)`-deny in `permissions`, weil Read/Edit außerhalb der Sandbox laufen. `filesystem.denyWrite` schützt `./scripts`, `./.githooks`, `./node_modules` und `./package-lock.json`: Hooks und der Playwright-MCP laden Code von dort ungesandboxt, ein beschreibbarer Pfad wäre ein Ausbruch. Invariante: kein `allowWrite` auf Orte, aus denen ungesandboxte Prozesse Code laden. Der `credentials`-Teil des Projekt-Blocks (Token-Variablen auf `deny`) ist vorbereitend und wirkt laut Doku nur im User-Scope; wirksam wird er über die Vorlage, die dieselben Einträge führt. Der Langfuse-Host steht bewusst nur in der Vorlage (lokale Instanz, je Maschine verschieden, nicht ins Repo).
 
