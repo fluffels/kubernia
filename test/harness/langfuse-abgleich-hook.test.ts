@@ -365,6 +365,25 @@ describe("Plugin-Locks aufräumen (raeumePluginLocks)", () => {
     expect(N.raeumePluginLocks(join(dir, "gibt-es-nicht"), T0)).toBe(0);
   });
 
+  test("gesperrterLauf räumt alte Startmarken nach genommenem Lock weg, bei belegtem Lock nicht (#1953)", async () => {
+    const dir = stateMit({});
+    const marke = (name: string) => {
+      mkdirSync(join(dir, "langfuse-start"), { recursive: true });
+      writeFileSync(join(dir, "langfuse-start", name), "x");
+      utimesSync(join(dir, "langfuse-start", name), new Date(T0 - 2 * TAG), new Date(T0 - 2 * TAG));
+    };
+    const lauf: Lauf = () => Promise.resolve({ exitCode: 0, text: "", protokoll: { zugang: true, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] } });
+    marke("alt1");
+    writeFileSync(join(dir, "langfuse-abgleich.lock"), JSON.stringify({ pid: 4242, zeit: T0 }));
+    const belegt = await N.gesperrterLauf(N.parseArgs(["--session", "s1"]), { stateDir: dir, lauf, ausloeser: "manuell", pid: 7, uhr: () => T0 } as never);
+    expect(belegt.lock).toBe("belegt");
+    expect(existsSync(join(dir, "langfuse-start", "alt1"))).toBe(true);
+    unlinkSync(join(dir, "langfuse-abgleich.lock"));
+    const frei = await N.gesperrterLauf(N.parseArgs(["--session", "s1"]), { stateDir: dir, lauf, ausloeser: "manuell", pid: 7, uhr: () => T0 } as never);
+    expect(frei.lock).toBe("frei");
+    expect(existsSync(join(dir, "langfuse-start", "alt1"))).toBe(false);
+  });
+
   test("auch wenn lauf wirft: aufgeräumt und die Zahl im Fehler-Logeintrag", async () => {
     const dir = stateMit({ "langfuse_state.0c.lock": { alterMs: 2 * TAG } });
     const lauf: Lauf = () => Promise.reject(new Error("kaputt"));

@@ -957,6 +957,16 @@ describe("Fortsetzung nach SessionEnd: keine Doppelsendung (#1953)", () => {
     }
   });
 
+  test("gewachsenes Transkript hebt das Ende auf, ist aber keine Fortsetzung per Startmarke (fortgesetzt false), mit und ohne Marke", async () => {
+    for (const mitMarke of [false, true]) {
+      const a = sessionAlt(6 * MIN);
+      if (mitMarke) marke(a, jetzt - 2 * MIN);
+      // Ende 10 min vor der letzten Transkript-Änderung: das Transkript wuchs danach
+      const r = await lauf(a, mock({ ist: 0 }), { beendet: "s1", ende: jetzt - 16 * MIN }, jetzt);
+      expect(r.protokoll.sessions[0]).toMatchObject({ status: "läuft", endeVerworfen: true, fortgesetzt: false });
+    }
+  });
+
   test("eine Startmarke einer anderen Session oder ein kaputter Inhalt hebt das Ende nicht auf", async () => {
     const a = sessionAlt(6 * MIN);
     L.markiereStart(a.state, "andere", jetzt);
@@ -989,12 +999,16 @@ describe("Startmarken (#1953)", () => {
 
   test("eine unzulässige Session-ID schreibt und liest nichts", () => {
     const dir = neu();
-    for (const id of ["../x", "a/b", "a\b", "", ".versteckt", null, 5]) {
+    for (const id of ["../x", "a/b", "a\\b", "", ".versteckt", null, 5]) {
       expect(L.markiereStart(dir, id, T)).toBe(false);
       expect(L.leseStartMarke(dir, id)).toBeNull();
     }
     expect(existsSync(join(dir, "langfuse-start"))).toBe(false);
     expect(existsSync(join(dir, "x"))).toBe(false);
+    // Lesen: eine gültige Marke unter `<state>/x` wird über `../x` nicht erreicht
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "x"), new Date(T).toISOString());
+    expect(L.leseStartMarke(dir, "../x")).toBeNull();
   });
 
   test("ein unbeschreibbarer Zustandsordner wirft nie", () => {

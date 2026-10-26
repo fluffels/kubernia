@@ -238,7 +238,7 @@ function bericht(args, protokoll) {
   const p = protokoll;
   const zeilen = [`Nachliefern: ${p.geprueft} Session(s) geprüft, ${p.gesendet} Call(s) und ${p.spans} Subagent-Span(s) gesendet, ${p.dubletten} Dublette(n) (nur gemeldet), würde senden: ${p.wuerdeSenden}.`];
   for (const r of p.sessions.filter(zeigenswert)) {
-    zeilen.push(`- ${r.session.slice(0, 8)} ${r.status}: gesendet ${r.gesendet}, würde senden ${r.wuerdeSenden}, Dubletten ${r.dubletten}, ausstehend ${r.ausstehend}${r.befund ? `, ${r.befund}` : ""}${r.endeVerworfen ? ", Ende verworfen (Transkript wuchs nach dem SessionEnd-Hook)" : ""}`);
+    zeilen.push(`- ${r.session.slice(0, 8)} ${r.status}: gesendet ${r.gesendet}, würde senden ${r.wuerdeSenden}, Dubletten ${r.dubletten}, ausstehend ${r.ausstehend}${r.befund ? `, ${r.befund}` : ""}${r.endeVerworfen ? (r.fortgesetzt ? ", Ende verworfen (Session nach dem SessionEnd neu gestartet, Startmarke)" : ", Ende verworfen (Transkript wuchs nach dem SessionEnd-Hook)") : ""}`);
   }
   if (p.uebrig) zeilen.push(`Gesamtfrist von ${GESAMTFRIST_MS / 60_000} min erreicht: ${p.uebrig} Session(s) folgen beim nächsten Lauf.`);
   for (const f of p.fehler) zeilen.push(`FEHLER ${f.session.slice(0, 8)} (HTTP ${f.status ?? "–"}): ${f.meldung}`);
@@ -310,11 +310,11 @@ export const WARTE_SESSIONEND = 600_000;
 /** Hook-Lauf: SessionEnd wartet zuerst WARTE_SESSIONEND (der Lauf misst die Ruhe danach) und versucht einen belegten Lock einmal erneut. */
 export async function hookLauf(args, optionen) {
   const ende = args.ausloeser === "sessionend";
-  const endeZeit = (optionen.uhr ?? Date.now)();
+  const jetzt = (optionen.uhr ?? Date.now)();
   // Startmarke je SessionStart (auch bei belegtem Lock): ein wartendes SessionEnd-Kind derselben Session erkennt so die Fortsetzung.
-  if (args.ausloeser === "sessionstart" && args.aktuell) markiereStart(optionen.stateDir, args.aktuell, endeZeit);
+  if (args.ausloeser === "sessionstart" && args.aktuell) markiereStart(optionen.stateDir, args.aktuell, jetzt);
   if (ende) await (optionen.schlafen ?? warte)(WARTE_SESSIONEND);
-  return gesperrterLauf(ende ? { ...args, ende: endeZeit } : args, { ...optionen, ausloeser: args.ausloeser, wiederholen: ende });
+  return gesperrterLauf(ende ? { ...args, ende: jetzt } : args, { ...optionen, ausloeser: args.ausloeser, wiederholen: ende });
 }
 
 async function main() {
