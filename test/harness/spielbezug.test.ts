@@ -14,12 +14,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+import * as projektLib from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { SPIEL_QUOTE } from "../../scripts/spielquote-lib.mjs";
 
+const ROLLEN_PFADE = (projektLib as unknown as { ROLLEN_PFADE: Record<string, string> }).ROLLEN_PFADE;
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const agents = readFileSync(WURZEL + "AGENTS.md", "utf8").replace(/\r\n/g, "\n");
 const projektBlock = agents.slice(agents.indexOf(PROJEKT_BLOCK_START as string), agents.indexOf(PROJEKT_BLOCK_ENDE as string));
@@ -72,7 +73,7 @@ describe("Projekt-Block der AGENTS.md (#1709, #1903)", () => {
 describe("Kern-Skills ohne Spielwort (#1943)", () => {
   // Wortanfang „spiel“ ohne Groß-/Kleinschreibung; „Beispiel“ trifft nicht (davor steht ein Buchstabe).
   const SPIELWORT = /(?<!\p{L})spiel/iu;
-  const dateien = [".agents/skills/factory/SKILL.md", ".agents/skills/factory/ablauf.md", ROLLEN_PFADE.ticketSkill as string];
+  const dateien = [".agents/skills/factory/SKILL.md", ".agents/skills/factory/ablauf.md", ROLLEN_PFADE.ticketSkill];
   test.each(dateien)("%s nennt kein Spielwort (die Spielquote und der Alias sind Projektwissen)", (pfad) => {
     const treffer = readFileSync(WURZEL + pfad, "utf8").split("\n").filter((z) => SPIELWORT.test(z));
     assert.deepEqual(treffer, []);

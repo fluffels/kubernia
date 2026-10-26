@@ -85,6 +85,20 @@ const OHNE_WERT = {
   "--ticket": "--ticket erwartet eine Ticketnummer (bekommen: nichts)",
 };
 
+/** Der `--bereich`-Wert des Aufrufs: `{ bereich }` (null ohne Schalter) oder `{ fehler }` bei einem unbekannten Namen. Pur. */
+function bereichLesen(rohWert, aliase) {
+  if (rohWert === undefined) return { bereich: null };
+  const bereich = bereichAus(rohWert, aliase);
+  return bereich === undefined ? { fehler: `--bereich erwartet agentic oder produkt (bekommen: „${rohWert}“)` } : { bereich };
+}
+
+/** Die `--ticket`-Nummer des Aufrufs: `{ ticket }` (null ohne Schalter) oder `{ fehler }`. Pur. */
+function ticketLesen(nr) {
+  if (nr === undefined) return { ticket: null };
+  const m = /^#?(\d+)$/.exec(nr);
+  return !m || Number(m[1]) <= 0 ? { fehler: `--ticket erwartet eine Ticketnummer (bekommen: „${nr}“)` } : { ticket: Number(m[1]) };
+}
+
 /**
  * Liest den Aufruf über `flagsLesen` (`--bereich <wert>`, `--ticket <nr>` auch als `--x=<wert>` und `#<nr>`, `--json`) und prüft die Werte:
  * `{ bereich, ticket, json }` (`bereich` und `ticket` null ohne Schalter) oder `{ fehler }`. Pur, ohne I/O.
@@ -96,15 +110,12 @@ export function aufrufLesen(argv, { aliase = {} } = {}) {
   });
   if (r.fehler) return { fehler: r.fehler.text };
   const { bereich: rohWert, ticket: nr, json, maengel } = r.werte;
-  const roh = rohWert === undefined ? undefined : bereichAus(rohWert, aliase);
-  if (rohWert !== undefined && roh === undefined) return { fehler: `--bereich erwartet agentic oder produkt (bekommen: „${rohWert}“)` };
-  let ticket = null;
-  if (nr !== undefined) {
-    const m = /^#?(\d+)$/.exec(nr);
-    if (!m || Number(m[1]) <= 0) return { fehler: `--ticket erwartet eine Ticketnummer (bekommen: „${nr}“)` };
-    ticket = Number(m[1]);
-  }
-  const bereich = roh ?? null;
+  const b = bereichLesen(rohWert, aliase);
+  if (b.fehler) return { fehler: b.fehler };
+  const tk = ticketLesen(nr);
+  if (tk.fehler) return { fehler: tk.fehler };
+  const { bereich } = b;
+  const { ticket } = tk;
   if (maengel === true && ticket !== null) return { fehler: "--maengel und --ticket schließen sich aus" };
   if (maengel === true) return { bereich, ticket: null, json: json === true, maengel: true };
   if (ticket !== null && bereich) return { fehler: "--ticket und --bereich schließen sich aus" };

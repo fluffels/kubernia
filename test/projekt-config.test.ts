@@ -30,6 +30,7 @@ interface Pc {
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
   escapeKopienAus(config: unknown): string[];
+  bereichAliaseAus(config: unknown): Record<string, string>;
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
   umgebungsWert(env: Record<string, string | undefined>, name: string): string | undefined;
   kernEnvNamen(ordner: string): string[];
