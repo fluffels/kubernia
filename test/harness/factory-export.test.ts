@@ -737,7 +737,7 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
       const t = (m: Record<string, string>) => lib.pruefeKommandos(new Map(Object.entries(m)), skripte).befunde;
       assert.match(t({ "a.md": "npm test" }).join(), /a\.md: Kommando `npm run test`/);
       assert.deepEqual(t({ "a.md": "npm run verify" }), []);
-      assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", ".claude/settings/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
+      assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", "docs/node_modules/x.md": "npm run nein", ".claude/settings/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
       assert.equal(t({ ".claude/agents/x.md": "npm run nein", "docs/b.md": "npm run nein2" }).length, 2);
       assert.equal(t({ ".claude/skills/s.md": "npm run nein", ".claude/workflows/w.md": "npm run nein" }).length, 2);
     });

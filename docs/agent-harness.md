@@ -258,6 +258,8 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WARUM:** das echte Nutzerrisiko steckt im `dist`-Artefakt (nur `phaser` & Co., kein vite/vitest). Ein hartes high+-Gate über den **ganzen** Baum wäre durch dev-only-Advisories dauerhaft rot — und würde dann abgeschaltet (die ⚠️-Falle aus #395). Die selbstwartende Regel „blocke, was ausgeliefert wird; berichte den Rest" verrottet nicht bei Stardew-Scope, anders als ein hartcodierter Advisory-Allowlist.
 - **Ergänzend:** Dependabot ([`.github/dependabot.yml`](../.github/dependabot.yml)) öffnet wöchentlich gebündelte Update-PRs und zieht Security-Advisories automatisch hoch; Umgang damit als Policy in [CONTRIBUTING.md](../CONTRIBUTING.md#pull-requests--abhängigkeits-updates-policy).
 
+<!-- factory-projekt:start -->
+
 ### Deploy-Validierung (`deploy/**`, #1544)
 - **WAS:** [`deploy-validate.yml`](../.github/workflows/deploy-validate.yml) läuft bei Änderungen an `deploy/**`: `helm lint --strict` (Default und `deploy/chart/ci/*-values.yaml`) plus kubeconform über die rohen Manifeste und das gerenderte Chart, gegen Kubernetes-, cert-manager- und Gateway-API-Schemas. Eingaben fest: kubeconform-Version mit SHA256, Kubernetes-Version, Commit des CRD-Katalogs (Handanhebung, kein Dependabot); nicht fest sind das Helm-Binary des Runners und die Basis-Schemas (`default`, nur der Versionsordner ist gepinnt). Ein Wächter ([`deploy-validate.test.ts`](../test/harness/deploy-validate.test.ts)) hält `shell: bash`, `--strict`, fail-closed und das Fehlen von `continue-on-error`.
 - **Absicherung:** **nicht-blockierend**, kein Required Check, aber ohne `continue-on-error` (der Lauf ist deterministisch, ein verstecktes Rot wäre kein Signal). Ein fehlendes Schema ist ein Fehler (kein `-ignore-missing-schemas`). `defaults.run.shell: bash` ist tragend: nur so bricht `helm template | kubeconform -` bei einem helm-Fehler ab. Der Workflow zählt nicht im `festgefahren`-Zähler (der hört nur auf „CI“). Eine Hochstufung zum Required Check ist eine Ruleset-Änderung (vorher klären, `paths:` dann durch einen job-internen Skip ersetzen).
@@ -271,7 +273,13 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Funde beheben, Muster:** (1) Pfad-Containment steht **inline** vor dem fs-Aufruf in derselben Funktion (`if (!ziel.startsWith(resolve(basis) + sep)) return null`), nicht in einem Helfer; CodeQL erkennt einen Helfer nicht als Barriere (Alerts 68 bis 70, `mermaid-vorschau.mjs`). Die Inline-Variante schließt die Alerts: der CodeQL-Lauf auf dem PR #1752 führt für die Alerts 68 bis 70, 72, 73 und 94 keine offene Instanz. (2) Eine Regex aus Variablen nur mit escapten Werten bauen, und wo ein Test nur einen Teilstring prüft, `includes` statt `RegExp` nehmen (Alert 94). (3) Funde in `test/` werden `used in tests` mit Grund dismisst oder behoben, nie per CodeQL-Pfadausnahme ausgeblendet; die Inbox führt sie als Zeile, nie als Spitzen-Ticket. (4) Heredoc und `node -e` halbieren Backslashes: Regex-Änderungen nur per Edit-Tool. (5) HTML-Werte in Attributen gehen durch `esc()` (maskiert auch `"` und `'`).
 - **Grenze:** die übrigen Workflows sind noch per Tag gepinnt (#983, erweitert `PIN_PFLICHT`). Der Wächter liest per `yaml`-Bibliothek; zeilenbasiert ist nur die Pin-Prüfung (der Versionskommentar steht nicht im Syntaxbaum).
 
+<!-- factory-projekt:start -->
+
+<!-- factory-projekt:ende -->
+
 > **Nicht auf der Liste, aber Teil des Netzes:** die **Save-nie-brechen-Regel** (jede Format-Änderung migriert, alter Stand vorher in den Backup-Slot, `sanitizeState` härtet kaputte Felder ab) und der **Determinismus-Anspruch** (seedbare Zufälligkeit statt `Math.random` in der Domäne) gehören zum selben Netz. Der Determinismus ist seit **#492** als ESLint-Gate (`no-restricted-properties` gegen `Math.random`) + `test/rng.test.ts` für `src/sim/**`+`src/content/**` **erzwungen**; die Ausweitung auf die übrige als „pur/deterministisch" deklarierte Logik (`game/**`, z.B. `spaced-repetition.ts`) ist mit #591 nachgezogen.
+
+<!-- factory-projekt:ende -->
 
 ## 3a. Langfassung der harten Regeln (ausgelagert aus AGENTS.md)
 
@@ -338,7 +346,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 
 ### Test-Harness und e2e-Smokes
 
+<!-- factory-projekt:start -->
+
 Tests in `test/` (Vitest), u.a.: `sim.test.ts` (Simulator-Kern/Dispatch; die Befehlsfamilien gespiegelt zu den `sim/`-Modulen unter `test/sim/`, Split #383), `content.test.ts` (Konsistenz aller Inhalte), `quests.test.ts` (spielt die ganze Story + alle Drills durch), `readme.test.ts` (Doku-Sync: Quest-Zahl der README gegen den Code).
+
+<!-- factory-projekt:ende -->
 
 **Test-Infrastruktur – zwei getrennte Rollen (#475; nicht zu verwechseln mit dem Wächter-Ordner `test/harness/`, s.u.).** Die Test-Infrastruktur folgt einer klaren Trennlinie, statt in einen Sammel-Ordner zu wachsen: **Querschnitts-Umgebung** (die Browser-Umgebung, die die Anwendungs-/Persistenz-Schicht im Node-Lauf braucht: `window`/`localStorage`-Stub + frisches Laden des Spiel-Stacks) liegt **einmal** in `test/support/` (`browser-env.ts`, `quota-stub.ts`); **Setup-Dateien** (`test.setupFiles`, z.B. `test/support/git-umgebung.ts`) tragen nur den Seiteneffekt, die Logik liegt pur daneben (`git-umgebung-env.ts`), und die Verdrahtung belegt ein Test, der das Setup nicht importiert (`test/git-umgebung.test.ts`: ein direkter Import führte den Seiteneffekt selbst aus und bewiese die `setupFiles`-Zeile nicht); **valide Domänen-Eingaben** entstehen über **Factories** in `test/factories/` (`freshSim()` – „immer ohne Argumente baubar", Varianten überschreiben nur das Nötige; `test/sim/helpers.ts` re-exportiert daraus, keine Link-Brüche). **Leitprinzip:** Tests prüfen **Verhalten/Funktionalität über die öffentliche API**, nicht die Implementierung/Interna – die Infrastruktur liefert nur Umgebung + valide Eingaben, keine Gucklöcher in Interna, damit die Tests Refactorings der Domäne überleben. **Abgrenzung:** Die Architektur-**Fitness-Functions** (z.B. `test/layering.test.ts`, `test/filesize.test.ts`, `test/harness/readme.test.ts`, `test/docmap.test.ts`) prüfen bewusst Struktur-/Doku-Regeln statt Verhalten – eigene Kategorie, nicht mit Verhaltens-Tests vermischen. **Harness-Wächter (#1156/#1165)** sind die Fitness-Functions, die selbst der **einzige** Durchsetzer ihrer Regel sind (kein geschütztes `scripts/check-*.mjs` dahinter): sie liegen in [`test/harness/`](../test/harness/), tragen im Dateikopf den Marker `@harness-waechter` und sind über den Ordner-Präfix in `.github/protected-paths.json` auditpflichtig. Ein neuer Wächter braucht damit keinen eigenen Schutz-Eintrag; dass Marker und Ordner übereinstimmen, prüft [`test/harness/harness-approval.test.ts`](../test/harness/harness-approval.test.ts).
 
