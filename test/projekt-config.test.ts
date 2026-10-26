@@ -225,6 +225,8 @@ describe("Bereichs-Aliase (#1943)", () => {
     assert.match(mit({ aliase: [] }).join("\n"), /bereiche\.aliase muss ein Objekt/);
     assert.match(mit({ aliase: { Spiel: "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
     assert.match(mit({ aliase: { "x y": "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
+    assert.match(mit({ aliase: { "2spiel": "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
+    assert.match(mit({ aliase: { "-spiel": "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
     assert.match(mit({ aliase: { agentic: "produkt" } }).join("\n"), /überdeckt einen Kern-Bereich/);
     assert.match(mit({ aliase: { spiel: "x" } }).join("\n"), /muss auf einen Kern-Bereich zeigen/);
     assert.match(mit({ aliase: { spiel: ["produkt"] } }).join("\n"), /muss auf einen Kern-Bereich zeigen/);
