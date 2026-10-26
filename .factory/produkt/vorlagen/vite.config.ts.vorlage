@@ -12,7 +12,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary", "lcovonly"],
       reportsDirectory: "coverage",
-      // Aggregat-Floors (Ratchet, nur nach oben): abgerundet aus der Messung des Exports (Zeilen 90,94 %, Zweige 88,64 %, #1942). Kein Floor je Schicht: die Schichten des Factory-Repos sind klein; den Diff misst check:diffcoverage je Schicht.
+      // Aggregat-Floors (Ratchet, nur nach oben): abgerundet aus der Messung der Probe von #1925 (Zeilen 90,94 %, Zweige 88,64 %). Kein Floor je Schicht: die Schichten des Factory-Repos sind klein; den Diff misst check:diffcoverage je Schicht.
       thresholds: { lines: 90, branches: 88 },
     },
     maxWorkers: process.env.CI ? undefined : Math.max(2, Math.floor(availableParallelism() / 4)),
