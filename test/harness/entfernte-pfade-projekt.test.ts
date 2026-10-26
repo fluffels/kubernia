@@ -134,6 +134,9 @@ describe("Reste der Auslagerung in das Factory-Repo (#1882)", () => {
     assert.deepEqual(resteK9("docs/adr/0022-x.md", text), []);
     assert.deepEqual(resteK9(BESITZ[0], text), []);
     assert.ok(resteK9("docs/modul.md", text).length > 0);
+    // Die Ausnahme der Liste entfernter Pfade bleibt eng: nur diese Datei, kein Nachbar und kein ganzer Ordner.
+    assert.deepEqual(resteK9("test/harness/entfernte-pfade-liste.json", text), []);
+    assert.ok(resteK9("test/harness/anderer.test.ts", text).length > 0);
   });
 });
 
@@ -226,7 +229,7 @@ describe("Entfernte Dateien kommen nicht zurück (#1882)", () => {
     assert.deepEqual(wiederangelegt(getrackt, ENTFERNT), [], "Diese Dateien leben im Factory-Repo (Kern per Sync vom Tag): nicht wieder anlegen");
   });
 
-  test("die Liste enthält die drei Pfade aus dem Ticket und den Ordner der Produkt-Entwürfe", () => {
+  test("die Liste enthält die Pfade aus dem Ticket (Stichproben) und den Ordner der Produkt-Entwürfe", () => {
     for (const p of [`.factory/${"extraktion"}.json`, `scripts/${"factory-export"}.mjs`, `scripts/${"factory-export"}-lib.mjs`, `test/harness/${"factory-export"}.test.ts`, "test/harness/kern-abdeckung.json"]) {
       assert.ok(ENTFERNT.dateien.includes(p), p);
     }
