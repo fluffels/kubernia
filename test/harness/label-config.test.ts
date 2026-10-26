@@ -336,7 +336,7 @@ describe("Workflow-Wächter: Config-Aufrufe", () => {
 
 const SKRIPTE = [
   "board-lib", "board-takt", "board-place", "langfuse-takt", "sammelticket-anlegen", "wiedervorlage", "fremdtext-lib",
-  "check-festgefahren", "naechstes-ticket", "spielquote-lib", "fremdtext", "spezifikation",
+  "check-festgefahren", "naechstes-ticket", "produktquote-lib", "fremdtext", "spezifikation",
 ].map((n) => `scripts/${n}.mjs`);
 const WORKFLOWS = ["festgefahren", "wiedervorlage", "dependabot-inbox", "board-takt", "internalrefs-pr-text"].map((n) => `.github/workflows/${n}.yml`);
 const WORKFLOW_ORDNER = fileURLToPath(new URL("../../.github/workflows", import.meta.url));

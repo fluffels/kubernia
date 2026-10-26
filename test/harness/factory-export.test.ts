@@ -26,7 +26,7 @@ import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawSkills from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ROLLEN_PFADE, TICKET_SKILL_NAME } from "../../scripts/projekt-config-lib.mjs";
+import { PROJEKT_ROLLEN, ROLLEN_PFADE, TICKET_SKILL_NAME } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
 import { hookSkripte, importeAus } from "./hook-importe";
@@ -69,6 +69,8 @@ const lib = rawLib as unknown as {
   schreibeRollenUm(text: string, paare: [string, string][]): { text: string; anzahl: number };
   pruefeKommandos(texte: Map<string, string>, skripte: Set<string>): { befunde: string[] };
   entlinke(text: string, seite: string, h: { gibt(p: string): boolean; ueberschriften(p: string): Set<string> | null }): { text: string; links: number; anker: number; ziele: Map<string, number> };
+  laufFehlerZeile(lauf: { status: number | null; signal?: string | null; error?: Error; stderr?: string | null; stdout?: string | null }): string;
+  entlinkeSeiten(e: { dateien: Map<string, { text: string }>; exportPfade: Set<string>; seiten: Set<string> }): { links: number; anker: number; ziele: [string, number][] };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
   pruefeSchutzliste(e: { vorlage: string; codeowners: string; quelle: string; pfade: string[] }): string[];
@@ -281,6 +283,57 @@ describe("entlinke (#1935)", () => {
     assert.equal(r.text, "a mitte b und c");
     assert.equal(r.ziele.get("docs/t.md"), 2);
     assert.equal(r.ziele.size, 2);
+  });
+});
+
+describe("Rollen der Umschreibung (#1942)", () => {
+  test("alle Rollen der Kern-Pfade außer den Projekt-Rollen sind es, die der Export in Factory-Seiten umschreibt", () => {
+    const rollen = Object.keys(ROLLEN_PFADE as Record<string, string>).filter((r) => !(PROJEKT_ROLLEN as string[]).includes(r));
+    assert.deepEqual(rollen, ["planer", "umsetzer", "lens", "gruppe"]);
+  });
+});
+
+describe("laufFehlerZeile (#1942)", () => {
+  test("Exit-Code ungleich 0: die erste nicht leere Ausgabezeile, stderr vor stdout, sonst der Exit-Code", () => {
+    assert.equal(lib.laufFehlerZeile({ status: 1, stderr: "\n  Fehler A \nzweite", stdout: "out" }), "Fehler A");
+    assert.equal(lib.laufFehlerZeile({ status: 1, stderr: "", stdout: "nur out\n" }), "nur out");
+    assert.equal(lib.laufFehlerZeile({ status: 3, stderr: " \n", stdout: null }), "Exit 3");
+  });
+  test("ohne Status (Signal oder Startfehler) steht nie 'Exit null': error.message vor Signal", () => {
+    assert.equal(lib.laufFehlerZeile({ status: null, signal: "SIGTERM", error: new Error("spawnSync node ETIMEDOUT"), stderr: "halb", stdout: "" }), "spawnSync node ETIMEDOUT");
+    assert.equal(lib.laufFehlerZeile({ status: null, signal: "SIGKILL", stderr: "", stdout: "" }), "Signal SIGKILL");
+    assert.equal(lib.laufFehlerZeile({ status: null, stderr: null, stdout: null }), "Signal unbekannt");
+    assert.equal(lib.laufFehlerZeile({ status: undefined, signal: "SIGTERM" } as unknown as { status: null }), "Signal SIGTERM");
+  });
+});
+
+describe("entlinkeSeiten (#1942)", () => {
+  const baue = (reihenfolge: string[]) => {
+    const inhalt: Record<string, string> = { "docs/z.md": "[a](../src/zz.ts) [b](../src/aa.ts)", "docs/a.md": "[c](../src/zz.ts) und [d](b.md#weg)", "docs/b.md": "# Titel" };
+    const dateien = new Map(reihenfolge.map((p) => [p, { text: inhalt[p] }]));
+    const exportPfade = new Set(Object.keys(inhalt));
+    return { dateien, exportPfade, seiten: new Set(["docs/z.md", "docs/a.md"]) };
+  };
+
+  test("zwei Seiten mit zwei toten Zielen: Summen, sortierte Ziele, Texte der Seiten ersetzt", () => {
+    const e = baue(["docs/z.md", "docs/a.md", "docs/b.md"]);
+    const r = lib.entlinkeSeiten(e);
+    assert.equal(r.links, 3);
+    assert.equal(r.anker, 1);
+    assert.deepEqual(r.ziele, [["src/aa.ts", 1], ["src/zz.ts", 2]]);
+    assert.equal(e.dateien.get("docs/z.md")?.text, "a b");
+    assert.equal(e.dateien.get("docs/a.md")?.text, "c und [d](b.md)");
+  });
+  test("die Reihenfolge der Map ändert das Ergebnis nicht (Seiten werden sortiert verarbeitet)", () => {
+    const a = lib.entlinkeSeiten(baue(["docs/z.md", "docs/a.md", "docs/b.md"]));
+    const b = lib.entlinkeSeiten(baue(["docs/b.md", "docs/a.md", "docs/z.md"]));
+    assert.deepEqual(a, b);
+  });
+  test("ohne Seiten bleibt alles unberührt, Summen sind 0", () => {
+    const e = baue(["docs/z.md", "docs/a.md", "docs/b.md"]);
+    e.seiten.clear();
+    assert.deepEqual(lib.entlinkeSeiten(e), { links: 0, anker: 0, ziele: [] });
+    assert.equal(e.dateien.get("docs/z.md")?.text, "[a](../src/zz.ts) [b](../src/aa.ts)");
   });
 });
 
@@ -638,6 +691,12 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
       assert.equal(r.bericht.entlinkt.links, echt.bericht.entlinkt.links);
       assert.equal(r.bericht.entlinkt.anker, echt.bericht.entlinkt.anker);
     });
+    test("#1942: ein Link auf eine Projekt-Datei in einer Factory-Seite zählt nicht als kubernia-Rest (entlinkt vor der Literal-Prüfung)", () => {
+      const rest = (b: Ergebnis["bericht"]): number => b.literalRest.find(([p]) => p === SEITE)?.[1] ?? 0;
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, "[Probe](src/kubernia-probe.ts)") }) });
+      assert.deepEqual(r.befunde, []);
+      assert.equal(rest(r.bericht), rest(echt.bericht));
+    });
     test("dieselbe Zeile in einer Besitz-Markdown-Datei bleibt stehen", () => {
       const md = ".agents/skills/review-lenses/SKILL.md";
       const zeile = "[Probe](src/gibt-es-nicht-1935.ts)";
@@ -655,8 +714,6 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     });
     test("der echte Export entlinkt Links (Zahl und Ziele im Bericht) und der Lauf nennt sie", () => {
       assert.ok(echt.bericht.entlinkt.links > 0);
-      const namen = echt.bericht.entlinkt.ziele.map(([z]) => z);
-      assert.deepEqual(namen, [...namen].sort((a, b) => (a < b ? -1 : 1)), "Ziele im Bericht sind sortiert");
       assert.equal(echt.bericht.entlinkt.ziele.reduce((s, [, n]) => s + n, 0), echt.bericht.entlinkt.links);
       const out = lauf(["--ziel", leerOrdner()], leser).out;
       const [z0, n0] = echt.bericht.entlinkt.ziele[0] ?? ["", 0];
@@ -747,7 +804,7 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
       const t = (m: Record<string, string>) => lib.pruefeKommandos(new Map(Object.entries(m)), skripte).befunde;
       assert.match(t({ "a.md": "npm test" }).join(), /a\.md: Kommando `npm run test`/);
       assert.deepEqual(t({ "a.md": "npm run verify" }), []);
-      assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", "docs/node_modules/x.md": "npm run nein", ".claude/settings/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
+      assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", "docs/node_modules/x.md": "npm run nein", ".claude/settings/x.md": "npm run nein", ".claude/commands/x.md": "npm run nein", ".claude/lose.md": "npm run nein", "dist/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
       assert.equal(t({ ".claude/agents/x.md": "npm run nein", "docs/b.md": "npm run nein2" }).length, 2);
       assert.equal(t({ ".claude/skills/s.md": "npm run nein", ".claude/workflows/w.md": "npm run nein" }).length, 2);
     });
@@ -1031,6 +1088,23 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     assert.deepEqual(config.bereiche.aliase, {}, "der Alias des Projekts wandert nicht ins Factory-Repo");
   }, 60_000);
 
+  test("#1942: der Ticket-Skill im Export ist idempotent gerendert; eine Quelle mit CRLF liefert Quelle und Zeiger nur mit LF, byte-gleich zur LF-Quelle", () => {
+    const quellPfad = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+    const zeigerPfad = `${String(ZEIGER_WURZEL)}/${String(TICKET_SKILL_NAME)}/SKILL.md`;
+    const factory = JSON.parse(echt.dateien.get(".factory/projekt.json")?.text ?? "{}") as unknown;
+    const exportiert = echt.dateien.get(quellPfad)?.text ?? "";
+    assert.equal(rendereProjektwerte(exportiert, factory, quellPfad), exportiert, "ein zweites Rendern ändert nichts");
+    const crlf = (leser.lies(quellPfad) ?? "").replace(/\r?\n/g, "\r\n");
+    assert.ok(crlf.includes("\r\n"), "die Probe-Quelle trägt CRLF");
+    const r = ex.baueExport({ leser: mitAenderung(leser, { [quellPfad]: crlf }) });
+    assert.deepEqual(r.befunde, []);
+    for (const pfad of [quellPfad, zeigerPfad]) {
+      const text = r.dateien.get(pfad)?.text ?? "";
+      assert.ok(!text.includes("\r"), `${pfad} trägt kein CR`);
+      assert.equal(text, echt.dateien.get(pfad)?.text);
+    }
+  }, 60_000);
+
   test("#1931: die Settings-Vorlage trägt die Kontext-Schalter und gibt jeden Server der .mcp.json frei, die Ergänzung der Config erreicht permissions", () => {
     const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
     const settings = JSON.parse(text(".claude/settings.json")) as { enabledPlugins: Record<string, boolean>; enabledMcpjsonServers: string[]; permissions: { allow: string[]; ask: string[] } };
@@ -1107,7 +1181,7 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     assert.deepEqual(pfade, [...pfade].sort());
   });
 
-  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", () => {
+  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", { timeout: 60_000 }, () => {
     const abbruch = (aend: Record<string, string | null>, muster: RegExp): void => {
       const z = leerOrdner();
       const r = lauf(["--ziel", z], mitAenderung(leser, aend));
@@ -1146,6 +1220,11 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
       const liste = alle.filter((z) => !z.includes(`"muster":"${quelle}"`));
       assert.equal(liste.length, alle.length - 1, "genau ein Eintrag entfällt");
       befund({ ".factory/extraktion.json": liste.join("\n"), [quelle]: null }, /Quelle der Rolle ticketSkill fehlt/);
+    });
+
+    test("#1942: ein kaputter Projektwert-Marker in der Quelle des Ticket-Skills ist ein Befund des Exports, kein Absturz", () => {
+      const quelle = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+      befund({ [quelle]: `${basisText(quelle)}\n# factory:projektwert agenten.gibtsnicht-1942\nname: x\n` }, /SKILL\.md:\d+: Projektwert-Zeilen-Marker steht außerhalb des führenden Frontmatters/);
     });
 
     test("#1929: fehlt die Vorlage einer der neuen Daten-Dateien, bricht der Export ab", () => {

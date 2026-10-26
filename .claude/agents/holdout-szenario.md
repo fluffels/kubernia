@@ -45,7 +45,7 @@ Regeln:
 
 1. Jedes Kriterium hat mindestens ein Szenario und mindestens einen Negativfall (falsche Eingabe, kaputter Zustand, „darf nicht passieren“); nennt das Kriterium selbst einen Negativfall, wird er ein Szenario.
 2. `Dann` beschreibt Beobachtbares (Rückgabewert, Ausgabe, Exit-Code, sichtbarer Zustand), keine Implementierungsdetails.
-3. `Beobachtung: API` heißt: über eine öffentliche Schnittstelle prüfbar (CLI, exportierte Funktion, Testlauf); `Browser`: nur im laufenden Spiel oder in der Oberfläche prüfbar.
+3. `Beobachtung: API` heißt: über eine öffentliche Schnittstelle prüfbar (CLI, exportierte Funktion, Testlauf); `Browser`: nur in der laufenden Anwendung oder in der Oberfläche prüfbar.
 4. Ist ein Kriterium mehrdeutig, schreibst du die plausibelste Lesart und eine Zeile `Annahme: …` darunter; du fragst nicht zurück.
 5. Konkrete Beispielwerte statt Platzhaltern, damit der Prüfer sie ohne Rückfrage ausführen kann.
 

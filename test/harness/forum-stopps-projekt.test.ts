@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { AGENTEN_KONTEXT, repoDateien } from "./repo-texte";
+import { projektBlock } from "../support/projekt-block";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -32,12 +33,6 @@ const PROJEKT_STOPP_ZEILE = "- **Projekt-Stopps** (ergänzen die Kern-Liste, nie
 
 const kernMarker = (f: (id: string) => string): string => (escapeRe as (t: string) => string)(f("kern"));
 const KERN_RE = new RegExp(`${kernMarker(markerStart as (id: string) => string)}([\\s\\S]*?)${kernMarker(markerEnde as (id: string) => string)}`);
-/** Inhalt des Projekt-Blocks (zwischen den Markern), `null` ohne vollständiges Paar. */
-const projektBlock = (text: string): string | null => {
-  const von = text.indexOf(PROJEKT_BLOCK_START as string);
-  const bis = text.indexOf(PROJEKT_BLOCK_ENDE as string, von + 1);
-  return von < 0 || bis < 0 ? null : text.slice(von + (PROJEKT_BLOCK_START as string).length, bis);
-};
 
 /** Feste Stopps, die fehlen: Kern-Anker im Kern-Block, Projekt-Anker samt Pin-Zeile im Projekt-Block, Kern-Anker im Projekt-Block (ohne Marker: alle). */
 function festeStoppsFehlend(agentsText: string): string[] {

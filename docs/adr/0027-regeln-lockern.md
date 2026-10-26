@@ -49,6 +49,8 @@ Lösen zwei Rückfall-Trigger binnen 3 Monaten aus, wird die Evidenzschwelle ver
 Präzisiert Punkt 4, lockert kein Gate: Für einen K1-Rückfall-Trigger zählt ein roter Lauf nur, wenn der Check an dem scheitert, was die gekürzte Regel beschreibt („CI-Rot desselben Fehlertyps“), belegt mit Lauf-ID und Logzeile. Ein Testfehler oder Zeitlimit im selben Job ist Test-Rot; ist im selben Lauf beides rot, zählt der Lauf als Gate-Rot.
 Erste Anwendung: #1694, Status-Lauf 1, Lauf 39044049165 (Zeitlimit in `test/abnahme.test.ts`, behoben in #1801) zählt nicht, der Rückfall-Zähler steht bei 0. Die Ledger-Zeile bleibt unverändert (Punkt 8 erlaubt nur den Vermerk „ausgelöst“).
 
+Weitere Fortschreibungen stehen als Dateien unter [`fortschreibungen/`](fortschreibungen/0027-1942-pass-limit-freigabe.md) (Konvention: [README](README.md#format)): [#1942](fortschreibungen/0027-1942-pass-limit-freigabe.md).
+
 ## Gelockert
 
 | Datum | Was | Evidenz | PR | Rückfall-Trigger |

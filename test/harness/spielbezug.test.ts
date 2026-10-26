@@ -6,25 +6,28 @@
  * (Null-Regel); was ein Projekt konkret in Config und Projekt-Block trägt, prüft dieser Projekt-Test. Er zieht nicht ins Factory-Repo.
  *
  * Grenze: geprüft wird nur, dass die Pflicht-Begriffe in der Config stehen und die Leitfrage samt Messlatten-Zeile im Projekt-Block
- * der AGENTS.md; die Bedeutung des Textes prüft kein Wächter. Der Spielwort-Wächter (#1943) prüft nur drei Dateien (Kern-Skill `factory`,
- * sein Ablauf, die Ticket-Skill-Quelle), nicht die Kern-Agenten und nicht den Rest des Kerns (Befund im Sammelticket). Dieser Test importiert nichts aus einer anderen `*.test.ts`. */
+ * der AGENTS.md; die Bedeutung des Textes prüft kein Wächter. Der Spielwort-Wächter (#1943, #1942) prüft den Kern (alle Einheiten der Besitz-Ringe), die Skill-Quelle und die
+ * Projekt-Vorlagen, nicht die Factory-Seiten. Dieser Test importiert nichts aus einer anderen `*.test.ts`. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { projektConfig } from "../support/fremd-config";
+import { ladeBesitzManifest } from "../support/besitz-anker";
+import { projektBlock as projektBlockVon } from "../support/projekt-block";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektLib from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
+import { einheitText as einheitTextRoh } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { SPIEL_QUOTE } from "../../scripts/spielquote-lib.mjs";
+import { PRODUKT_QUOTE } from "../../scripts/produktquote-lib.mjs";
 
 const ROLLEN_PFADE = (projektLib as unknown as { ROLLEN_PFADE: Record<string, string> }).ROLLEN_PFADE;
+const einheitText = einheitTextRoh as (e: unknown, text: string) => string | null;
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const agents = readFileSync(WURZEL + "AGENTS.md", "utf8").replace(/\r\n/g, "\n");
-const projektBlock = agents.slice(agents.indexOf(PROJEKT_BLOCK_START as string), agents.indexOf(PROJEKT_BLOCK_ENDE as string));
+const projektBlock = projektBlockVon(agents) ?? "";
 
 describe("Projektliterale der Config (#1843, #1903)", () => {
   // Pflicht-Begriffe: Dev-Helfer, Anti-Corruption-Begriff, Engine-Name und Referenzspiel; je ein Projektwort, das der Begriff treffen muss.
@@ -61,7 +64,7 @@ describe("Projekt-Block der AGENTS.md (#1709, #1903)", () => {
     assert.equal(config.bereiche?.aliase?.spiel, "produkt");
   });
   test("die Spielquote im Projekt-Block ist an die Konstante der Auswahl gebunden (#1663 T5, #1935)", () => {
-    const quote = SPIEL_QUOTE as number;
+    const quote = PRODUKT_QUOTE as number;
     const zahlen = (re: RegExp): number[] => [...projektBlock.matchAll(re)].map((m) => Number(m[1]));
     for (const re of [/nach (\d+) Produkt-Merges \(Spielquote 1:\d+/g, /Spielquote 1:(\d+)/g]) {
       const z = zahlen(re);
@@ -83,16 +86,40 @@ describe("Bereichs-Alias der Projekt-Config (#1943)", () => {
   });
 });
 
-describe("Kern-Skills ohne Spielwort (#1943)", () => {
+describe("Kern und Vorlagen ohne Spielwort (#1943, #1942)", () => {
   // Wortanfang „spiel“ ohne Groß-/Kleinschreibung; „Beispiel“ trifft nicht (davor steht ein Buchstabe).
   const SPIELWORT = /(?<!\p{L})spiel/iu;
-  const dateien = [".agents/skills/factory/SKILL.md", ".agents/skills/factory/ablauf.md", ROLLEN_PFADE.ticketSkill];
-  test.each(dateien)("%s nennt kein Spielwort (die Spielquote und der Alias sind Projektwissen)", (pfad) => {
-    const treffer = readFileSync(WURZEL + pfad, "utf8").split("\n").filter((z) => SPIELWORT.test(z));
+  const lies = (pfad: string): string | null => (existsSync(WURZEL + pfad) ? readFileSync(WURZEL + pfad, "utf8").replace(/\r\n/g, "\n") : null);
+  const vorlagen = (ordner: string): string[] =>
+    readdirSync(WURZEL + ordner, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? vorlagen(`${ordner}/${d.name}`) : [`${ordner}/${d.name}`]));
+  // Umfang: Einheiten der Ringe kern, kern-nach-entkopplung und oberflaeche (AGENTS.md nur als Kern-Block, ohne Projekt-Block), die Skill-Quelle,
+  // der Factory-Skill samt Ablauf und die Projekt-Vorlagen. Grenze: Factory-Seiten (eigene Extraktion) liegen außerhalb.
+  const einheiten = (): [string, string][] => {
+    const out: [string, string][] = [];
+    for (const e of ladeBesitzManifest<{ pfad: string; ring: string; block?: string; schluessel?: string }>().eintraege) {
+      const text = lies(e.pfad);
+      const einheit = text === null ? null : einheitText(e, text);
+      if (einheit !== null) out.push([e.block || e.schluessel ? `${e.pfad} (${e.block ?? e.schluessel})` : e.pfad, einheit]);
+    }
+    for (const pfad of [".agents/skills/factory/SKILL.md", ".agents/skills/factory/ablauf.md", ROLLEN_PFADE.ticketSkill, ...vorlagen(".factory/produkt/vorlagen")]) {
+      const text = lies(pfad);
+      if (text !== null) out.push([pfad, text]);
+    }
+    return out;
+  };
+  test("der Umfang ist nicht leer und trägt Kern, Oberfläche, Skill-Quelle und Vorlagen", () => {
+    const namen = einheiten().map(([n]) => n);
+    for (const teil of ["scripts/naechstes-ticket.mjs", ".agents/skills/factory/SKILL.md", ROLLEN_PFADE.ticketSkill, ".factory/produkt/vorlagen/AGENTS.md.vorlage", "AGENTS.md (kern)"]) {
+      assert.ok(namen.includes(teil), `${teil} fehlt im Scan`);
+    }
+    assert.ok(namen.length > 100, `nur ${namen.length} Einheiten`);
+  });
+  test("keine Einheit nennt ein Spielwort (Produktquote statt Spielquote, Projektunabhängig statt Spielunabhängig)", () => {
+    const treffer = einheiten().flatMap(([name, text]) => text.split("\n").map((z, i) => (SPIELWORT.test(z) ? `${name}:${i + 1}: ${z.trim().slice(0, 90)}` : "")).filter(Boolean));
     assert.deepEqual(treffer, []);
   });
   test("das Muster trifft Spielwörter und nicht „Beispiel“", () => {
-    for (const ja of ["Spiel-Tickets", "spiel", "Spielquote", "nächstes Spiel"]) assert.ok(SPIELWORT.test(ja), ja);
+    for (const ja of ["Spiel-Tickets", "spiel", "Spielquote", "nächstes Spiel", "Spielraum"]) assert.ok(SPIELWORT.test(ja), ja);
     for (const nein of ["Beispiel", "beispielsweise", "Produkt"]) assert.ok(!SPIELWORT.test(nein), nein);
   });
 });

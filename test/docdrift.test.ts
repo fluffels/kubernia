@@ -54,8 +54,9 @@ const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = check
 const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
 // Neue Bindings (#1091) typisiert per Assertion statt per unsafe-Zugriff: der Alt-Bestand
 // oben ist in eslint-suppressions.json eingefroren und soll nicht wachsen.
-const { collectMarkdown, VERSIONED_CLAUDE_DIRS } = checkBasis as unknown as {
+const { collectMarkdown, VERSIONED_CLAUDE_DIRS, istGelesenesMarkdown } = checkBasis as unknown as {
   collectMarkdown: (rootDir?: string) => string[];
+  istGelesenesMarkdown: (pfad: string) => boolean;
   VERSIONED_CLAUDE_DIRS: Set<string>;
 };
 
@@ -170,6 +171,18 @@ describe("Harness-Doku-Drift (#529)", () => {
       [
         ["Text a", false, "a.md", "x"],
         ["Alt b", true, "b.png", ""],
+      ],
+    );
+  });
+
+  test("linkStellen: Ziele in spitzen Klammern verlieren die Klammern, auch mit Leerzeichen, Anker und Titel", () => {
+    const md = '[a](<docs/a b.md#x>) [c](<k.md> "Titel") [d](<https://x.de/y>)';
+    const stellen = linkStellen(md);
+    assert.deepEqual(
+      stellen.map((s) => [md.slice(s.start, s.ende), s.target, s.path, s.anchor]),
+      [
+        ["[a](<docs/a b.md#x>)", "docs/a b.md#x", "docs/a b.md", "x"],
+        ['[c](<k.md> "Titel")', "k.md", "k.md", ""],
       ],
     );
   });
@@ -322,6 +335,26 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
     const unignored = [...gitignore.matchAll(/^!\.claude\/([^/\s]+)\/\s*$/gm)].map((m) => m[1]).sort();
     assert.ok(unignored.length > 0, "Leerlauf-Schutz: keine !.claude/<ordner>/-Zeilen in .gitignore gefunden");
     assert.deepEqual([...VERSIONED_CLAUDE_DIRS].sort(), unignored);
+  });
+
+  test("istGelesenesMarkdown (#1942): dasselbe Prädikat wie der Walker, abgeleitet aus IGNORED_DIRS und VERSIONED_CLAUDE_DIRS", () => {
+    for (const ja of ["README.md", "docs/a.md", ".claude/skills/x.md", ".claude/agents/a/b.md", ".claude/workflows/w.md", "src/x/node_module.md", "docs/.claude/commands/x.md", "docs/.claude/lose.md"]) assert.equal(istGelesenesMarkdown(ja), true, ja);
+    for (const nein of [".claude/commands/x.md", ".claude/x.md", ".claude/worktrees/w-1/README.md", "node_modules/p/README.md", "docs/node_modules/p/README.md", "dist/a.md", "dist-offline/a.md", "playwright-report/a.md", ".git/a.md", "docs/a.txt"]) assert.equal(istGelesenesMarkdown(nein), false, nein);
+  });
+
+  test("istGelesenesMarkdown (#1942): jeder vom Walker gefundene Pfad ist gelesen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "md-gelesen-"));
+    try {
+      for (const p of ["a.md", "docs/b.md", ".claude/skills/s.md", ".claude/commands/c.md", ".claude/lose.md", "docs/.claude/commands/x.md", "docs/.claude/lose.md", "node_modules/n.md", "dist/d.md"]) {
+        mkdirSync(join(dir, dirname(p)), { recursive: true });
+        writeFileSync(join(dir, p), "# x\n");
+      }
+      const gefunden = collectMarkdown(dir);
+      assert.deepEqual([...gefunden].sort(), ["a.md", "docs/b.md", ".claude/skills/s.md", "docs/.claude/commands/x.md", "docs/.claude/lose.md"].sort());
+      for (const p of gefunden) assert.equal(istGelesenesMarkdown(p), true, p);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

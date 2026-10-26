@@ -35,6 +35,7 @@ ZEILEN: L<x>: umgesetzt | bewusst nicht | Issue #… — Halbsatz (je Zeile eine
 DATEIEN: <geänderte Dateien>
 SELBSTCHECK: <Ergebnis in einer Zeile>
 ENTSCHEIDUNGEN: <Entscheidung: X, weil Y | ->
+ABWEICHUNGEN: <je Zeile `L<x>: <nicht/anders umgesetzt> · Grund · Alternative`, sonst keine>
 OFFEN: <was die nächste Gruppe oder der Umsetzer wissen muss | ->
 BEFUNDE: <Auffälliges außerhalb der Gruppe | ->
 ```

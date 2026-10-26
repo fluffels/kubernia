@@ -25,7 +25,7 @@ Nein, nicht 1:1 — die projektspezifische Qualitäts-Harness (§2 in [agent-har
 - **Workflow-/Orchestrierungs-Schicht (voll portabel, stack-unabhängig):** Board-getriebene Ticket-Auswahl, `git worktree` pro Agent als Kollisionsschutz, Skills als kodifizierte Abläufe. Läuft über Git/CLI/`gh`, kennt die Programmiersprache des Zielprojekts gar nicht.
 - **Verifikations-/Gate-Schicht (Konzept portabel, Tooling stack-gebunden):** dependency-cruiser, die ESLint-Komplexitätsregeln, die handgeschriebenen Node-Skripte (`check:docmap`, `check:size` …) sind auf Kubernias TypeScript/Vite-Stack zugeschnitten. Für ein anderes Zielprojekt trägt das *Prinzip* (Schichtung erzwingen, Doku-Drift verhindern), das *Werkzeug* muss für den Zielstack ausgetauscht werden (z. B. ArchUnit statt dependency-cruiser bei Java/Kotlin).
 
-Kurzformel: für die stack-gebundene Gate-Schicht das Prinzip kopieren, nicht den Code. Den spielunabhängigen Kern verteilt ein Factory-Repo per Sync mit Besitz-Manifest (Kern-Dateien byte-gleich, Projektwerte aus einer Config), siehe [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); den Sync gibt es erst mit F10.
+Kurzformel: für die stack-gebundene Gate-Schicht das Prinzip kopieren, nicht den Code. Den projektunabhängigen Kern verteilt ein Factory-Repo per Sync mit Besitz-Manifest (Kern-Dateien byte-gleich, Projektwerte aus einer Config), siehe [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); den Sync gibt es erst mit F10.
 
 ## Warum prüft die Mauer erst im PR-Gate (CI) und nicht direkt als Hook nach jedem Edit?
 
@@ -164,6 +164,7 @@ Gemessen an den Transkripten der Sessions von #1378, #1342 und #1390 (Status-Lau
 - **Muster → Ausweg** (nie eine `allow`-Regel ergänzen, nie Security Weaken lockern):
   - `rm -rf` oder `Remove-Item -Recurse` auf Scratch (auch der Abnahme-Agent räumt seinen Scratch nicht auf) → liegen lassen, die nächste Probe nutzt einen neuen literalen Scratchpad-Pfad; den eigenen Dev-Server beendest du per PID (`taskkill //PID <pid> //T //F`).
   - `git checkout`/`git restore` auf Dateien (Klassifikator-Grund „Irreversible Local Destruction“) → vorher committen und per Zwischen-Commit zurückgehen, oder eine gesicherte Kopie zurückkopieren.
+  - Sabotage-Proben an Code, der unter `os.tmpdir()` ablegt (Export-Staging `fexp-gen-*` in `factory-export.mjs`): `TMP` und `TEMP` auf einen literalen Scratchpad-Pfad setzen, sonst bleiben die Ordner in `%TEMP%` liegen (der Auto-Mode blockt ihr Löschen).
   - Grund „Self-Modification“ oder „Security Weaken“ bei einem Harness-Ticket (Agent-Definition, Settings, Hooks): erwartbar, nicht umformulieren, sondern `entscheidung-noetig` melden.
   - **Meldungsformat der zwei Quellen:** eine Regel-Ablehnung lautet `Permission to use <Tool> with command <befehl> has been denied.` und nennt **keinen** Grund (der Befehl steht davor und kann lang sein); der Klassifikator schreibt `Permission for this action was denied by the Claude Code auto mode classifier. Reason: [<Grund>]. …`. Die Zeile `Tool-Fehler:` des Messskripts zeigt beides getrennt (`Permission n (Regel a, <Grund> b)`).
 - **Der Auto-Mode-Klassifikator** lehnt einen `claude -p`-Lauf mit abweichender `--settings`-Datei oder Bypass-Modus ab (`[Create Unsafe Agents]`). Nicht umformulieren: die Probe so fahren wie im Abschnitt Probe-Lauf (nur `--allowedTools`, keine eigene Settings-Datei). Blockt er trotzdem, meldet der Umsetzer `entscheidung-noetig` und wartet auf die Maintainerin (Auto-Mode kurz verlassen), er versucht keine Variante.
@@ -197,6 +198,10 @@ Kein Ticketlauf startet ohne erreichbares Langfuse ([Glossar](harness-glossar.md
 - **Typische Ursache:** das Rancher-Desktop-Backend steht (`vmState: ERROR`, WSL-Distributionen `rancher-desktop` und `rancher-desktop-data` gestoppt), die Docker-Pipe `//./pipe/docker_engine` fehlt, `localhost:3000/api/public/health` liefert keine Antwort. Folgen: der MCP-Server `langfuse` meldet ECONNREFUSED und trennt sich (`MCP server disconnected: mcp__langfuse__*`), der Nachlieferer endet mit Exit 1 und „fetch failed“ (Spur: `langfuse-abgleich.log`), ohne dass es jemand sieht. Die Ursache des VM-Fehlers ist nicht belegt (Hypothese: Neustart oder Ruhezustand des Rechners).
 - **Behebung:** `rdctl shutdown`, dann `rdctl start`; danach holt der Nachlieferer die verpassten Sessions nach (Exit 0, `fehler: []`). Ein MCP-Server, der sich getrennt hat, verbindet sich erst nach `/mcp` wieder.
 - **Prüfen:** `node scripts/langfuse-vorbedingung.mjs` (Exit 0 = erreichbar), bei Rot Rancher Desktop und `docker ps` prüfen; fehlende Sessions nach dem Start holt der Nachlieferer selbst nach ([Hook-Patch](langfuse-hook-patch.md)), mit `node scripts/langfuse-abgleich.mjs --pruefen` (Prüfbericht) belegbar.
+
+## Wie baue ich einen CI-Schritt ein, der Pfade eines Fremdwerkzeugs ableitet?
+
+Nicht raten, sondern vor dem Einbau lokal gegen die installierte Version prüfen. Beispiel Playwright (#1921): Browser-Revision und Cache-Ordner (`~/.cache/ms-playwright/chromium_headless_shell-<revision>`) stehen im installierten Paket (`node_modules/playwright-core/browsers.json`, Einträge `name`/`revision`); der Schritt in `.github/workflows/ci.yml` sucht deshalb per `find` nach dem Muster, statt einen Pfad fest zu verdrahten. Den abgeleiteten Pfad einmal lokal nachvollziehen, bevor der Schritt in die CI geht.
 
 ## Verwandte Dokumente
 

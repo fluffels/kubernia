@@ -15,13 +15,13 @@ import { tmpdir } from "node:os";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { collectHeadingSlugs } from "./docs-gen/markdown.mjs";
 import { istGanzeDatei, normalisiereEol, projektwertDateien, pruefeManifest, rendereProjektwerte } from "./besitz-lib.mjs";
 import { artVon, EXTRAKTION_PFAD, MITZIEHEND, musterRegex, pruefeExtraktion } from "./besitz-extraktion.mjs";
 import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import {
-  entlinke,
+  entlinkeSeiten,
   KANDIDATEN,
+  laufFehlerZeile,
   kuberniaBegriffe,
   lockAuszug,
   schreibePraefixUm,
@@ -38,7 +38,7 @@ import {
   vorlagenZiel,
 } from "./factory-export-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ergaenzungAusText, PROJEKT_CONFIG, pruefeProjektConfig, repoName, ROLLEN_PFADE, TICKET_SKILL_NAME, TICKET_SKILL_ZEIGER } from "./projekt-config-lib.mjs";
+import { ergaenzungAusText, PROJEKT_CONFIG, PROJEKT_ROLLEN, pruefeProjektConfig, repoName, ROLLEN_PFADE, TICKET_SKILL_NAME, TICKET_SKILL_ZEIGER } from "./projekt-config-lib.mjs";
 import { zeigerText } from "./skill-pfade.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -53,6 +53,7 @@ const USAGE = "Aufruf: node scripts/factory-export.mjs --ziel <leerer Ordner> [-
 /** Dateien, die der Export aus einer Vorlage nicht braucht: er filtert sie aus dem Quellstand (Lint- und Any-Suppressionen) oder berechnet sie (Zeiger des Ticket-Skills aus der gerenderten Quelle). */
 const BERECHNET = ["eslint-suppressions.json", "any-suppressions.json", TICKET_SKILL_ZEIGER];
 /** Art `infrastruktur-anteil` ohne Vorlage (#1943): der Export rendert die Quelle selbst (Projektwert-Stellen aus der Factory-Config), eine Handkopie gibt es nicht. */
+// Genau eine Datei: kommt eine zweite so gerenderte Rollen-Datei dazu, wird daraus eine eigene Art in .factory/extraktion.json.
 const AUS_QUELLE = [ROLLEN_PFADE.ticketSkill];
 
 const json = (wert) => `${JSON.stringify(wert, null, 2)}\n`;
@@ -194,7 +195,7 @@ function schrittDateien(k) {
   return schrittTicketSkill(k);
 }
 
-/** Der Ticket-Skill (#1943): die Quelle der Rolle ticketSkill samt dem aus ihr berechneten Zeiger; `schrittProjektwerte` rendert beide mit den Projektwerten der Factory-Config. */
+/** Der Ticket-Skill (#1943, #1942): die Quelle der Rolle ticketSkill, mit den Projektwerten der Factory-Config gerendert (ein Fehler ist ein Befund), samt dem aus dem gerenderten Text berechneten Zeiger; `schrittProjektwerte` findet beide danach unverändert (idempotent). */
 function schrittTicketSkill(k) {
   const pfad = ROLLEN_PFADE.ticketSkill;
   const quelle = k.lies(pfad);
@@ -202,7 +203,13 @@ function schrittTicketSkill(k) {
     k.befunde.push(`${pfad}: Quelle der Rolle ticketSkill fehlt`);
     return true;
   }
-  const text = normalisiereEol(quelle);
+  let text = normalisiereEol(quelle);
+  try {
+    text = rendereProjektwerte(text, k.factoryConfig, pfad);
+  } catch (err) {
+    k.befunde.push(err.message);
+    return true;
+  }
   k.lege(pfad, text, "extraktion");
   k.lege(TICKET_SKILL_ZEIGER, zeigerText(TICKET_SKILL_NAME, text), "berechnet");
   return true;
@@ -306,34 +313,6 @@ function schreibePraefixeUm(k, seiten) {
 }
 
 /**
- * Entlinken (#1935): in den Factory-Seiten werden Links auf Ziele außerhalb des Exports (Spielinhalte, Projekt-Skripte) zu Text, tote Anker gestrichen;
- * Besitz, Vorlagen und berechnete Dateien bleiben byte-gleich. Rückgabe `{ links, anker, ziele }` (`ziele`: sortierte Paare Ziel und Anzahl).
- */
-function entlinkeSeiten(k, seiten) {
-  const { dateien, exportPfade } = k;
-  const dateiPfade = [...exportPfade];
-  const gibt = (ziel) => ziel === "" || exportPfade.has(ziel) || dateiPfade.some((p) => p.startsWith(`${ziel}/`));
-  const ueberschriftenCache = new Map();
-  const ueberschriften = (ziel) => {
-    if (!ueberschriftenCache.has(ziel)) {
-      const d = dateien.get(ziel);
-      ueberschriftenCache.set(ziel, d !== undefined && ziel.endsWith(".md") ? new Set(collectHeadingSlugs(d.text)) : null);
-    }
-    return ueberschriftenCache.get(ziel);
-  };
-  const entlinkt = { links: 0, anker: 0, ziele: new Map() };
-  for (const pfad of [...seiten].sort()) {
-    const d = dateien.get(pfad);
-    const r = entlinke(d.text, pfad, { gibt, ueberschriften });
-    d.text = r.text;
-    entlinkt.links += r.links;
-    entlinkt.anker += r.anker;
-    for (const [z, n] of r.ziele) entlinkt.ziele.set(z, (entlinkt.ziele.get(z) ?? 0) + n);
-  }
-  return { ...entlinkt, ziele: [...entlinkt.ziele].sort(([a], [b]) => (a < b ? -1 : 1)) };
-}
-
-/**
  * Projekt-Blöcke (#1936): in den Factory-Seiten entfallen die Zeilen zwischen den `factory-projekt`-Markern (Spiel-Passagen); eine Besitz-Markdown-Datei darf
  * keine Markerzeile allein auf einer Zeile tragen (ihr Block bliebe sonst im Export stehen). Rückgabe `{ bloecke, seiten }`; Befunde stehen in `k.befunde`.
  */
@@ -358,7 +337,7 @@ function streicheBloeckeInSeiten(k, seiten) {
 
 /** Rollen-Namen (#1936): in den Factory-Seiten steht der Name der Factory-Config statt dem der Quelle (Planer, Umsetzer, Lens, Gruppe; der Ticket-Skill nicht, er ist zugleich der Spielname). Rückgabe: Zahl der Stellen. */
 function schreibeRollenInSeiten(k, seiten) {
-  const paare = ["planer", "umsetzer", "lens", "gruppe"].map((r) => [k.kubConfig.agenten[r], k.factoryConfig.agenten[r]]);
+  const paare = Object.keys(ROLLEN_PFADE).filter((r) => !PROJEKT_ROLLEN.includes(r)).map((r) => [k.kubConfig.agenten[r], k.factoryConfig.agenten[r]]);
   let anzahl = 0;
   for (const p of seiten) {
     const d = k.dateien.get(p);
@@ -384,8 +363,7 @@ function generiereDoku(k) {
     }
     const lauf = spawnSync(process.execPath, ["scripts/docs-gen.mjs", "--write"], { cwd: staging, encoding: "utf8", timeout: 120_000 });
     if (lauf.status !== 0) {
-      const zeile = `${lauf.stderr ?? ""}${lauf.stdout ?? ""}`.split("\n").find((z) => z.trim() !== "") ?? `Exit ${lauf.status}`;
-      k.befunde.push(`docs-gen im Export scheitert: ${zeile.trim()}`);
+      k.befunde.push(`docs-gen im Export scheitert: ${laufFehlerZeile(lauf)}`);
       return 0;
     }
     let anzahl = 0;
@@ -445,7 +423,7 @@ export function baueExport({ leser }) {
   if (befunde.length > 0) return aus();
   const rollenUmgeschrieben = schreibeRollenInSeiten(k, seiten);
   const praefixUmgeschrieben = schreibePraefixeUm(k, seiten);
-  const entlinkt = entlinkeSeiten(k, seiten);
+  const entlinkt = entlinkeSeiten({ dateien: k.dateien, exportPfade: k.exportPfade, seiten });
   const generiert = generiereDoku(k);
   pruefeZusammenbau(k, seiten, { praefixUmgeschrieben, entlinkt, gestrichen, rollenUmgeschrieben, generiert });
   return befunde.length > 0 ? aus() : { dateien: k.dateien, befunde, bericht };

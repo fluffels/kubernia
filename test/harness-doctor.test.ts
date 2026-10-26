@@ -199,7 +199,7 @@ describe("Sprache des Spezifikations-Gates (--pruefen, #1866 L22)", () => {
     assert.equal(r.code, 1);
     assert.equal(luecken(r).length, 1, r.out.join("\n"));
     assert.match(luecken(r)[0], /Sprache: .*Fix: .*sprache\.spezifikation/);
-  });
+  }, 30_000);
   test("CLI: ohne angemeldetes Token wird die Sprache trotzdem geprüft (liest nur die Config)", () => {
     const { sprache: _weg, ...ohneSprache } = CONFIG;
     const r = lauf({ "api -i user": new Error("gh auth login") }, { config: ohneSprache });

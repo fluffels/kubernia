@@ -64,6 +64,11 @@ export const RESTE: Rest[] = [
     muster: /kern-test-literale-baseline/,
     fix: "für Kern-Tests gilt die Null-Regel ohne Baseline: Projektwerte aus FREMD bzw. projektConfig() nehmen, Projektinhalt in einen projekt-test",
   },
+  {
+    name: "Spielquote-Bibliothek (heißt produktquote-lib)",
+    muster: /spielquote-lib|\bSPIEL_QUOTE\b|\bzaehleSpielMerges\b/,
+    fix: "den Kern-Begriff Produktquote nutzen: scripts/produktquote-lib.mjs, PRODUKT_QUOTE, zaehleProduktMerges (#1942)",
+  },
 ];
 
 const reste = (dateien: Datei[]): string[] => findeReste(dateien, RESTE);
@@ -118,6 +123,11 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.deepEqual(reste([{ pfad: "docs/x.md", inhalt: `Lies ${alt}` }]), ["docs/x.md:1: Ticket-Ablauf am alten Ort"]);
     assert.deepEqual(reste([{ pfad: "docs/x.md", inhalt: "Lies .agents/skills/factory/ablauf.md und ../.agents/skills/factory/ablauf.md" }]), []);
     assert.deepEqual(reste([{ pfad: "docs/adr/0022-x.md", inhalt: alt }]), []);
+  });
+
+  test.each(["scripts/spielquote-lib.mjs", "SPIEL_QUOTE", "zaehleSpielMerges"])("Negativfall: der entfernte Name %s wird gefunden, der neue nicht", (name) => {
+    assert.deepEqual(reste([{ pfad: "docs/c.md", inhalt: name }]), ["docs/c.md:1: Spielquote-Bibliothek (heißt produktquote-lib)"]);
+    assert.deepEqual(reste([{ pfad: "docs/c.md", inhalt: "scripts/produktquote-lib.mjs PRODUKT_QUOTE zaehleProduktMerges" }]), []);
   });
 
   // Je Alternative der Muster ein Literal: sonst bliebe ein gestrichener Name unbemerkt
@@ -190,6 +200,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Platzhalter als Dateiname, die Datei heißt nach der Rolle": "Lies .claude/agents/<agenten.lens>.md",
       "Altnamen-Rückfall": "const alt = altNameZuPraefix(name, praefix);",
       "Härtungs-Takt nach Merge-Zahl": "export const HARNESS_TAKT_MERGES = 5;",
+      "Spielquote-Bibliothek (heißt produktquote-lib)": "import { SPIEL_QUOTE } from board-takt",
       "Baseline der Kern-Test-Literale": "gelesen aus test/harness/kern-test-literale-baseline.json",
     };
     const text = beispiele[r.name];

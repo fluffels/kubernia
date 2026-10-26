@@ -10,7 +10,7 @@
  * `--bereich` nimmt die Kern-Namen `agentic` und `produkt`; ein Alias aus `bereiche.aliase` der Projekt-Config gilt als sein Kern-Name (#1943), ohne Alias ist ein anderer Name unbekannt (Exit 2).
  * Ohne `--bereich` und ohne `--ticket` ist der Aufruf ein Fehler (Exit 2): es gibt keinen Auswahlmodus über beide Seiten. Zwei Boards (ADR 0022 F11, #1729):
  * zuerst die Kopf-Items (Rang nach `kopfRang`; mit Bereich die der eigenen Seite plus die Notfälle beider), dann das oberste freie Item der eigenen Seite,
- * ohne Ausweichen auf die andere. Die Spielquote bleibt eine Kennzahl (`spielquote-lib.mjs`), sie steuert die Auswahl nicht.
+ * ohne Ausweichen auf die andere. Die Produktquote bleibt eine Kennzahl (`produktquote-lib.mjs`), sie steuert die Auswahl nicht.
  *
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 5 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Forum-Label der Config) wird übersprungen und als „Befund melden“ ausgewiesen.
@@ -32,8 +32,8 @@ import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { BEREICHE, bereichAliaseAus, configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
-import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./spielquote-lib.mjs";
+import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./produktquote-lib.mjs";
 import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
@@ -79,9 +79,12 @@ function bereichAus(roh, aliase) {
   return typeof ziel === "string" && Object.hasOwn(BEREICHE, ziel) ? ziel : undefined;
 }
 
+/** Die Kern-Bereichsnamen, für Meldungen mit Trenner verbunden. */
+const bereichsNamen = (trenner) => Object.keys(BEREICHE).join(trenner);
+
 /** Skript-eigene Texte für einen fehlenden Wert (die übrigen Arten nehmen die Standardtexte von `flagsLesen`). */
 const OHNE_WERT = {
-  "--bereich": "--bereich erwartet agentic oder produkt (bekommen: nichts)",
+  "--bereich": `--bereich erwartet ${bereichsNamen(" oder ")} (bekommen: nichts)`,
   "--ticket": "--ticket erwartet eine Ticketnummer (bekommen: nichts)",
 };
 
@@ -89,7 +92,7 @@ const OHNE_WERT = {
 function bereichLesen(rohWert, aliase) {
   if (rohWert === undefined) return { bereich: null };
   const bereich = bereichAus(rohWert, aliase);
-  return bereich === undefined ? { fehler: `--bereich erwartet agentic oder produkt (bekommen: „${rohWert}“)` } : { bereich };
+  return bereich === undefined ? { fehler: `--bereich erwartet ${bereichsNamen(" oder ")} (bekommen: „${rohWert}“)` } : { bereich };
 }
 
 /** Die `--ticket`-Nummer des Aufrufs: `{ ticket }` (null ohne Schalter) oder `{ fehler }`. Pur. */
@@ -119,7 +122,7 @@ export function aufrufLesen(argv, { aliase = {} } = {}) {
   if (maengel === true && ticket !== null) return { fehler: "--maengel und --ticket schließen sich aus" };
   if (maengel === true) return { bereich, ticket: null, json: json === true, maengel: true };
   if (ticket !== null && bereich) return { fehler: "--ticket und --bereich schließen sich aus" };
-  if (ticket === null && !bereich) return { fehler: "Aufruf ohne Auswahl: --bereich agentic|produkt (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)" };
+  if (ticket === null && !bereich) return { fehler: `Aufruf ohne Auswahl: --bereich ${bereichsNamen("|")} (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)` };
   return { bereich, ticket, json: json === true };
 }
 
@@ -150,7 +153,7 @@ export function istNotfallBeider(item) {
 /** Gehört das Item zum Bereich? Ohne Bereich immer; Notfälle (`istNotfallBeider`) zählen in beiden. Das Harness-Label kommt aus `config` (Pflicht, wirft ohne `labels.harness`). Pur. */
 export function imBereich(item, bereich, config) {
   if (!bereich) return true;
-  return istNotfallBeider(item) || item.labels.includes(labelAus(config, "harness")) === (bereich === "agentic");
+  return istNotfallBeider(item) || item.labels.includes(labelAus(config, "harness")) === (BEREICH_BOARD[bereich] === "factory");
 }
 
 /**
@@ -192,10 +195,10 @@ function kopfKandidaten(listen, eigene) {
  * Liefert `{ ticket, uebersprungen, hinweise? }`. Pur.
  */
 export function waehleUeberBoards({ produkt, factory, bereich, config, ...belegung }) {
-  if (!Object.hasOwn(BEREICHE, bereich ?? "")) throw new Error("waehleUeberBoards: bereich erwartet agentic oder produkt");
+  if (!Object.hasOwn(BEREICHE, bereich ?? "")) throw new Error(`waehleUeberBoards: bereich erwartet ${bereichsNamen(" oder ")}`);
   const listen = seitenListen(produkt, factory, config);
   const hinweise = listenHinweise(listen);
-  const eigene = bereich === "agentic" ? "factory" : "produkt";
+  const eigene = BEREICH_BOARD[bereich];
   const uebersprungen = [];
   const lauf = (items, extra) => {
     const r = waehleNaechstes({ ...belegung, config, items, ...extra });
@@ -278,9 +281,9 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = 
  * mit `bereich` nur dessen Board); Kopf-, Sammel- und Epic-Tickets sind vom Gate ausgenommen. Das Messfenster zählt hier nicht. Liefert `{ anzahl, maengel: [{ nr, titel, fehlt }] }`. Pur.
  */
 export function listeMaengel({ produkt, factory, bereich = null, config, offene, refs = [], worktrees = [], prHeads = [], owner = "", hartAb = 0, namen }) {
-  if (bereich !== null && !Object.hasOwn(BEREICHE, bereich)) throw new Error("listeMaengel: bereich erwartet agentic oder produkt");
+  if (bereich !== null && !Object.hasOwn(BEREICHE, bereich)) throw new Error(`listeMaengel: bereich erwartet ${bereichsNamen(" oder ")}`);
   const listen = seitenListen(produkt, factory, config);
-  const items = bereich === null ? [...listen.produkt, ...listen.factory] : listen[bereich === "agentic" ? "factory" : "produkt"];
+  const items = bereich === null ? [...listen.produkt, ...listen.factory] : listen[BEREICH_BOARD[bereich]];
   const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
   const maengel = [];
   for (const item of items) {

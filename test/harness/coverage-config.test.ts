@@ -25,6 +25,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+// @ts-expect-error: kein .d.ts für das .mjs-Skript.
+import { isMeasured as isMeasuredRaw } from "../../scripts/check-diffcoverage.mjs";
 
 const require = createRequire(import.meta.url);
 const { LAYERS, COVERAGE_GLOBS, layerOf } = require("../../scripts/layers.cjs") as {
@@ -202,5 +204,40 @@ describe("COVERAGE_GLOBS bleiben byte-gleich zu den bisherigen Literalen (#1392)
   };
   it("jeder Bucket-Glob entspricht seinem Literal", () => {
     expect(COVERAGE_GLOBS).toEqual(LITERALE);
+  });
+});
+
+describe("Vorlage vite.config.ts.vorlage: coverage.include deckt sich mit isMeasured (#1942)", () => {
+  const messung = { isMeasured: isMeasuredRaw as (p: string, q?: string) => boolean };
+  const vorlage = readRepo(".factory/produkt/vorlagen/vite.config.ts.vorlage");
+  const globs = (schluessel: string): string[] => {
+    const treffer = [...vorlage.matchAll(new RegExp(`${schluessel}: \\[([^\\]]*)\\]`, "g"))];
+    expect(treffer.length, `${schluessel} fehlt in der Vorlage`).toBeGreaterThan(0);
+    return treffer.flatMap((m) => [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]));
+  };
+  const include = globs("include").filter((g) => g.startsWith("scripts/")).map((g) => picomatch(g));
+  const exclude = globs("exclude").map((g) => picomatch(g));
+  const gemessen = (p: string) => include.some((f) => f(p)) && !exclude.some((f) => f(p));
+
+  const faelle = [
+    "scripts/a.mjs",
+    "scripts/unter/b.cjs",
+    "scripts/c.ts",
+    "scripts/d.mts",
+    "scripts/e.js",
+    "scripts/f.d.ts",
+    "scripts/g.d.mts",
+    "scripts/h.d.cts",
+    "scripts/i.json",
+    "scripts/j.md",
+    "test/k.test.ts",
+    "docs/scripts/l.mjs",
+  ];
+  it.each(faelle)("%s: include/exclude und isMeasured urteilen gleich", (pfad) => {
+    expect(gemessen(pfad)).toBe(messung.isMeasured(pfad, "scripts"));
+  });
+  it("die Vorlage setzt include und exclude überhaupt (sonst zählt v8 nur geladene Dateien)", () => {
+    expect(include.length).toBeGreaterThan(0);
+    expect(exclude.length).toBeGreaterThan(0);
   });
 });

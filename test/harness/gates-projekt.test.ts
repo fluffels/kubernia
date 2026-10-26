@@ -10,6 +10,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { projektBlock } from "../support/projekt-block";
 
 const readRepo = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 const scripts = (JSON.parse(readRepo("package.json")) as { scripts: Record<string, string> }).scripts;
@@ -64,9 +65,7 @@ function verifyFullFehlt(projektBlock: string): string[] {
 
 /** Der Projekt-Block (zwischen den Markern, die die Verteilung nie anfasst) einer AGENTS.md. Pur. */
 function projektBlockVon(agents: string): string {
-  const a = agents.indexOf("<!-- factory-projekt:start -->");
-  const b = agents.indexOf("<!-- factory-projekt:ende -->");
-  return a < 0 || b < a ? "" : agents.slice(a, b);
+  return projektBlock(agents) ?? "";
 }
 
 describe("verify:full im Projekt-Block der AGENTS.md nennt die Spielgates (#1932, #1921)", () => {

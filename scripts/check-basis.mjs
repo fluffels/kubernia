@@ -92,15 +92,26 @@ const IGNORED_DIRS = new Set([
  *  sonst lokal ungeprüft. test/docdrift.test.ts gleicht die Liste mit .gitignore ab. */
 export const VERSIONED_CLAUDE_DIRS = new Set(["agents", "skills", "workflows"]);
 
+/** Überspringt der Markdown-Walker den Eintrag `name` in `relDir`? Einzige Quelle der Regel (Walker und `istGelesenesMarkdown`). */
+function walkerUeberspringt(name, istOrdner, relDir) {
+  const inClaude = relDir === ".claude";
+  if (istOrdner) return IGNORED_DIRS.has(name) || (inClaude && !VERSIONED_CLAUDE_DIRS.has(name));
+  return inClaude; // lose Dateien direkt in .claude
+}
+
+/** Liest der Doku-Drift-Wächter diese Markdown-Datei (repo-relativer POSIX-Pfad)? Dieselbe Regel wie `collectMarkdown`, auf einen Pfad angewandt (#1942). */
+export function istGelesenesMarkdown(pfad) {
+  if (!pfad.endsWith(".md")) return false;
+  const teile = pfad.split("/");
+  return teile.every((name, i) => i === teile.length - 1 || !walkerUeberspringt(name, true, teile.slice(0, i).join("/")))
+    && !walkerUeberspringt(teile[teile.length - 1], false, teile.slice(0, -1).join("/"));
+}
+
 /** Alle *.md im Repo (repo-relativer POSIX-Pfad), IGNORED_DIRS ausgenommen; unter
  *  dem .claude im Repo-Root nur die VERSIONED_CLAUDE_DIRS (und keine losen Dateien direkt
  *  darin). Anders als früher (Basename-Match) gilt das nur für das Root-.claude. */
 export function collectMarkdown(rootDir = ROOT) {
   return collectMd(rootDir, ["."], {
-    ueberspringe: (ent, relDir) => {
-      const inClaude = relDir === ".claude";
-      if (ent.isDirectory()) return IGNORED_DIRS.has(ent.name) || (inClaude && !VERSIONED_CLAUDE_DIRS.has(ent.name));
-      return inClaude; // lose Dateien direkt in .claude
-    },
+    ueberspringe: (ent, relDir) => walkerUeberspringt(ent.name, ent.isDirectory(), relDir),
   });
 }

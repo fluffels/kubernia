@@ -362,10 +362,12 @@ function abgedecktJeIssue(abgedeckt) {
  * Nachfolger-Map für die Spitzen-Kandidaten. Lädt die Vorgänger-Liste nur, wenn es einen Spitzen-Alert gibt und `io.ladeVorgaenger` existiert.
  * Ein Fehler beim Laden ist KEIN Abbruch: Warnung und leere Map, die Alerts bleiben Spitze (laut statt still).
  */
-function ladeNachfolger({ alerts, io, owner, log }) {
-  if (!io.ladeVorgaenger || !alerts.some((a) => klasse(a) === "spitze")) return new Map();
+function ladeNachfolger({ alerts, bekannt, io, owner, log }) {
+  // Spitzen-Alerts, die eine Wiedervorlage (Nummer) oder ein deckendes Issue still macht, brauchen keinen Nachfolger-Abgleich (keine API-Aufrufe).
+  const kandidaten = alerts.filter((a) => klasse(a) === "spitze" && !bekannt.alerts?.has(a.nummer) && deckendesIssue(a, bekannt.issues) === null);
+  if (!io.ladeVorgaenger || kandidaten.length === 0) return new Map();
   try {
-    return nachfolgerJeAlert({ alerts, vorgaenger: vorgaengerAus(io.ladeVorgaenger(), owner), lies: io.ladeDatei ?? (() => null) });
+    return nachfolgerJeAlert({ alerts: kandidaten, vorgaenger: vorgaengerAus(io.ladeVorgaenger(), owner), lies: io.ladeDatei ?? (() => null) });
   } catch (err) {
     log(`::warning::Vorgänger-Alerts nicht lesbar, Alerts bleiben Spitze: ${fehlerText(err)}`);
     return new Map();
@@ -379,8 +381,9 @@ export function lauf({ io, trocken = false }) {
   try {
     const alerts = alertsAus(io.ladeAlerts());
     const k = io.ladeKontext();
-    const nachfolger = ladeNachfolger({ alerts, io, owner: k.owner, log });
-    plan = plane({ alerts, bekannt: bekannteAlerts(k), offenesIssue: k.offenesIssue, repo: io.repo, nachfolger });
+    const bekannt = bekannteAlerts(k);
+    const nachfolger = ladeNachfolger({ alerts, bekannt, io, owner: k.owner, log });
+    plan = plane({ alerts, bekannt, offenesIssue: k.offenesIssue, repo: io.repo, nachfolger });
     for (const n of plan.nachfolger) log(`Code-Scanning-Inbox: Alert ${n.nummer} ist Nachfolger von Nr. ${n.vorgaenger.join(", ")}`);
     for (const [issue, liste] of abgedecktJeIssue(plan.abgedeckt)) log(`Code-Scanning-Inbox: Alerts ${liste.nummern.join(", ")} abgedeckt durch #${issue} (${liste.gruende.join(", ")})`);
   } catch (err) {
@@ -413,10 +416,10 @@ export function kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wieder
 const seiten = (pfad) => JSON.parse(ghText(["api", "--paginate", "--slurp", pfad])).flat();
 
 /** Dateitext `pfad` im Stand `commit` über die Contents-API (roh); jeder Fehler ergibt null (kein Treffer, der Alert bleibt Spitze). */
-function dateiAusGh(repo, pfad, commit) {
+export function dateiAusGh(repo, pfad, commit, gh = ghText) {
   try {
     const segmente = pfad.split("/").map(encodeURIComponent).join("/");
-    return ghText(["api", "-H", "Accept: application/vnd.github.raw+json", `repos/${repo}/contents/${segmente}?ref=${encodeURIComponent(commit)}`]);
+    return gh(["api", "-H", "Accept: application/vnd.github.raw+json", `repos/${repo}/contents/${segmente}?ref=${encodeURIComponent(commit)}`]);
   } catch {
     return null;
   }

@@ -14,14 +14,16 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
-const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
+const { linkStellen, linkZiel } = rawMarkdown as unknown as {
+  linkStellen: (md: string) => { path: string }[];
+  linkZiel: (datei: string, pfad: string) => string;
+};
 
 interface Eintrag {
   pfad: string;
@@ -41,26 +43,13 @@ const BASELINE = "test/harness/kern-links-baseline.json";
 
 const lesen = (pfad: string): string | null => (existsSync(WURZEL + pfad) ? readFileSync(WURZEL + pfad, "utf8") : null);
 
-/** Text ohne Code-Fences (``` und ~~~) und ohne Inline-Code; Zeilenanzahl bleibt irrelevant. */
-export function ohneCode(text: string): string {
-  const zeilen = text.replace(/\r\n/g, "\n").split("\n");
-  const maske = fenceMaske(zeilen);
-  return zeilen
-    .filter((_, i) => !maske[i])
-    .map((zeile) => zeile.replace(/`[^`\n]*`/g, ""))
-    .join("\n");
-}
-
-/** Repo-relative Markdown-Ziele der Links in `text` einer Datei `quelle` (normalisiert, ohne Anker, dedupliziert). Schema-Links und reine Anker bleiben außen vor. */
+/** Repo-relative Markdown-Ziele der Links in `text` einer Datei `quelle` (normalisiert, ohne Anker und Query, dedupliziert). Schema-Links, reine Anker und Nicht-Markdown-Ziele bleiben außen vor. */
 export function markdownZiele(quelle: string, text: string): string[] {
   const ziele = new Set<string>();
-  for (const m of ohneCode(text).matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) {
-    const roh = m[1] ?? "";
-    if (/^[a-z][a-z0-9+.-]*:/i.test(roh) || roh.startsWith("#")) continue;
-    const ohneAnker = roh.split(/[#?]/)[0] ?? "";
-    if (!ohneAnker.toLowerCase().endsWith(".md")) continue;
-    const pfad = ohneAnker.startsWith("/") ? posix.normalize(ohneAnker.slice(1)) : posix.normalize(posix.join(posix.dirname(quelle), ohneAnker));
-    ziele.add(pfad);
+  for (const stelle of linkStellen(text)) {
+    const ohneQuery = stelle.path.split("?")[0] ?? "";
+    if (!ohneQuery.toLowerCase().endsWith(".md")) continue;
+    ziele.add(linkZiel(quelle, ohneQuery));
   }
   return [...ziele];
 }
@@ -106,6 +95,9 @@ describe("Kern-Links (#1860)", () => {
     test("löst relative Ziele gegen die Quelle auf, schneidet Anker und Titel ab, normalisiert ../", () => {
       const t = "[a](adr/0014.md#x) [b](../AGENTS.md) [c](./k.md \"Titel\") [d](/docs/w.md)";
       assert.deepEqual(markdownZiele("docs/sub/q.md", t), ["docs/sub/adr/0014.md", "docs/AGENTS.md", "docs/sub/k.md", "docs/w.md"]);
+    });
+    test("Ziele in spitzen Klammern (mit Leerzeichen) und Query werden aufgelöst", () => {
+      assert.deepEqual(markdownZiele("docs/q.md", "[a](<sub/a b.md#x>) [b](c.md?v=1)"), ["docs/sub/a b.md", "docs/c.md"]);
     });
     test("http(s), mailto, reine Anker und Nicht-Markdown-Ziele zählen nicht", () => {
       const t = "[a](https://x.de/a.md) [b](mailto:a@b.md) [c](#abschnitt) [d](skript.mjs) [e](bild.png#a.md)";

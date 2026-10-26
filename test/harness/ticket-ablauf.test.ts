@@ -284,7 +284,7 @@ describe("Ticket-Ablauf: das echte Repo", () => {
   test("jedes `--bereich <wert>` in Skills und Ablauf ist <bereich> oder ein Kern-Bereich, nie ein Alias (#1943)", () => {
     for (const datei of [PRODUKT, FACTORY, TICKET_ABLAUF]) {
       const werte = [...lies(datei).matchAll(/--bereich[ =]`?([^\s`.,;)|]+)/g)].map((m) => m[1]);
-      assert.ok(werte.length > 0 || datei === TICKET_ABLAUF, `${datei} nennt keinen --bereich`);
+      assert.ok(werte.length > 0, `${datei} nennt keinen --bereich`);
       for (const w of werte) assert.ok(w === "<bereich>" || Object.hasOwn(BEREICHE, w), `${datei}: --bereich ${w} ist kein Kern-Bereich`);
     }
   });

@@ -31,6 +31,10 @@ Sessions mit nicht leerem `pending_agent_turns` in `~/.claude/state/langfuse_sta
 
 **Nachhol-Weg:** der [Abgleich](#abgleich-als-garantie-1578) liefert fehlende Calls aus dem Transkript nach (SessionStart für ältere, SessionEnd für die eigene Session); ein Plugin-Flush von Hand entfällt. Der Abgleich sendet nur, was nach Ist-Abfrage und Ledger fehlt, denn Langfuse v4 sichert für wiederholt gesendete IDs keine verlässliche Zusammenführung zu (in der Langfuse-Doku fand sich keine Stelle, die sie beschreibt, Entscheidung in #1556); Dubletten werden nur gemeldet, nie gelöscht ([ADR 0023](adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md)). Danach `pending_agent_turns` der Session und die Erfassungsquote prüfen (Score `erfassung`).
 
+## Größe der Zustandsdatei (#1942)
+
+`~/.claude/state/langfuse_state.json` wächst nicht unbegrenzt: `save_hook_state` verwirft Einträge mit `updated` älter als 30 Tage (Upstream, ohne Patch). Das Gewicht liegt fast ganz im Feld `open_turn.rows` (das zurückgehaltene Transkript des letzten Turns, je Session bis in den hunderte-KB-Bereich); alle anderen Felder sind zusammen klein. Die Datei steht darum bei einer Größe im zweistelligen MB-Bereich (Messung 2026-10-26: rund 17 MB bei 108 Sessions, Beleg im Kommentar auf [#1942](https://github.com/fluffels/kubernia/issues/1942)). **Kein Patch:** `open_turn.rows` trägt den Resume-Zustand (Fortsetzung des offenen Turns, `emit_ready_observations_of_open_turn`), und ein Kappen nach Alter griffe erst jenseits der 30 Tage, die Upstream ohnehin entfernt. Ein Kappen jüngerer Einträge risse Resume-Zustand ab. Wird die Datei zum Problem (Stop-Hook merklich langsam), ist der Hebel die Aufbewahrung (Upstream-Konstante), nicht ein Feld-Schnitt.
+
 ## Abgleich als Garantie (#1578)
 
 Fehlende Calls stellt der Nachlieferer (`scripts/langfuse-nachliefern.mjs`, Entscheidung: [ADR 0023](adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md)) von selbst nach; kein Agent muss daran denken. Der Einstieg `scripts/langfuse-abgleich-hook.mjs` hängt in `.claude/settings.json` an **`SessionStart`** (`startup|resume|clear`, dort nicht als eigener Eintrag, sondern über `haupt-sync.mjs --danach`, siehe Absatz „Reihenfolge an SessionStart“) und **`SessionEnd`**, **nie an `Stop`** (läuft je Turn, kollidiert mit dem vom Plugin zurückgehaltenen Turn und erzeugte Dubletten). Er startet den Nachlieferer losgelöst (`detached`, `cwd` im Home, damit kein Worktree gehalten wird) und endet sofort mit Exit 0, auch bei kaputtem stdin; `compact`, `fork` und unbekannte Quellen starten nichts.
@@ -56,6 +60,17 @@ Fehlende Calls stellt der Nachlieferer (`scripts/langfuse-nachliefern.mjs`, Ents
 ## Modelldefinitionen der Instanz
 
 Langfuse bepreist die Generationen des Hook-Plugins selbst, und nur bei der Ingestion: ein später angelegter Preis gilt nicht rückwirkend, ein Nachtragen gibt es nicht (erneutes Senden erzeugt Dubletten). Der Nachlieferer sendet dagegen `cost_details` aus `scripts/preise.mjs`. Ein neues Modell in `preise.mjs` braucht darum eine Definition in der Instanz (Project Settings › Models bzw. `POST /api/public/models`), vor dem ersten Lauf mit diesem Modell; Beispiel `match_pattern` `(?i)^claude-haiku-5-5$`. Preis-Schlüssel je Token (Wert aus `preise.mjs` geteilt durch 1e6): `input`, `output`, `cache_read_input_tokens`, `input_cache_creation_5m`, `input_cache_creation_1h`, `cache_creation_input_tokens`. Eine Preisstufe über 100k Prompt-Tokens (wie bei Haiku in `preise.mjs`) trägt die Instanz als Stufe „Usage-Schlüssel per Regex“ ein (Bedingung und Regex: [Modell-Routing › Messen](model-routing.md#messen), Punkt „Kosten“); die Definitionen pflegt die Maintainerin oder, per Langfuse-MCP, der Hauptchat nach dem Merge des Ticket-PRs. Erkennung eines fehlenden oder zu niedrigen Preises: der Hinweis Modellpreis in `--pruefen`, eines zu hohen Preises: die Preisabweichung und der Hinweis Überpreis. Das `match_pattern` ist immer exakt (`(?i)^<modell>$`), nie ein Präfix. Prüfweg bei Abweichung: den effektiven Preis je Schlüssel aus einer Hook-Generation (Name `LLM Call` oder `Subagent LLM Call`) lesen (`costDetails` geteilt durch `usageDetails` mal 1e6, `getObservation`) und gegen `preise.mjs` legen; nachgelieferte Generationen (Name `Call`) tragen die Preise aus `preise.mjs` und dienen als Gegenprobe. Eine neue Preisperiode in `preise.mjs` gilt für die Instanz erst, wenn ihre Definition mitgeändert ist; sonst bepreist sie Hook-Generationen weiter mit dem alten Preis, nachgelieferte mit dem neuen. Beispiel (Befund 2026-10-26, Rohwerte im Ergebnis-Kommentar von #1919): Sonnet 5.5 stand in der Instanz mit `cache_read_input_tokens` 0,2 $ je Mio statt 0,1 $ (Preisliste seit 2026-10-07), Opus 5.5 stimmte exakt, Langfuse lag bei sonnetlastigen Sessions klar über dem Transkript. Altdaten werden nicht nachgetragen: die Preisabweichung bleibt dort stehen und wird in den Wochensummen abgezogen.
+
+**Stand der Definitionen:** je Modell und Preisperiode aus `PRICES` eine Zeile (`Modellstart` = Eintrag ohne `validFrom`); Status `angelegt <YYYY-MM-DD>` nur mit Beleg (Instanz gelesen und mit `preise.mjs` gleich), sonst `offen`. Ein Test (`test/modelldefinitionen.test.ts`) verlangt für jede Periode eine Zeile; der Status-Lauf prüft die `offen`-Zeilen ([Checkliste Punkt 2](model-routing.md#langfuse-status-überprüfen-1293)).
+
+| Modell | Periode ab | Instanz |
+| --- | --- | --- |
+| claude-sonnet-5-5 | Modellstart | angelegt 2026-10-26 |
+| claude-sonnet-5-5 | 2026-10-07 | offen |
+| claude-opus-5-5 | Modellstart | angelegt 2026-10-26 |
+| claude-opus-5 | Modellstart | offen |
+| claude-haiku-5-5 | Modellstart | offen |
+| claude-haiku-4-5 | Modellstart | offen |
 
 ## Fehlende Sessions (#1382)
 

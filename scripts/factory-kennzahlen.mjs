@@ -21,7 +21,7 @@ import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { REPO } from "./board-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { claimNummer, median } from "./mess-lib.mjs";
-import { SPIEL_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { PRODUKT_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./produktquote-lib.mjs";
 import { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } from "./nachweis-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
@@ -236,21 +236,21 @@ export function renderMarkdown(b) {
 export const MAX_RUNDEN = MAX_REVIEW_PAESSE + MAX_ZUSATZPAESSE + 1;
 /** CI-Fix-Runden, ab denen das Festgefahren-Protokoll greifen muss (nach dem dritten Fix-Versuch). */
 export const FESTGEFAHREN_AB_CI_FIX = 4;
-/** Spielquote: unter so vielen Ticket-Merges im Fenster gibt es keine Aussage. */
+/** Produktquote: unter so vielen Ticket-Merges im Fenster gibt es keine Aussage. */
 export const QUOTE_MIN_MERGES = 4;
 
 const nrListe = (zs) => zs.map((z) => `#${z.pr}`).join(", ");
 
 function auditQuote(commits, luecke, harnessIssues, harnessLuecke) {
-  const soll = `höchstens 1 Factory- auf ${SPIEL_QUOTE} Produkt-Merges`;
+  const soll = `höchstens 1 Factory- auf ${PRODUKT_QUOTE} Produkt-Merges`;
   const grund = luecke ?? harnessLuecke;
-  if (grund) return { mechanismus: "Spielquote", messung: grund, soll, status: "Lücke" };
+  if (grund) return { mechanismus: "Produktquote", messung: grund, soll, status: "Lücke" };
   const ticket = commits.filter((c) => zaehleTicketMerges([c]) === 1);
   const harness = ticket.filter((c) => istHarnessCommit(c, harnessIssues)).length;
-  const spiel = ticket.length - harness;
-  const messung = `${harness} Factory- auf ${spiel} Produkt-Merges seit dem letzten Sammelticket-Abschluss (${harnessIssues ? "Zuordnung nach Label der referenzierten Issues" : "Rückfall: Zuordnung nach Commit-Scope"})`;
-  if (ticket.length < QUOTE_MIN_MERGES) return { mechanismus: "Spielquote", messung: `${messung}, nur ${ticket.length} Merges: keine Aussage`, soll, status: "Lücke" };
-  return { mechanismus: "Spielquote", messung, soll, status: harness * SPIEL_QUOTE <= spiel ? "ok" : "ABWEICHUNG" };
+  const produkt = ticket.length - harness;
+  const messung = `${harness} Factory- auf ${produkt} Produkt-Merges seit dem letzten Sammelticket-Abschluss (${harnessIssues ? "Zuordnung nach Label der referenzierten Issues" : "Rückfall: Zuordnung nach Commit-Scope"})`;
+  if (ticket.length < QUOTE_MIN_MERGES) return { mechanismus: "Produktquote", messung: `${messung}, nur ${ticket.length} Merges: keine Aussage`, soll, status: "Lücke" };
+  return { mechanismus: "Produktquote", messung, soll, status: harness * PRODUKT_QUOTE <= produkt ? "ok" : "ABWEICHUNG" };
 }
 
 function auditTakt({ commits, luecke, sammelAbschluss, sammelIssues, sammelInArbeit }) {
@@ -285,7 +285,7 @@ function auditLens(zeilen) {
 }
 
 /**
- * Selbst-Audit: je Mechanismus (Spielquote, Härtungs-Takt, Festgefahren-Protokoll, Lens-Zahl) eine Messung gegen das Ziel, als
+ * Selbst-Audit: je Mechanismus (Produktquote, Härtungs-Takt, Festgefahren-Protokoll, Lens-Zahl) eine Messung gegen das Ziel, als
  * `{ mechanismus, messung, soll, status: "ok" | "ABWEICHUNG" | "Lücke" }`. `commits` = Commits von main seit dem Abschluss des letzten Sammeltickets
  * (`null` plus `commitsLuecke` = Grund, wenn nicht ladbar), `sammelAbschluss` = dessen Abschlusszeit, `sammelIssues` = Nummern
  * aller Sammeltickets, `sammelInArbeit` = Nummer eines geclaimten offenen Sammeltickets oder null, `harnessIssues` = Nummern geschlossener Harness-Issues (Quote-Zuordnung, null: Rückfall auf den Scope), `harnessLuecke` = Grund, wenn nicht ladbar (nur die Quote wird Lücke), `zeilen` = Zeilen von `lauf-ergebnis --json`

@@ -52,6 +52,7 @@ import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 import { type BesitzEintragKurz, ladeBesitzManifest } from "../support/besitz-anker";
+import { projektBlock } from "../support/projekt-block";
 
 interface BesitzLibKurz {
   einheitText: (e: { pfad: string; block?: string }, text: string) => string | null;
@@ -148,9 +149,7 @@ function kernDocsVon(agentsText: string, vorlageText: string): Record<Ziel, stri
  */
 function vorlageOderProjektBlock(vorlageText: string | null, agentsText: string): string {
   if (vorlageText !== null) return vorlageText;
-  const von = agentsText.indexOf("<!-- factory-projekt:start -->");
-  const bis = agentsText.indexOf("<!-- factory-projekt:ende -->");
-  return von >= 0 && bis > von ? agentsText.slice(von, bis) : "";
+  return projektBlock(agentsText) ?? "";
 }
 
 const nurBegriffe = (vs: Verweis[]) => vs.map(({ ziel, begriff }) => ({ ziel, begriff }));

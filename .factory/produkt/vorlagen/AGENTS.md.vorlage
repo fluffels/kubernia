@@ -4,7 +4,7 @@
 <!-- factory-besitz:ende kern -->
 
 <!-- factory-projekt:start -->
-> Dieses Repository ist der Harness selbst: Gates, Wächter-Tests, Hooks, Skills und Werkzeuge, mit denen Coding-Agenten Tickets bearbeiten. Es enthält kein Spiel und keinen Produktcode; Projekte beziehen den Besitz per Sync.
+> Dieses Repository ist der Harness selbst: Gates, Wächter-Tests, Hooks, Skills und Werkzeuge, mit denen Coding-Agenten Tickets bearbeiten. Es enthält keinen Produktcode; Projekte beziehen den Besitz per Sync.
 
 ## Das Wichtigste zuerst
 

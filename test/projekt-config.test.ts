@@ -211,6 +211,16 @@ describe("pruefeProjektConfig", () => {
   });
 });
 
+describe("Bereich zu Board-Rolle", () => {
+  const roh = rawPc as unknown as { BEREICHE: object; BEREICH_BOARD: Record<string, string>; BOARD_ROLLEN: string[] };
+
+  test("jeder Kern-Bereich zeigt auf genau eine Board-Rolle, keine Rolle ohne Bereich", () => {
+    assert.deepEqual(Object.keys(roh.BEREICH_BOARD), Object.keys(roh.BEREICHE));
+    for (const rolle of Object.values(roh.BEREICH_BOARD)) assert.ok(roh.BOARD_ROLLEN.includes(rolle), rolle);
+    assert.deepEqual(Object.values(roh.BEREICH_BOARD).sort(), [...roh.BOARD_ROLLEN].sort());
+  });
+});
+
 describe("Bereichs-Aliase (#1943)", () => {
   const mit = (wert: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), bereiche: wert });
 
@@ -444,6 +454,34 @@ describe("Einstieg scripts/projekt-config.mjs", { timeout: 30_000 }, () => {
     assert.equal(start("boards.0.gibtsnicht").status, 1);
     assert.equal(start().status, 2);
   });
+});
+
+describe("Accessoren vertragen eine fehlende Config (null/undefined)", () => {
+  const acc = rawPc as unknown as Record<string, (config: unknown, ...rest: unknown[]) => unknown>;
+  // Standardwert oder klare Fehlermeldung mit Config-Pfad, nie ein TypeError aus `null.feld`.
+  const FAELLE: [string, (c: unknown) => unknown, { wert: unknown } | { fehler: RegExp }][] = [
+    ["bereichAliaseAus", (c) => acc.bereichAliaseAus(c), { wert: {} }],
+    ["labelAus", (c) => acc.labelAus(c, "harness"), { fehler: /labels\.harness fehlt/ }],
+    ["spracheAus", (c) => acc.spracheAus(c), { fehler: /sprache fehlt/ }],
+    ["strukturAus", (c) => acc.strukturAus(c), { fehler: /struktur fehlt/ }],
+    ["escapeKopienAus", (c) => acc.escapeKopienAus(c), { wert: [] }],
+    ["umschriftAus", (c) => acc.umschriftAus(c), { fehler: /sprache\.umschrift fehlt/ }],
+    ["ausnahmenAus", (c) => acc.ausnahmenAus(c), { wert: { groesse: [], kontext: [] } }],
+    ["gatesAus", (c) => acc.gatesAus(c), { wert: { nichtInVerify: [] } }],
+    ["repoName", (c) => acc.repoName(c), { fehler: /repo fehlt/ }],
+    ["repoOwner", (c) => acc.repoOwner(c), { fehler: /repo fehlt/ }],
+    ["berechtigungenAus", (c) => acc.berechtigungenAus(c), { wert: { allow: [], ask: [], deny: [] } }],
+    ["sandboxAus", (c) => acc.sandboxAus(c), { wert: { allowedDomains: [], envVars: [] } }],
+    ["altEnvPraefix", (c) => acc.altEnvPraefix(c), { wert: null }],
+  ];
+  for (const [name, aufruf, erwartet] of FAELLE) {
+    for (const leer of [null, undefined]) {
+      test(`${name}(${String(leer)})`, () => {
+        if ("wert" in erwartet) assert.deepEqual(aufruf(leer), erwartet.wert);
+        else assert.throws(() => aufruf(leer), (e: unknown) => e instanceof Error && !(e instanceof TypeError) && erwartet.fehler.test(e.message));
+      });
+    }
+  }
 });
 
 describe("altEnvPraefix", () => {
@@ -729,6 +767,18 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
       assert.match(r.text, /✖ [\s\S]*struktur/, skript);
       assert.match(r.text, /Fix:/, skript);
       assert.doesNotMatch(r.text, /^\s+at /m, skript);
+    }
+  });
+  test("#1942: check:docmap prüft sonst nichts und ist dann rot: Quellwurzel ohne .ts-Datei oder ohne Ordner (kein stilles Grün, kein Stacktrace)", () => {
+    const leer = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
+    rmSync(join(leer, "lib", "gross.ts"));
+    writeFileSync(join(leer, "lib", "typen.d.ts"), "export {};\n");
+    const fehlt = fremdrepo({ quelle: "gibts-nicht", moduldoku: "handbuch/module" });
+    for (const d of [leer, fehlt]) {
+      const r = lauf(d, "check-docmap.mjs");
+      assert.equal(r.status, 1, r.text);
+      assert.match(r.text, /✖ check:docmap prüft nichts: keine `[\w-]+\/\*\*\/\*\.ts`/);
+      assert.doesNotMatch(r.text, /^\s+at /m);
     }
   });
 });

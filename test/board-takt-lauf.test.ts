@@ -1,4 +1,4 @@
-/* Spielquote nach Issue-Label (#1428 Z22) und die Verdrahtung des Takt-Laufs mit Fakes (#1428 Z23): `fuehreTaktAus` nimmt seine I/O
+/* Produktquote nach Issue-Label (#1428 Z22) und die Verdrahtung des Takt-Laufs mit Fakes (#1428 Z23): `fuehreTaktAus` nimmt seine I/O
  * injiziert, die Tests prüfen Fenster, Label-Menge und Listen-Nachzug ohne Netz. Technik wie test/board-takt.test.ts. */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -23,8 +23,8 @@ type Io = {
 };
 const T = raw as unknown as {
   istHarnessCommit: (c: unknown, h?: Set<number> | null) => boolean;
-  zaehleSpielMerges: (c: unknown[], seit?: string | null, h?: Set<number> | null) => number;
-  quotenBericht: (c: unknown[], seit?: string | null, h?: Set<number> | null) => { harness: number; spiel: number };
+  zaehleProduktMerges: (c: unknown[], seit?: string | null, h?: Set<number> | null) => number;
+  quotenBericht: (c: unknown[], seit?: string | null, h?: Set<number> | null) => { harness: number; produkt: number };
   fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io; config?: unknown }) => { fehler: boolean };
 };
 
@@ -55,9 +55,9 @@ describe("istHarnessCommit nach Label (#1428 Z22)", () => {
   });
   test("Zählung und Bericht nutzen die Menge", () => {
     const l = [c("feat(sim): a (#7)"), c("docs(adr): b (#102)"), c("feat(harness): c (#8)")];
-    expect(T.zaehleSpielMerges(l, null, H)).toBe(2); // a und das feat(harness) zu Spiel-Issue #8
-    expect(T.zaehleSpielMerges(l)).toBe(2); // ohne Menge zählt nur der Scope: docs(adr) ist Spiel, feat(harness) Harness
-    expect(T.quotenBericht(l, null, H)).toMatchObject({ harness: 1, spiel: 2 });
+    expect(T.zaehleProduktMerges(l, null, H)).toBe(2); // a und das feat(harness) zu Spiel-Issue #8
+    expect(T.zaehleProduktMerges(l)).toBe(2); // ohne Menge zählt nur der Scope: docs(adr) ist Spiel, feat(harness) Harness
+    expect(T.quotenBericht(l, null, H)).toMatchObject({ harness: 1, produkt: 2 });
   });
 });
 
@@ -111,11 +111,11 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
   const kommentar = (login: string, type = "User") => ({ user: { login, type } });
   const befunde = (n: number) => Array.from({ length: n }, () => kommentar(OWNER));
 
-  test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Spiel-Merges plus ein Harness-Doku-Commit (ohne Befund-Kommentare) holen nichts", () => {
+  test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Produkt-Merges plus ein Harness-Doku-Commit (ohne Befund-Kommentare) holen nichts", () => {
     const { log, aufrufe } = lauf([spiel(1), spiel(2), doku]);
     expect(aufrufe.harness).toHaveLength(0);
     expect(log.join("\n")).toContain("Fenster ab 2026-10-01T00:01:00.000Z");
-    expect(log.join("\n")).toMatch(/1 Harness- auf 2 Spiel-Merges/);
+    expect(log.join("\n")).toMatch(/1 Harness- auf 2 Produkt-Merges/);
   });
 
   test("zehn Befund-Kommentare (Füllstand 10/10) holen das Sammelticket; die Liste ist nach der Status-Aktion nachgezogen (Status-Ticket vorn); die Kommentare lädt der Takt nur für dieses Ticket", () => {

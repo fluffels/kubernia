@@ -372,6 +372,12 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
     assert.equal(isMeasured("scripts/check-size.mjs"), false);
   });
 
+  test("#1942: auch .mts, .mjs, .cjs und .js unter der Quellwurzel sind Gegenstand der Messung (Factory-Repo: Quellwurzel scripts), Typdeklarationen und Daten nicht", () => {
+    for (const endung of ["ts", "mts", "mjs", "cjs", "js"]) assert.equal(isMeasured(`scripts/x.${endung}`, "scripts"), true, endung);
+    for (const nein of ["scripts/x.d.ts", "scripts/x.d.mts", "scripts/x.d.cts", "scripts/x.json", "scripts/x.md", "scripts/x.mjs.map", "test/x.mjs", "scriptsx/y.mjs"]) assert.equal(isMeasured(nein, "scripts"), false, nein);
+    assert.equal(isMeasured("scripts/check-size.mjs"), false, "unter der Quellwurzel des Spiels (src) bleibt ein Skript außerhalb");
+  });
+
   test("eigener Override-Schlüssel (#1269): ein Diffsize-Trailer gilt hier nicht", () => {
     assert.equal(ZEILEN.diffcovOverride, `${FREMD.praefixe.commitZeile}Diffcov-Override`);
     const runGit = mitTrailer(
@@ -606,7 +612,7 @@ describe("Diff-Coverage: Quellwurzel aus der Struktur-Config (#1860)", () => {
     assert.equal(isMeasured(`${Q}/a.ts`, "lib"), false);
     assert.equal(isMeasured("library/a.ts", "lib"), false);
     assert.equal(isMeasured("lib/a.d.ts", "lib"), false);
-    assert.equal(isMeasured("lib/a.mjs", "lib"), false);
+    assert.equal(isMeasured("lib/a.mjs", "lib"), true);
   });
   test("ohne Angabe gilt struktur.quelle der Projekt-Config", () => {
     assert.equal(isMeasured(`${Q}/sim/pods.ts`), true);
