@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawKetten from "../../scripts/docs-gen/npm-ketten.mjs";
 
+// Begründete Ausnahme wie in verify-script.test.ts: das .mjs hat kein Declaration-File.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
 const kettenSchritte = rawKetten.kettenSchritte as (scripts: Record<string, string>, chains: string[], kette: string) => string[];
 
 const readRepo = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
