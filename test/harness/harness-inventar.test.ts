@@ -5,7 +5,7 @@
  * Prüfstand-Marker („Geprüft bis <Werkzeug> <Stand>“), die der Wochenabgleich (#1362) fortschreibt.
  * Drei Dinge dürfen nicht still driften: (1) jedes der fünf Werkzeuge hat genau einen regelkonformen
  * Marker, (2) jeder Baustein der generierten README-Tabelle (ADR 0017) steht in einer Inventarzeile,
- * (3) Urteil und Spielunabhängig nutzen nur das feste Vokabular. Negativfälle gegen die pure Hilfsfunktionen.
+ * (3) Urteil und Projektunabhängig nutzen nur das feste Vokabular. Negativfälle gegen die pure Hilfsfunktionen.
  * Bewusste Grenzen: Der Generator benennt Hooks nur je Event, ein neuer Guard unter einem bestehenden Event verlangt keine neue Zeile;
  * der erste Backtick-Name der ersten Zelle ist der Name der Zeile; ein Marker in einem Codeblock zählt;
  * die Abschnitte B und C (Skripte, Regeln) sind Handlisten ohne Generator-Abgleich.
@@ -33,7 +33,7 @@ const WURZEL = process.cwd();
 const SEITE = "docs/harness-inventar.md";
 const WERKZEUGE = ["Claude Code", "Langfuse", "PixelLab", "Playwright", "GitHub"] as const;
 const MARKER = /^- Geprüft bis (Claude Code|Langfuse|PixelLab|Playwright|GitHub) (v?\d+\.\d+\.\d+|\d{4}-\d{2}-\d{2})$/gm;
-const KOPF = "| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Spielunabhängig |";
+const KOPF = "| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Projektunabhängig |";
 const URTEIL = /^(behalten|ersetzen|beobachten)(:|$)/;
 const UNABHAENGIG = /^(ja|nein|teilweise|Modul|Oberfläche)(:|$)/;
 
@@ -100,7 +100,7 @@ function vokabularProbleme(zeilen: Zeile[]): string[] {
     if (z.zellen.length !== 5) p.push(`${z.zellen[0]}: ${z.zellen.length} statt 5 Zellen`);
     else {
       if (!URTEIL.test(z.zellen[3])) p.push(`${z.zellen[0]}: Urteil „${z.zellen[3]}“`);
-      if (!UNABHAENGIG.test(z.zellen[4])) p.push(`${z.zellen[0]}: Spielunabhängig „${z.zellen[4]}“`);
+      if (!UNABHAENGIG.test(z.zellen[4])) p.push(`${z.zellen[0]}: Projektunabhängig „${z.zellen[4]}“`);
     }
   }
   return p;
@@ -172,7 +172,7 @@ describe("harness-inventar.md: Vollständigkeit gegen die generierte Tabelle (#1
 });
 
 describe("harness-inventar.md: festes Vokabular (#1361)", () => {
-  test("die echte Seite hat Zeilen und nur erlaubte Urteile und Spielunabhängig-Werte", () => {
+  test("die echte Seite hat Zeilen und nur erlaubte Urteile und Projektunabhängig-Werte", () => {
     const zeilen = inventarZeilen(seite());
     expect(zeilen.length).toBeGreaterThan(20);
     expect(kopfZahl(seite())).toBe(4);
@@ -186,9 +186,9 @@ describe("harness-inventar.md: festes Vokabular (#1361)", () => {
     expect(vokabularProbleme([z("ersetzten", "ja")]).join()).toContain("Urteil");
     expect(vokabularProbleme([z("vielleicht", "ja")]).join()).toContain("Urteil");
     expect(vokabularProbleme([z("behalten", "Modul")])).toEqual([]);
-    expect(vokabularProbleme([z("behalten", "modul")]).join()).toContain("Spielunabhängig");
-    expect(vokabularProbleme([z("ersetzen", "vielleicht")]).join()).toContain("Spielunabhängig");
-    expect(vokabularProbleme([z("ersetzen", "ja (unklar)")]).join()).toContain("Spielunabhängig");
+    expect(vokabularProbleme([z("behalten", "modul")]).join()).toContain("Projektunabhängig");
+    expect(vokabularProbleme([z("ersetzen", "vielleicht")]).join()).toContain("Projektunabhängig");
+    expect(vokabularProbleme([z("ersetzen", "ja (unklar)")]).join()).toContain("Projektunabhängig");
     expect(doppelt([z("a", "ja"), { zellen: ["`a`, `b`", "", "", "behalten", "ja"] }])).toEqual(["a"]);
     expect(vokabularProbleme([{ zellen: ["`a`", "z"] }]).join()).toContain("2 statt 5");
   });

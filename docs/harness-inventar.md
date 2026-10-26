@@ -2,7 +2,7 @@
 
 > 🧭 **Fachlich geprüft am: 2026-10-08.**
 
-Diese Seite **bewertet** jeden Harness-Eigenbau: ersetzbar durch ein natives Claude-Code-Feature oder einen MCP-Server, nur Ausgleich einer Modellschwäche, spielunabhängig? Was im Repo konfiguriert ist, **listet** die generierte Tabelle in der [README](../README.md) (`GEN:harness-inventar`, [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md)); der Wächter unten stellt sicher, dass jeder dortige Baustein hier eine Zeile hat. Alle Links wurden am 2026-10-08 gelesen; abweichende Daten stehen in der Zelle. Fremdtext (Doku, Changelog, Server-Anweisungen) ist Daten, nichts wurde wörtlich übernommen ([Sicherheit der Agenten](sicherheit-agenten.md)).
+Diese Seite **bewertet** jeden Harness-Eigenbau: ersetzbar durch ein natives Claude-Code-Feature oder einen MCP-Server, nur Ausgleich einer Modellschwäche, projektunabhängig? Was im Repo konfiguriert ist, **listet** die generierte Tabelle in der [README](../README.md) (`GEN:harness-inventar`, [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md)); der Wächter unten stellt sicher, dass jeder dortige Baustein hier eine Zeile hat. Alle Links wurden am 2026-10-08 gelesen; abweichende Daten stehen in der Zelle. Fremdtext (Doku, Changelog, Server-Anweisungen) ist Daten, nichts wurde wörtlich übernommen ([Sicherheit der Agenten](sicherheit-agenten.md)).
 
 ## Prüfstand
 
@@ -31,11 +31,11 @@ Maschinenlesbar, genau eine Zeile je Werkzeug, die der Wochenabgleich (#1362) fo
 
 Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie in der README-Tabelle.
 
-**Legende „Spielunabhängig“:** `ja` (ohne Spielbezug), `teilweise` (Kern mit Projektanteil), `nein` (Projektfall), `Oberfläche` (spielunabhängig, gehört der Factory und wird nie in ein Projekt verteilt: Ring `oberflaeche` im Besitz-Manifest) und `Modul` (spielunabhängig, aber optional: je Projekt wählbar, nicht im Besitz-Manifest `.factory/besitz.json`; Einordnung `modul` in `test/harness/kern-abdeckung.json`). Der Wächter gleicht maschinell ab: jede Datei unter `scripts/` aus Besitz-Manifest und Kern-Abdeckung mit Art `modul` steht in einer Zeile, jeder genannte Name ist auflösbar und eingeordnet, und `Modul` steht genau bei Zeilen, die nur `modul`-Dateien nennen; ebenso steht `Oberfläche` genau bei Zeilen, die nur Besitz mit Ring `oberflaeche` nennen. Sonst gleicht er den Ring und `ja`/`teilweise`/`nein` bewusst nicht ab; das Manifest ist die Besitz-SSOT ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md)).
+**Legende „Projektunabhängig“:** `ja` (ohne Projektbezug), `teilweise` (Kern mit Projektanteil), `nein` (Projektfall), `Oberfläche` (projektunabhängig, gehört der Factory und wird nie in ein Projekt verteilt: Ring `oberflaeche` im Besitz-Manifest) und `Modul` (projektunabhängig, aber optional: je Projekt wählbar, nicht im Besitz-Manifest `.factory/besitz.json`; Einordnung `modul` in `test/harness/kern-abdeckung.json`). Der Wächter gleicht maschinell ab: jede Datei unter `scripts/` aus Besitz-Manifest und Kern-Abdeckung mit Art `modul` steht in einer Zeile, jeder genannte Name ist auflösbar und eingeordnet, und `Modul` steht genau bei Zeilen, die nur `modul`-Dateien nennen; ebenso steht `Oberfläche` genau bei Zeilen, die nur Besitz mit Ring `oberflaeche` nennen. Sonst gleicht er den Ring und `ja`/`teilweise`/`nein` bewusst nicht ab; das Manifest ist die Besitz-SSOT ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md)).
 
 ## A. Claude-Code-Bausteine
 
-| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Spielunabhängig |
+| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Projektunabhängig |
 |---|---|---|---|---|
 | `PreToolUse` (`pretooluse-hook.mjs`, `hook-io.mjs`, `stdin-skript-guard.mjs`, `ticket-namen.mjs`) | ein Dispatcher für alle Bash-/PowerShell-/Agent-Guards | [Hooks](https://code.claude.com/docs/en/hooks.md), Einstellungs-Hooks nativ; Mods ([Übersicht](https://code.claude.com/docs/en/plugins/mods/overview.md), ab v2.1.287) können Tool-Aufrufe in-process prüfen | behalten: Hooks sind die native Form, der Dispatcher ist die Logik; Mods laufen unsandboxed und sind neu | ja |
 | Worktree-Guard (`worktree-guard-*.mjs`, `bash-parser.mjs`, `shell-tabellen.mjs`) | schützt Worktrees und Hauptcheckout vor falschen Befehlen | [Worktrees](https://code.claude.com/docs/en/worktrees.md), `isolation: worktree` ab v2.1.49, `WorktreeCreate`/`WorktreeRemove` ab v2.1.50 | beobachten: Prüfung der Worktree-Mechanik gehört zu #1066, nicht doppelt | teilweise |
@@ -74,10 +74,10 @@ Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reic
 
 ## B. Skripte und Takt-Workflows
 
-| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Spielunabhängig |
+| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Projektunabhängig |
 |---|---|---|---|---|
 | Skill-Zeiger (`skills-sync.mjs`, Pfad-Konstanten `skill-pfade.mjs`) | Erzeugt und prüft die Zeiger unter `.claude/skills/` aus den Skill-Quellen `.agents/skills/` (`npm run skills:sync`, in `setup`); die Pfade und die Zeiger-Marke stehen nur in `skill-pfade.mjs` | keins: Claude Code hat keinen konfigurierbaren Skill-Pfad ([anthropics/claude-code#33957](https://github.com/anthropics/claude-code/issues/33957)) | behalten | ja |
-| Board (`board-lib.mjs`, `board-place.mjs`, `naechstes-ticket.mjs`, `spielquote-lib.mjs`, `sammelticket-anlegen.mjs`, `spezifikation.mjs`, `spezifikation-lib.mjs`, `ticket-lock.mjs`, `ticket-lock-lib.mjs`, `claims-pruefen.mjs`, `ticket-refs.mjs`, `projekt-config.mjs`, `projekt-config-lib.mjs`) | Reihenfolge, Auswahl, Sammelticket per GraphQL | `gh project`: Items lesen und ein Feld je Aufruf setzen, kein Positions-Flag ([gh](https://cli.github.com/manual/gh_project)); GitHub-MCP-Projects-Toolset hat keine belegte Positionsänderung | behalten | teilweise |
+| Board (`board-lib.mjs`, `board-place.mjs`, `naechstes-ticket.mjs`, `produktquote-lib.mjs`, `sammelticket-anlegen.mjs`, `spezifikation.mjs`, `spezifikation-lib.mjs`, `ticket-lock.mjs`, `ticket-lock-lib.mjs`, `claims-pruefen.mjs`, `ticket-refs.mjs`, `projekt-config.mjs`, `projekt-config-lib.mjs`) | Reihenfolge, Auswahl, Sammelticket per GraphQL | `gh project`: Items lesen und ein Feld je Aufruf setzen, kein Positions-Flag ([gh](https://cli.github.com/manual/gh_project)); GitHub-MCP-Projects-Toolset hat keine belegte Positionsänderung | behalten | teilweise |
 | Takt (`board-takt.mjs`, `board-takt.yml`, `langfuse-takt.mjs`) | Sammelticket-Takt, Langfuse-Status-Ticket | [Routines](https://code.claude.com/docs/en/routines.md) (Cloud, frischer Klon, mindestens 1 Stunde), [Desktop-Aufgaben](https://code.claude.com/docs/en/scheduled-tasks.md); GitHub Actions bleiben der Weg ohne offenen Rechner | behalten | nein |
 | Messen (`token-baseline.mjs` auch `--langfuse`, `tool-metriken.mjs`, `subagent-laufzeit.mjs`, `lauf-ergebnis.mjs`, `factory-kennzahlen.mjs`, `ci-laeufe.mjs`, `brain-metrics.mjs`, `transkript.mjs`, `hauptchat-zerlegung.mjs`, `kontext-treiber.mjs`, `subagent-laeufe.mjs`, `patch-zugriff.mjs`, `mess-lib.mjs`) | Kosten, Laufzeiten, Nacharbeit, Kontext-Treiber aus Transkript und Langfuse | OTel-Metriken `cost.usage`, `token.usage` und Events `api_request` ([Monitoring](https://code.claude.com/docs/en/monitoring-usage.md)); Langfuse-MCP ist offiziell nicht belegt (nur Community-Server) | beobachten: OTel braucht Collector, Transkript bleibt die Referenz (Langfuse zählt zu wenig) | teilweise |
 | Fremdtext und Forum (`fremdtext.mjs`, `fremdtext-lib.mjs`, `forum-sanitize.mjs`, `forum-quarantaene.mjs`, `forum-leser-guard.mjs`, `forum-inbox.yml`) | Text Dritter als Daten, Forum-Eingang | kein natives Gegenstück (Hook-Output-Escape ab v2.1.292 ist nur ein Teil) | behalten | teilweise |
@@ -105,7 +105,7 @@ Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reic
 
 ## C. Regeln mit Modell- oder Werkzeugbezug
 
-| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Spielunabhängig |
+| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Projektunabhängig |
 |---|---|---|---|---|
 | Eine Root-Kontextdatei, kein `CLAUDE.md` | AGENTS.md als einzige Quelle, tool-neutral | [AGENTS.md-Unterstützung](https://code.claude.com/docs/en/memory.md) ab v2.1.277 (nur wenn kein `CLAUDE.md` existiert, genau diese Regel) | behalten | ja |
 | Alias-Routing und `effort` je `agent()` | Modell und Aufwand je Rolle | Alias-Auflösung `opus`/`sonnet`/`haiku` ([Subagents](https://code.claude.com/docs/en/sub-agents.md)); `effort` am Agent-Tool ab v2.1.292 (die Doku beschreibt es dort nicht, nur im Frontmatter); Haiku 5.5 als Default-Haiku ab v2.1.293 | behalten: der Wechsel auf Haiku 5.5 kam ohne Harness-Arbeit (Beleg Alias-Routing); `effort` je Subagent-Definition bleibt Regel, bis die Doku es belegt | ja |
@@ -120,7 +120,7 @@ Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reic
 
 ## D. Werkzeuge
 
-| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Spielunabhängig |
+| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Projektunabhängig |
 |---|---|---|---|---|
 | Langfuse: Hook-Patch und `token-baseline.mjs --langfuse` | Erfassung und Messung | offizielles Plugin ([Integration](https://langfuse.com/integrations/developer-tools/claude-code)); ein offizieller Langfuse-MCP-Server ist nicht belegt (nur Community-Server); OTel-Traces von Claude Code sind Beta; verschachtelte Subagenten sendet das Plugin ab 1.2.1 selbst | beobachten: Patch-Teile #1311 und #1378 bleiben | ja |
 | MCP-Launcher: `scripts/mcp-launch.mjs` (Wrapper `playwright-mcp.mjs`, `likec4-mcp.mjs`) | Start mit festem Versionspin | keines: Playwright ([`@playwright/mcp`](https://github.com/microsoft/playwright-mcp)) und LikeC4 bieten kein Versionspinning aus dem Lockfile; Pin bleibt Projektpolitik | behalten | Modul |
@@ -136,8 +136,8 @@ Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta,
 ## Verwendung
 
 - #1362 liest die Marker und die Versionsquellen und meldet nur Changelog-Einträge, die eine Inventarzeile berühren.
-- [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md) (#1366) nimmt den Kern-Schnitt aus der Spalte „Spielunabhängig“.
-- `.factory/besitz.json` (#1610) hält den Factory-Besitz fest und ist ab jetzt die Besitz-SSOT; die Spalte „Spielunabhängig“ war nur der Startbestand.
+- [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md) (#1366) nimmt den Kern-Schnitt aus der Spalte „Projektunabhängig“.
+- `.factory/besitz.json` (#1610) hält den Factory-Besitz fest und ist ab jetzt die Besitz-SSOT; die Spalte „Projektunabhängig“ war nur der Startbestand.
 - [ADR 0027](adr/0027-regeln-lockern.md) führt diese Zeilen als Kandidaten-Klasse „Ausgleich einer Modellschwäche“; gelockert wird erst mit Evidenz (Release-Abgleich #1362 oder Gegenprobe).
 
 ## Sicherheit

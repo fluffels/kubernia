@@ -1,6 +1,6 @@
 // Kein Shebang: Bibliothek für board-takt.mjs und factory-kennzahlen.mjs (Einstiegsskripte importieren nicht voneinander).
 /**
- * Die Spielquote (ADR 0016, F11 aus ADR 0022 in #1729): höchstens 1 Factory-Merge auf `SPIEL_QUOTE` Produkt-Merges. Pur, ohne I/O,
+ * Die Produktquote (ADR 0016, F11 aus ADR 0022 in #1729): höchstens 1 Factory-Merge auf `PRODUKT_QUOTE` Produkt-Merges. Pur, ohne I/O,
  * damit der Takt (Sammelticket nach vorn) und die Kennzahlen dieselbe Zählung benutzen. Die Quote ist Kennzahl, sie wählt keine Seite.
  * Ein Factory-Merge ist ein Commit auf main, dessen Titel ein Issue mit dem Harness-Label der Config referenziert (`istHarnessCommit`); Bots zählen nicht.
  */
@@ -8,11 +8,11 @@ import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { zerlegeRepo } from "./projekt-config-lib.mjs";
 
-/** Spielquote (#1425): höchstens 1 Harness-Ticket auf so viele Spiel-Tickets. */
-export const SPIEL_QUOTE = 3;
+/** Produktquote (#1425): höchstens 1 Harness-Ticket auf so viele Produkt-Tickets. */
+export const PRODUKT_QUOTE = 3;
 
 /** Härtungs-Takt (Füllstand): so viele Befund-Kommentare vertrauter Nicht-Bot-Autoren muss das ungeclaimte Harness-Sammelticket tragen, bevor der Takt es
- *  hinter den Kopf holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`SPIEL_QUOTE`) gekoppelt. */
+ *  hinter den Kopf holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`PRODUKT_QUOTE`) gekoppelt. */
 export const HARNESS_TAKT_KOMMENTARE = 10;
 
 /**
@@ -60,10 +60,10 @@ const istBot = (c) => /\[bot\]$/i.test(String(c?.author?.login ?? ""));
  * Ist dieser Commit von main ein Harness-Merge? Der Squash-Commit trägt den PR-Titel `feat(<scope>): …`; Scope `harness` markiert
  * Harness-Arbeit (Konvention aus AGENTS.md, in den letzten 14 Tagen 86 von 125 Commits). Bot-Commits sind keine Ticket-Merges. Pur.
  * Seit #1428 zählt das Label: `harnessIssues` ist die Menge der Nummern geschlossener Harness-Issues (90 Tage, lädt `main` ohnehin).
- * Nennt die Titelzeile `#N`-Referenzen, entscheiden sie allein: eine davon in der Menge = Harness, sonst Spiel (so zählen `docs(adr)`
- * und `fix(ci)` zu einem Harness-Issue als Harness, ein `feat(harness)` zu einem Spiel-Issue als Spiel). Ohne Referenz oder ohne Menge
+ * Nennt die Titelzeile `#N`-Referenzen, entscheiden sie allein: eine davon in der Menge = Harness, sonst Produkt (so zählen `docs(adr)`
+ * und `fix(ci)` zu einem Harness-Issue als Harness, ein `feat(harness)` zu einem Produkt-Issue als Produkt). Ohne Referenz oder ohne Menge
  * (null) bleibt der Rückfall auf den COMMIT-SCOPE `(harness)`. Bewusste Grenze: ein Commit ohne `#N` im Titel (Handarbeit) zählt nur
- * über den Scope; ein Titel mit nur einer PR-Nummer zählt als Spiel (keine PR→Issue-Auflösung, #1460 Z6: von 139 Commits tragen 128 Issue und
+ * über den Scope; ein Titel mit nur einer PR-Nummer zählt als Produkt (keine PR→Issue-Auflösung, #1460 Z6: von 139 Commits tragen 128 Issue und
  * PR, die 11 mit einer Nummer sind Dependabot, keiner ist ohne; der Scope-Rückfall greift praktisch nie).
  */
 export function istHarnessCommit(commit, harnessIssues = null) {

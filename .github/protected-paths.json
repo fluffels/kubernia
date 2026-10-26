@@ -64,7 +64,7 @@
     "/scripts/cleanup-worktrees.mjs",
     "/scripts/transkript.mjs",
     "/scripts/board-lib.mjs",
-    "/scripts/spielquote-lib.mjs",
+    "/scripts/produktquote-lib.mjs",
     "/scripts/projekt-config.mjs",
     "/scripts/projekt-config-lib.mjs",
     "/scripts/ticket-namen.mjs",

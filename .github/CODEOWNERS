@@ -95,7 +95,7 @@ AGENTS.md                  @fluffels
 /scripts/cleanup-worktrees.mjs @fluffels
 /scripts/transkript.mjs @fluffels
 /scripts/board-lib.mjs @fluffels
-/scripts/spielquote-lib.mjs @fluffels
+/scripts/produktquote-lib.mjs @fluffels
 /scripts/projekt-config.mjs @fluffels
 /scripts/projekt-config-lib.mjs @fluffels
 /scripts/ticket-namen.mjs @fluffels

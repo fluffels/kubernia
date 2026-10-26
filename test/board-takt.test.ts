@@ -11,7 +11,7 @@ import * as rawStatus from "../scripts/langfuse-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawQuote from "../scripts/spielquote-lib.mjs";
+import * as rawQuote from "../scripts/produktquote-lib.mjs";
 import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
 const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
@@ -25,16 +25,16 @@ type Takt = {
   mergeFensterAb: (letzter: string | null, jetzt: string | Date) => Date;
   zaehleTicketMerges: (commits: unknown, seit?: string | Date | null) => number;
   istHarnessCommit: (c: unknown, harnessIssues?: Set<number> | null) => boolean;
-  zaehleSpielMerges: (commits: unknown, seit?: string | Date | null) => number;
-  quotenBericht: (commits: unknown[], seit?: string | null) => { harness: number; spiel: number; eingehalten: boolean; zeile: string };
-  SPIEL_QUOTE: number;
+  zaehleProduktMerges: (commits: unknown, seit?: string | Date | null) => number;
+  quotenBericht: (commits: unknown[], seit?: string | null) => { harness: number; produkt: number; eingehalten: boolean; zeile: string };
+  PRODUKT_QUOTE: number;
   befundKommentare: (kommentare: unknown, owner: string) => number;
   entscheideHarnessTakt: (a: { items: Item[]; befundKommentare: number; position: number }) => Harness;
   ziehListeNach: (items: Item[], ergebnis: { nr: number; itemId?: string | null } | null) => Item[];
 };
 const T = raw as unknown as Takt;
 const Q = rawQuote as unknown as {
-  SPIEL_QUOTE: number;
+  PRODUKT_QUOTE: number;
   zaehleTicketMerges: Takt["zaehleTicketMerges"];
   istHarnessCommit: Takt["istHarnessCommit"];
   zaehleTaktMerges: (commits: unknown, seit?: string | Date | null, sammelIssues?: Set<number>) => number;
@@ -104,7 +104,7 @@ describe("zaehleTicketMerges (#1349)", () => {
   });
 });
 
-describe("Spielquote im Takt (#1425)", () => {
+describe("Produktquote im Takt (#1425)", () => {
   const c = (message: string, login: string | null = OWNER, date = "2026-10-07T10:00:00Z") => ({ author: login === null ? null : { login }, commit: { message, committer: { date } } });
   const harness = c("feat(harness): Härtung (#1)\n\nKörper");
   const spiel = c("feat(sim): Pod (#2)");
@@ -126,11 +126,11 @@ describe("Spielquote im Takt (#1425)", () => {
     expect(T.istHarnessCommit(c("feat(harness): x (#1500)"), null)).toBe(true);
   });
 
-  test("zaehleSpielMerges: Harness-, Bot- und zu alte Commits zählen nicht", () => {
+  test("zaehleProduktMerges: Harness-, Bot- und zu alte Commits zählen nicht", () => {
     const l = [spiel, harness, c("feat(sim): y", "dependabot[bot]"), c("feat(sim): z", OWNER, "2026-10-06T10:00:00Z"), c("feat(inhalt): q")];
-    expect(T.zaehleSpielMerges(l)).toBe(3);
-    expect(T.zaehleSpielMerges(l, "2026-10-07T00:00:00Z")).toBe(2);
-    expect(() => T.zaehleSpielMerges({})).toThrow();
+    expect(T.zaehleProduktMerges(l)).toBe(3);
+    expect(T.zaehleProduktMerges(l, "2026-10-07T00:00:00Z")).toBe(2);
+    expect(() => T.zaehleProduktMerges({})).toThrow();
   });
 
   test("zaehleTaktMerges: Spiel und Agentic zählen, Bots, Sammelticket-Commits und zu alte nicht", () => {
@@ -144,10 +144,10 @@ describe("Spielquote im Takt (#1425)", () => {
   });
 
   test("quotenBericht: 1:3 ist eingehalten, 2:3 überschritten, leeres Fenster eingehalten", () => {
-    expect(T.SPIEL_QUOTE).toBe(3);
+    expect(T.PRODUKT_QUOTE).toBe(3);
     const q = T.quotenBericht([harness, spiel, spiel, spiel]);
-    expect(q).toMatchObject({ harness: 1, spiel: 3, eingehalten: true });
-    expect(q.zeile).toMatch(/1 Harness- auf 3 Spiel-Merges/);
+    expect(q).toMatchObject({ harness: 1, produkt: 3, eingehalten: true });
+    expect(q.zeile).toMatch(/1 Harness- auf 3 Produkt-Merges/);
     expect(T.quotenBericht([harness, harness, spiel, spiel, spiel]).eingehalten).toBe(false);
     expect(T.quotenBericht([]).eingehalten).toBe(true);
     expect(T.quotenBericht([c("feat(harness): x", "dependabot[bot]"), spiel], null).harness).toBe(0);
@@ -157,8 +157,8 @@ describe("Spielquote im Takt (#1425)", () => {
     const alt = c("feat(harness): alt", OWNER, "2026-10-06T10:00:00Z");
     const altSpiel = c("feat(sim): alt", OWNER, "2026-10-06T10:00:00Z");
     const q = T.quotenBericht([alt, alt, altSpiel, spiel], "2026-10-07T00:00:00Z");
-    expect(q).toMatchObject({ harness: 0, spiel: 1 });
-    expect(T.quotenBericht([alt, alt, altSpiel, spiel], null)).toMatchObject({ harness: 2, spiel: 2 });
+    expect(q).toMatchObject({ harness: 0, produkt: 1 });
+    expect(T.quotenBericht([alt, alt, altSpiel, spiel], null)).toMatchObject({ harness: 2, produkt: 2 });
   });
 
   describe("fuellstandVon: Laden, Zählen und Fail-closed an einer Stelle", () => {
@@ -207,7 +207,7 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
 
   test("Grenze 9/10/11: erst ab 10 Befund-Kommentaren nach oben (Härtungs-Takt, Füllstand #1888)", () => {
     expect(T.HARNESS_TAKT_KOMMENTARE).toBe(10);
-    expect(T.HARNESS_TAKT_KOMMENTARE).not.toBe(T.SPIEL_QUOTE); // eigene Zahl, nicht an die Seitenwahl gekoppelt
+    expect(T.HARNESS_TAKT_KOMMENTARE).not.toBe(T.PRODUKT_QUOTE); // eigene Zahl, nicht an die Seitenwahl gekoppelt
     const board = [it(10), it(11), sammel(12)];
     expect(h(board, 9).aktion).toBe("nichts");
     expect(h(board, 9).grund).toMatch(/Füllstand 9\/10/);
@@ -337,9 +337,9 @@ function bindeAlle(re: RegExp, text: string, erwartet: number, min = 1): void {
   expect(zahlen.every((z) => z === erwartet), `Muster ${re}: ${zahlen.join(", ")} statt ${erwartet}`).toBe(true);
 }
 
-describe("spielquote-lib (#1729)", () => {
+describe("produktquote-lib (#1729)", () => {
   test("die Bestandsfunktionen sind aus board-takt erreichbar und identisch (Re-Export)", () => {
-    expect(T.SPIEL_QUOTE).toBe(Q.SPIEL_QUOTE);
+    expect(T.PRODUKT_QUOTE).toBe(Q.PRODUKT_QUOTE);
     expect(T.zaehleTicketMerges).toBe(Q.zaehleTicketMerges);
     expect(T.istHarnessCommit).toBe(Q.istHarnessCommit);
   });
@@ -381,8 +381,11 @@ describe("spielquote-lib (#1729)", () => {
     const L = rawQuote as unknown as { harnessIssuesAnfrage: (a: { repo: string; label: string; seit: string }) => string[]; harnessIssuesAus: (s: unknown) => Set<number> };
     test("Anfrage: paginiert, Label kodiert, seit durchgereicht", () => {
       expect(L.harnessIssuesAnfrage({ repo: "o/r", label: `${FREMD.labels.harness} x`, seit: "2026-10-01T00:00:00.000Z" })).toEqual([
-        "api", "--paginate", "--slurp", `repos/o/r/issues?state=closed&labels=${FREMD.labels.harness.replace(":", "%3A")}%20x&since=2026-10-01T00:00:00.000Z&per_page=100`,
+        "api", "--paginate", "--slurp", `repos/o/r/issues?state=closed&labels=${FREMD.labels.harness.replaceAll(":", "%3A")}%20x&since=2026-10-01T00:00:00.000Z&per_page=100`,
       ]);
+    });
+    test("Anfrage: jeder Doppelpunkt des Labels wird kodiert, nicht nur der erste", () => {
+      expect(L.harnessIssuesAnfrage({ repo: "o/r", label: "a:b:c", seit: "s" })[3]).toContain("labels=a%3Ab%3Ac&");
     });
     test("Aus: Nummern ohne PRs über alle Seiten; falsche Form wirft", () => {
       expect(L.harnessIssuesAus([[{ number: 1 }, { number: 2, pull_request: {} }], [{ number: 3 }]])).toEqual(new Set([1, 3]));
@@ -415,7 +418,7 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(letzterTreffer(/(\d+) Ticket-Merges \(ohne Bots\)/g, adr))).toBe(status.MIN_TICKET_MERGES_PUSH);
     bindeAlle(/ab (\d+) Befund-Kommentaren/g, fortschreibung, T.HARNESS_TAKT_KOMMENTARE);
     bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, fortschreibung, T.HARNESS_TAKT_KOMMENTARE);
-    bindeAlle(/Spielquote 1:(\d+)/g, fortschreibung, T.SPIEL_QUOTE);
+    bindeAlle(/Spielquote 1:(\d+)/g, fortschreibung, T.PRODUKT_QUOTE);
     expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(doc)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(adr)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
@@ -424,7 +427,7 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     bindeAlle(/ab (\d+) Befund-Kommentaren/g, doc, T.HARNESS_TAKT_KOMMENTARE, 2);
     bindeAlle(/Schwelle (\d+) Befund-Kommentare/g, doc, T.HARNESS_TAKT_KOMMENTARE);
     bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, doc, T.HARNESS_TAKT_KOMMENTARE);
-    bindeAlle(/Spielquote 1:(\d+)/g, doc, T.SPIEL_QUOTE, 2);
+    bindeAlle(/Produktquote 1:(\d+)/g, doc, T.PRODUKT_QUOTE, 2);
     // die Zahl steht auch in Glossar, Befehlsreferenz und Anlaufstellen
     expect(Number(/ab der Schwelle (\d+) greift der Härtungs-Takt/.exec(lies("docs/harness-glossar.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
     const befehle = lies("docs/referenz/befehle.md");
@@ -433,16 +436,16 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/Harness-Sammelticket ab (\d+) Befund-Kommentaren/.exec(lies("docs/referenz/anlaufstellen.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
   });
   test("das Kennzahl-Soll (#1729) trägt dieselbe Zahl in ticket-reihenfolge.md und, als jüngster Stand, in ADR 0016", () => {
-    const wendung = /nach (\d+) Produkt-Merges \(Spielquote 1:\d+\) seit dem letzten Factory-Merge/;
-    expect(Number(wendung.exec(lies("docs/ticket-reihenfolge.md"))?.[1])).toBe(Q.SPIEL_QUOTE);
-    expect(Number(letzterTreffer(/nach (\d+) Produkt-Merges seit dem letzten Factory-Merge/g, lies("docs/adr/0016-langfuse-takt-woechentlich.md")))).toBe(Q.SPIEL_QUOTE);
+    const wendung = /nach (\d+) Produkt-Merges \(Produktquote 1:\d+\) seit dem letzten Factory-Merge/;
+    expect(Number(wendung.exec(lies("docs/ticket-reihenfolge.md"))?.[1])).toBe(Q.PRODUKT_QUOTE);
+    expect(Number(letzterTreffer(/nach (\d+) Produkt-Merges seit dem letzten Factory-Merge/g, lies("docs/adr/0016-langfuse-takt-woechentlich.md")))).toBe(Q.PRODUKT_QUOTE);
   });
-  test("Bibliothek statt Querimport: board-takt importiert die Quote aus spielquote-lib, nicht aus dem Auswahl-Skript; naechstes-ticket kennt die Spielquote nicht (es nutzt aus der Bibliothek nur den Füllstand des Härtungs-Takts)", () => {
+  test("Bibliothek statt Querimport: board-takt importiert die Quote aus produktquote-lib, nicht aus dem Auswahl-Skript; naechstes-ticket kennt die Produktquote nicht (es nutzt aus der Bibliothek nur den Füllstand des Härtungs-Takts)", () => {
     const takt = lies("scripts/board-takt.mjs");
     const wahl = lies("scripts/naechstes-ticket.mjs");
-    expect(takt).toContain('from "./spielquote-lib.mjs"');
-    expect(wahl).not.toMatch(/SPIEL_QUOTE|quotenBericht|zaehleSpielMerges/); // die Spielquote steuert die Auswahl nicht
-    expect(wahl).toMatch(/import \{ HARNESS_TAKT_KOMMENTARE, fuellstandVon \} from "\.\/spielquote-lib\.mjs"/);
+    expect(takt).toContain('from "./produktquote-lib.mjs"');
+    expect(wahl).not.toMatch(/PRODUKT_QUOTE|quotenBericht|zaehleProduktMerges/); // die Produktquote steuert die Auswahl nicht
+    expect(wahl).toMatch(/import \{ HARNESS_TAKT_KOMMENTARE, fuellstandVon \} from "\.\/produktquote-lib\.mjs"/);
     expect(takt).not.toMatch(/from "\.\/naechstes-ticket\.mjs"/);
     expect(wahl).not.toMatch(/from "\.\/board-takt\.mjs"/);
   });

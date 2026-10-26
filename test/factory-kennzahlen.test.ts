@@ -570,40 +570,40 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
   const CFG = { labels: { harness: FREMD.labels.harness } };
   const von = (e: Eingabe, name: string) => S.selbstAudit({ commits: [], sammelAbschluss: "2026-10-01T00:00:00Z", zeilen: [], ...e }).find((a) => a.mechanismus === name)!;
 
-  test("Spielquote: 1:3 ok, 2:2 ABWEICHUNG, unter 4 Merges Lücke (keine Aussage), Bots zählen nicht", () => {
-    expect(von({ commits: [harness(1), spiel(1), spiel(2), spiel(3)] }, "Spielquote").status).toBe("ok");
-    expect(von({ commits: [harness(1), harness(2), spiel(1), spiel(2)] }, "Spielquote").status).toBe("ABWEICHUNG");
-    const wenig = von({ commits: [harness(1), spiel(1), spiel(2)] }, "Spielquote");
+  test("Produktquote: 1:3 ok, 2:2 ABWEICHUNG, unter 4 Merges Lücke (keine Aussage), Bots zählen nicht", () => {
+    expect(von({ commits: [harness(1), spiel(1), spiel(2), spiel(3)] }, "Produktquote").status).toBe("ok");
+    expect(von({ commits: [harness(1), harness(2), spiel(1), spiel(2)] }, "Produktquote").status).toBe("ABWEICHUNG");
+    const wenig = von({ commits: [harness(1), spiel(1), spiel(2)] }, "Produktquote");
     expect(wenig.status).toBe("Lücke");
     expect(wenig.messung).toMatch(/keine Aussage/);
     // vier Commits, davon zwei von Bots: nur zwei zählen, also keine Aussage statt ok
-    expect(von({ commits: [spiel(1), spiel(2), commit("feat(sim): x (#1)", "dependabot[bot]"), commit("feat(sim): y (#2)", "dependabot[bot]")] }, "Spielquote").status).toBe("Lücke");
+    expect(von({ commits: [spiel(1), spiel(2), commit("feat(sim): x (#1)", "dependabot[bot]"), commit("feat(sim): y (#2)", "dependabot[bot]")] }, "Produktquote").status).toBe("Lücke");
   });
 
-  test("Spielquote: Zuordnung nach Label der referenzierten Issues, nicht nach Commit-Scope (#1798)", () => {
+  test("Produktquote: Zuordnung nach Label der referenzierten Issues, nicht nach Commit-Scope (#1798)", () => {
     const harnessIssues = new Set([900]);
     const alsProdukt = commit("feat(harness): zu Spiel-Issue (#901)");
     const alsFactory = commit("docs(adr): zu Harness-Issue (#900)");
-    const r = von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)], harnessIssues }, "Spielquote");
+    const r = von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)], harnessIssues }, "Produktquote");
     expect(r.messung).toContain("1 Factory- auf 3 Produkt-Merges");
     expect(r.messung).toContain("Zuordnung nach Label der referenzierten Issues");
     expect(r.status).toBe("ok");
     // ohne Label-Menge Rückfall auf den Scope: dann zählt das feat(harness) als Factory, und der Messtext sagt es
-    const rueckfall = von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)] }, "Spielquote").messung;
+    const rueckfall = von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)] }, "Produktquote").messung;
     expect(rueckfall).toContain("1 Factory- auf 3 Produkt-Merges");
     expect(rueckfall).toContain("Rückfall: Zuordnung nach Commit-Scope");
   });
 
-  test("Spielquote: Label und Scope laufen auseinander, das Label entscheidet (#1798)", () => {
+  test("Produktquote: Label und Scope laufen auseinander, das Label entscheidet (#1798)", () => {
     // zwei feat(harness) auf Spiel-Issues (#901, #902), ein docs auf ein Harness-Issue (#900): nach Label 1 Factory, nach Scope 2
     const cs = [commit("feat(harness): a (#901)"), commit("feat(harness): b (#902)"), commit("docs(adr): c (#900)"), spiel(1), spiel(2)];
-    expect(von({ commits: cs, harnessIssues: new Set([900]) }, "Spielquote").messung).toContain("1 Factory- auf 4 Produkt-Merges");
-    expect(von({ commits: cs }, "Spielquote").messung).toContain("2 Factory- auf 3 Produkt-Merges");
+    expect(von({ commits: cs, harnessIssues: new Set([900]) }, "Produktquote").messung).toContain("1 Factory- auf 4 Produkt-Merges");
+    expect(von({ commits: cs }, "Produktquote").messung).toContain("2 Factory- auf 3 Produkt-Merges");
   });
 
-  test("Spielquote: Lücke mit Grund bei harnessLuecke, der Takt bleibt gemessen (#1798)", () => {
+  test("Produktquote: Lücke mit Grund bei harnessLuecke, der Takt bleibt gemessen (#1798)", () => {
     const e = { commits: [spiel(1)], harnessLuecke: "Harness-Issues nicht ladbar: x" };
-    expect(von(e, "Spielquote")).toMatchObject({ status: "Lücke", messung: "Harness-Issues nicht ladbar: x" });
+    expect(von(e, "Produktquote")).toMatchObject({ status: "Lücke", messung: "Harness-Issues nicht ladbar: x" });
     expect(von(e, "Härtungs-Takt").status).toBe("ok");
   });
 
@@ -625,8 +625,8 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
 
   test("Ladefehler der Commits: Quote und Takt sind Lücken mit dem Grund, nie ok", () => {
     const e = { commits: null, commitsLuecke: "Commits von main nicht ladbar: gh weg" };
-    for (const m of ["Spielquote", "Härtungs-Takt"]) expect(von(e, m)).toMatchObject({ status: "Lücke", messung: "Commits von main nicht ladbar: gh weg" });
-    expect(von({ commits: null }, "Spielquote").messung).toMatch(/nicht geladen/);
+    for (const m of ["Produktquote", "Härtungs-Takt"]) expect(von(e, m)).toMatchObject({ status: "Lücke", messung: "Commits von main nicht ladbar: gh weg" });
+    expect(von({ commits: null }, "Produktquote").messung).toMatch(/nicht geladen/);
   });
 
   test("Festgefahren-Protokoll: ≥ 4 CI-Fix ohne Label ABWEICHUNG, mit Label oder darunter ok, fehlende Felder Lücke", () => {
@@ -651,13 +651,13 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
 
   test("auditAbschnitt: je Mechanismus eine Zeile Messung · Soll · Status; renderMarkdown hängt den Abschnitt nur mit Audit an", () => {
     const audit = S.selbstAudit({ commits: [], zeilen: [] });
-    expect(audit.map((a) => a.mechanismus)).toEqual(["Spielquote", "Härtungs-Takt", "Festgefahren-Protokoll", "Lens-Zahl"]);
+    expect(audit.map((a) => a.mechanismus)).toEqual(["Produktquote", "Härtungs-Takt", "Festgefahren-Protokoll", "Lens-Zahl"]);
     const zeilen = S.auditAbschnitt(audit);
     expect(zeilen).toHaveLength(4);
     for (const z of zeilen) expect(z).toMatch(/^- .+: .+ · Soll: .+ · (ok|ABWEICHUNG|Lücke)$/);
     const lage: Lage = { luecke: "x" };
     const b = (extra: object) => F.bericht({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z", quelle: "Transkript", lauf: lage, nacharbeit: lage, tickets: [], ...extra });
-    expect(S.renderMarkdown(b({ audit }))).toContain("**Selbst-Audit**\n- Spielquote:");
+    expect(S.renderMarkdown(b({ audit }))).toContain("**Selbst-Audit**\n- Produktquote:");
     expect(S.renderMarkdown(b({}))).not.toContain("Selbst-Audit");
   });
 
@@ -700,7 +700,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(d.harnessLuecke).toMatch(/Harness-Issues nicht ladbar: .*issues weg/);
     expect(d.commits).toHaveLength(1);
     expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
-    expect(von({ ...d, zeilen: [] }, "Spielquote").status).toBe("Lücke");
+    expect(von({ ...d, zeilen: [] }, "Produktquote").status).toBe("Lücke");
     expect(von({ ...d, zeilen: [] }, "Härtungs-Takt").status).toBe("ok");
     const ohneLabel = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: (a) => (a[0] === "issue" ? [] : [[spiel(1)]]), config: { labels: {} } });
     expect(ohneLabel.harnessLuecke).toMatch(/labels.harness/);

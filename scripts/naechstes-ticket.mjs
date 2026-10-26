@@ -10,7 +10,7 @@
  * `--bereich` nimmt die Kern-Namen `agentic` und `produkt`; ein Alias aus `bereiche.aliase` der Projekt-Config gilt als sein Kern-Name (#1943), ohne Alias ist ein anderer Name unbekannt (Exit 2).
  * Ohne `--bereich` und ohne `--ticket` ist der Aufruf ein Fehler (Exit 2): es gibt keinen Auswahlmodus über beide Seiten. Zwei Boards (ADR 0022 F11, #1729):
  * zuerst die Kopf-Items (Rang nach `kopfRang`; mit Bereich die der eigenen Seite plus die Notfälle beider), dann das oberste freie Item der eigenen Seite,
- * ohne Ausweichen auf die andere. Die Spielquote bleibt eine Kennzahl (`spielquote-lib.mjs`), sie steuert die Auswahl nicht.
+ * ohne Ausweichen auf die andere. Die Produktquote bleibt eine Kennzahl (`produktquote-lib.mjs`), sie steuert die Auswahl nicht.
  *
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 5 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Forum-Label der Config) wird übersprungen und als „Befund melden“ ausgewiesen.
@@ -33,7 +33,7 @@ import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { BEREICHE, bereichAliaseAus, configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
-import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./spielquote-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./produktquote-lib.mjs";
 import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";

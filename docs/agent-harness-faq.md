@@ -25,7 +25,7 @@ Nein, nicht 1:1 — die projektspezifische Qualitäts-Harness (§2 in [agent-har
 - **Workflow-/Orchestrierungs-Schicht (voll portabel, stack-unabhängig):** Board-getriebene Ticket-Auswahl, `git worktree` pro Agent als Kollisionsschutz, Skills als kodifizierte Abläufe. Läuft über Git/CLI/`gh`, kennt die Programmiersprache des Zielprojekts gar nicht.
 - **Verifikations-/Gate-Schicht (Konzept portabel, Tooling stack-gebunden):** dependency-cruiser, die ESLint-Komplexitätsregeln, die handgeschriebenen Node-Skripte (`check:docmap`, `check:size` …) sind auf Kubernias TypeScript/Vite-Stack zugeschnitten. Für ein anderes Zielprojekt trägt das *Prinzip* (Schichtung erzwingen, Doku-Drift verhindern), das *Werkzeug* muss für den Zielstack ausgetauscht werden (z. B. ArchUnit statt dependency-cruiser bei Java/Kotlin).
 
-Kurzformel: für die stack-gebundene Gate-Schicht das Prinzip kopieren, nicht den Code. Den spielunabhängigen Kern verteilt ein Factory-Repo per Sync mit Besitz-Manifest (Kern-Dateien byte-gleich, Projektwerte aus einer Config), siehe [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); den Sync gibt es erst mit F10.
+Kurzformel: für die stack-gebundene Gate-Schicht das Prinzip kopieren, nicht den Code. Den projektunabhängigen Kern verteilt ein Factory-Repo per Sync mit Besitz-Manifest (Kern-Dateien byte-gleich, Projektwerte aus einer Config), siehe [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); den Sync gibt es erst mit F10.
 
 ## Warum prüft die Mauer erst im PR-Gate (CI) und nicht direkt als Hook nach jedem Edit?
 

@@ -93,7 +93,7 @@ export function collectWorkflowSizes(rootDir = ROOT) {
  */
 const REBASE_HINWEIS = " Paralleler PR, der dieselbe Datei ändert? Nach dem Rebase auf origin/main den Deckel auf die jetzt gemessene Zahl setzen (ein Konflikt in scripts/check-size.mjs ist dann erwartbar). Wächst die Datei durch den eigenen Diff, gilt weiter: kürzen oder bewusst per reviewtem Commit anheben."
 
-/** Zeichen-Deckel (#1628, jeder DECKEL-Eintrag): über `maxZeichen` rot, mehr als `ZEICHEN_TOLERANZ` darunter rot (Ratchet mit Spielraum). */
+/** Zeichen-Deckel (#1628, jeder DECKEL-Eintrag): über `maxZeichen` rot, mehr als `ZEICHEN_TOLERANZ` darunter rot (Ratchet mit Toleranz). */
 export const ZEICHEN_TOLERANZ = 500
 function pruefeZeichen(file, chars, d) {
   if (typeof d.maxZeichen !== 'number') return [`${file}: DECKEL-Eintrag ohne maxZeichen (Zeichen-Deckel, #1628) – gemessene Zeichenzahl eintragen.`]

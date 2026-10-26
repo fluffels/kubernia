@@ -52,10 +52,10 @@ import {
 
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { bestaetigeAnlegen, entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
-import { HARNESS_TAKT_KOMMENTARE, SPIEL_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTicketMerges } from "./spielquote-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTicketMerges } from "./produktquote-lib.mjs";
 
-// Die Quote liegt in spielquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
-export { HARNESS_TAKT_KOMMENTARE, SPIEL_QUOTE, befundKommentare, istHarnessCommit, zaehleTicketMerges };
+// Die Quote liegt in produktquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
+export { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, istHarnessCommit, zaehleTicketMerges };
 
 // Zwei Boards (ADR 0022 F11, #1729): Status-Ticket, Harness-Sammelticket und ihre Selbstkorrektur laufen auf dem Factory-Board; der Wächter
 // nimmt fehlende Issues nach der Trennregel (`boardRolleFuer`) auf ihrem Board auf.
@@ -71,22 +71,22 @@ export function mergeFensterAb(letzterAbschluss, jetzt) {
   return new Date(alsDatum(letzterAbschluss, "letzterAbschluss").getTime() + 60_000);
 }
 
-/** Spiel-Merges in einer Commit-Liste: Ticket-Merges (`zaehleTicketMerges`) ohne Harness-Commits (`istHarnessCommit`); mit `seit` nur ab diesem Zeitpunkt. Pur. */
-export function zaehleSpielMerges(commits, seit = null, harnessIssues = null) {
+/** Produkt-Merges in einer Commit-Liste: Ticket-Merges (`zaehleTicketMerges`) ohne Harness-Commits (`istHarnessCommit`); mit `seit` nur ab diesem Zeitpunkt. Pur. */
+export function zaehleProduktMerges(commits, seit = null, harnessIssues = null) {
   if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
   return zaehleTicketMerges(commits.filter((c) => !istHarnessCommit(c, harnessIssues)), seit);
 }
 
 /**
- * Die Spielquote des Fensters als Zahlen und Zeile für das Protokoll: `harness` und `spiel` = Ticket-Merges (ohne Bots) mit bzw. ohne
- * Harness-Zuordnung (`istHarnessCommit`), `eingehalten` = höchstens 1 Harness auf `SPIEL_QUOTE` Spiel (Notfälle und Security gelten als Harness, sofern ihr Issue das Harness-Label der Config trägt, und
+ * Die Produktquote des Fensters als Zahlen und Zeile für das Protokoll: `harness` und `produkt` = Ticket-Merges (ohne Bots) mit bzw. ohne
+ * Harness-Zuordnung (`istHarnessCommit`), `eingehalten` = höchstens 1 Harness auf `PRODUKT_QUOTE` Produkt-Merges (Notfälle und Security gelten als Harness, sofern ihr Issue das Harness-Label der Config trägt, und
  * zählen hier mit; das Protokoll ist Information, kein Gate). Pur.
  */
 export function quotenBericht(commits, seit = null, harnessIssues = null) {
   const harness = zaehleTicketMerges(commits.filter((c) => istHarnessCommit(c, harnessIssues)), seit);
-  const spiel = zaehleSpielMerges(commits, seit, harnessIssues);
-  const eingehalten = harness * SPIEL_QUOTE <= spiel;
-  return { harness, spiel, eingehalten, zeile: `Spielquote: ${harness} Harness- auf ${spiel} Spiel-Merges im Fenster (Soll höchstens 1:${SPIEL_QUOTE}), ${eingehalten ? "eingehalten" : "überschritten"}` };
+  const produkt = zaehleProduktMerges(commits, seit, harnessIssues);
+  const eingehalten = harness * PRODUKT_QUOTE <= produkt;
+  return { harness, produkt, eingehalten, zeile: `Produktquote: ${harness} Harness- auf ${produkt} Produkt-Merges im Fenster (Soll höchstens 1:${PRODUKT_QUOTE}), ${eingehalten ? "eingehalten" : "überschritten"}` };
 }
 
 /**
@@ -283,9 +283,9 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     .flat()
     .filter((i) => !i.pull_request && typeof i.closed_at === "string")
     .sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at));
-  // Die Nummern aller geschlossenen Harness-Issues: die Spielquote ordnet einen Commit über seine `#N`-Referenz zu (istHarnessCommit).
+  // Die Nummern aller geschlossenen Harness-Issues: die Produktquote ordnet einen Commit über seine `#N`-Referenz zu (istHarnessCommit).
   const harnessIssues = new Set(geschlossen.map((i) => i.number));
-  // Der Abschluss des letzten Harness-Sammeltickets beginnt das Fenster der Spielquote (Protokollzeile).
+  // Der Abschluss des letzten Harness-Sammeltickets beginnt das Fenster der Produktquote (Protokollzeile).
   const { abschluss } = sammelStand([
     ...geschlossen.map((i) => ({ number: i.number, title: i.title, state: "closed", closedAt: i.closed_at })),
     ...offene.map((i) => ({ number: i.number, title: i.titel, state: "open" })),
