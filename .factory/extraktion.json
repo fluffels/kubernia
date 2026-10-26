@@ -89,6 +89,7 @@
     {"muster":"test/board*.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/brain-metrics.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/budget-pacing.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
+    {"muster":"test/harness/coverage-config.test.ts","art":"projekt-test","grund":"liest die Schichtdaten des Projekts (scripts/layers.cjs) und src/"},
     {"muster":"test/check-c4*.test.ts","art":"projekt-test","grund":"Gegenstand ist ein Projekt-Modul, kein Besitz (Architekturmodell)"},
     {"muster":"test/ci-laeufe.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/cockpit/*.test.ts","art":"kern-test","grund":"Ring oberflaeche, nur Factory"},

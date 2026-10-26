@@ -2,7 +2,7 @@
  * unbekanntem Flag, mit einem Flag ohne Wert und mit einem doppelten Einzel-Flag. Geprüft werden Exit-Code und der
  * stderr-Rahmen (Präfix, Meldung, Aufrufzeile). PATH enthält nur den Ordner von node: ohne gh, git und Netz. */
 import { describe, expect, test } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -304,10 +304,14 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
   test.concurrent("naechstes-ticket: ein Alias gilt als sein Kern-Name, --ticket und --bereich <alias> schließen sich aus", { timeout: 60_000 }, () => {
     const ordner = mkdtempSync(join(tmpdir(), "alias-config-"));
     const pfad = join(ordner, "projekt-alias.json");
-    writeFileSync(pfad, JSON.stringify({ ...FREMD, bereiche: { aliase: { kunde: "produkt" } } }));
-    const r = starte("naechstes-ticket", ["--config", pfad, "--bereich", "kunde", "--ticket", "1"]);
-    expect(r.status).toBe(2);
-    expect(r.stderr.split("\n")[0]).toBe("✖ naechstes-ticket: --ticket und --bereich schließen sich aus");
+    try {
+      writeFileSync(pfad, JSON.stringify({ ...FREMD, bereiche: { aliase: { kunde: "produkt" } } }));
+      const r = starte("naechstes-ticket", ["--config", pfad, "--bereich", "kunde", "--ticket", "1"]);
+      expect(r.status).toBe(2);
+      expect(r.stderr.split("\n")[0]).toBe("✖ naechstes-ticket: --ticket und --bereich schließen sich aus");
+    } finally {
+      rmSync(ordner, { recursive: true, force: true });
+    }
   });
 
   test.concurrent("fremdtext: beide Flags und --issue= ergeben die Aufrufzeile (fail-closed)", { timeout: 60_000 }, () => {

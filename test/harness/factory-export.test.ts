@@ -302,7 +302,8 @@ describe("laufFehlerZeile (#1942)", () => {
   test("ohne Status (Signal oder Startfehler) steht nie 'Exit null': error.message vor Signal", () => {
     assert.equal(lib.laufFehlerZeile({ status: null, signal: "SIGTERM", error: new Error("spawnSync node ETIMEDOUT"), stderr: "halb", stdout: "" }), "spawnSync node ETIMEDOUT");
     assert.equal(lib.laufFehlerZeile({ status: null, signal: "SIGKILL", stderr: "", stdout: "" }), "Signal SIGKILL");
-    assert.doesNotMatch(lib.laufFehlerZeile({ status: null, stderr: null, stdout: null }), /Exit null/);
+    assert.equal(lib.laufFehlerZeile({ status: null, stderr: null, stdout: null }), "Signal unbekannt");
+    assert.equal(lib.laufFehlerZeile({ status: undefined, signal: "SIGTERM" } as unknown as { status: null }), "Signal SIGTERM");
   });
 });
 

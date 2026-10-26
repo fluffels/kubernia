@@ -338,19 +338,19 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
   });
 
   test("istGelesenesMarkdown (#1942): dasselbe Prädikat wie der Walker, abgeleitet aus IGNORED_DIRS und VERSIONED_CLAUDE_DIRS", () => {
-    for (const ja of ["README.md", "docs/a.md", ".claude/skills/x.md", ".claude/agents/a/b.md", ".claude/workflows/w.md", "src/x/node_module.md"]) assert.equal(istGelesenesMarkdown(ja), true, ja);
+    for (const ja of ["README.md", "docs/a.md", ".claude/skills/x.md", ".claude/agents/a/b.md", ".claude/workflows/w.md", "src/x/node_module.md", "docs/.claude/commands/x.md", "docs/.claude/lose.md"]) assert.equal(istGelesenesMarkdown(ja), true, ja);
     for (const nein of [".claude/commands/x.md", ".claude/x.md", ".claude/worktrees/w-1/README.md", "node_modules/p/README.md", "docs/node_modules/p/README.md", "dist/a.md", "dist-offline/a.md", "playwright-report/a.md", ".git/a.md", "docs/a.txt"]) assert.equal(istGelesenesMarkdown(nein), false, nein);
   });
 
   test("istGelesenesMarkdown (#1942): jeder vom Walker gefundene Pfad ist gelesen", () => {
     const dir = mkdtempSync(join(tmpdir(), "md-gelesen-"));
     try {
-      for (const p of ["a.md", "docs/b.md", ".claude/skills/s.md", ".claude/commands/c.md", ".claude/lose.md", "node_modules/n.md", "dist/d.md"]) {
+      for (const p of ["a.md", "docs/b.md", ".claude/skills/s.md", ".claude/commands/c.md", ".claude/lose.md", "docs/.claude/commands/x.md", "docs/.claude/lose.md", "node_modules/n.md", "dist/d.md"]) {
         mkdirSync(join(dir, dirname(p)), { recursive: true });
         writeFileSync(join(dir, p), "# x\n");
       }
       const gefunden = collectMarkdown(dir);
-      assert.deepEqual([...gefunden].sort(), ["a.md", "docs/b.md", ".claude/skills/s.md"].sort());
+      assert.deepEqual([...gefunden].sort(), ["a.md", "docs/b.md", ".claude/skills/s.md", "docs/.claude/commands/x.md", "docs/.claude/lose.md"].sort());
       for (const p of gefunden) assert.equal(istGelesenesMarkdown(p), true, p);
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -175,7 +175,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Workflow-Skripte** (`DECKEL`) haben je Eintrag zusätzlich einen Zeichen-Deckel `maxZeichen` (CR-neutral wie `check:contextsize`): mehr Zeichen rot, mehr als 500 darunter rot („Deckel senken"), fehlendes `maxZeichen` rot; so hebelt Zusammenziehen von Zeilen den Zeilen-Deckel nicht aus.
 
 ### Doku↔Code-Drift-Wächter (`npm run check:docmap`, #482)
-- **WAS:** meldet jede Quell-Datei, die in **keinem** [`docs/module/`](module/)-Tiefendoc als Backtick-Pfad auftaucht, sowie jede deklarierte Schicht, die von der dependency-cruiser-Zuordnung abweicht (gemeinsame Schicht-Quelle [`scripts/layers.cjs`](../scripts/layers.cjs)). Auch als `test/docmap.test.ts`.
+- **WAS:** meldet jede Quell-Datei, die in **keinem** [`docs/module/`](module/)-Tiefendoc als Backtick-Pfad auftaucht, sowie jede deklarierte Schicht, die von der dependency-cruiser-Zuordnung abweicht (gemeinsame Schicht-Quelle [`scripts/layers.cjs`](../scripts/layers.cjs)). Auch als `test/docmap.test.ts`. Das Gate ist rot, wenn es kein Quell-Modul findet (es prüft sonst nichts).
 - **WARUM:** Landkarte ([`docs/referenz/repo-landkarte.md`](referenz/repo-landkarte.md), Subsystem-granular) + Tiefendocs sind der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet die Abdeckung leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
 
 ### Lebende-Doku-Wächter (`npm run check:docgen`, #1355)

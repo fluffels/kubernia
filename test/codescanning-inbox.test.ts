@@ -1063,6 +1063,31 @@ describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
         expect(a.vorgaenger).toBe(1);
         expect(a.datei).toBeGreaterThan(0);
       });
+      test("Mischfall: nur der echte Kandidat lädt Dateien, der durch Wiedervorlage stille Alert am selben Ort nicht", () => {
+        const ort = { location: { path: "scripts/a.mjs", start_line: 14, end_line: 14 } };
+        const zaehleDatei = (liste: () => unknown[], extra: Record<string, unknown>) => {
+          let n = 0;
+          lauf({
+            ladeAlerts: liste,
+            ladeKontext: () => ({ ...kontext, ...extra }),
+            ladeVorgaenger: () => [dismissed(75)],
+            ladeDatei: (p: string, c: string) => {
+              n += 1;
+              return lies(p, c);
+            },
+            legeIssueAn: () => 7,
+            projectToken: undefined,
+          });
+          return n;
+        };
+        const nurKandidat = zaehleDatei(() => [rohAlert(110, { most_recent_instance: instanz(ort) })], {});
+        expect(nurKandidat).toBeGreaterThan(0);
+        const gemischt = zaehleDatei(
+          () => [rohAlert(109, { most_recent_instance: instanz(ort) }), rohAlert(110, { most_recent_instance: instanz(ort) })],
+          { wiedervorlagen: [{ id: "codescanning-js-incomplete-sanitization", alerts: [109] }] },
+        );
+        expect(gemischt).toBe(nurKandidat);
+      });
     });
     test("ohne ladeDatei in io: kein Nachfolger (Alert bleibt Spitze)", () => {
       const angelegt: string[] = [];
