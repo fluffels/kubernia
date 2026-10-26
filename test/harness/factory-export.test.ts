@@ -65,6 +65,8 @@ const lib = rawLib as unknown as {
   pruefeLokalePfade(d: Map<string, string>, repos: string[]): { befunde: string[]; durchgelassen: number; jeMuster: number[] };
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
   schreibePraefixUm(text: string, von: string, nach: string): { text: string; anzahl: number };
+  streicheProjektBloecke(text: string): { text: string; bloecke: number; befunde: string[] };
+  schreibeRollenUm(text: string, paare: [string, string][]): { text: string; anzahl: number };
   entlinke(text: string, seite: string, h: { gibt(p: string): boolean; ueberschriften(p: string): Set<string> | null }): { text: string; links: number; anker: number; ziele: Map<string, number> };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
@@ -73,7 +75,7 @@ const lib = rawLib as unknown as {
 };
 const docdrift = rawDocdrift as unknown as { auditDocDrift(wurzel: string): { deadLinks: { file: string; target: string; resolved: string }[]; deadAnchors: { file: string; target: string }[] } };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
-const { projektwertLauf } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] } };
+const { projektwertLauf, PROJEKT_BLOCK_START: PB_START, PROJEKT_BLOCK_ENDE: PB_ENDE } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] }; PROJEKT_BLOCK_START: string; PROJEKT_BLOCK_ENDE: string };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const temp: string[] = [];
@@ -268,6 +270,61 @@ describe("entlinke (#1935)", () => {
     assert.equal(r.text, "a mitte b und c");
     assert.equal(r.ziele.get("docs/t.md"), 2);
     assert.equal(r.ziele.size, 2);
+  });
+});
+
+describe("streicheProjektBloecke (#1936)", () => {
+  const s = (text: string) => lib.streicheProjektBloecke(text);
+  test("ohne Block bleibt der Text byte-gleich", () => {
+    const text = "A\n\nB\n";
+    assert.deepEqual(s(text), { text, bloecke: 0, befunde: [] });
+  });
+  test("ein Block samt Markern entfällt, die doppelte Leerzeile schrumpft auf eine", () => {
+    const r = s(["Davor", "", PB_START, "| Projekt | x |", PB_ENDE, "", "Danach"].join("\n"));
+    assert.equal(r.text, "Davor\n\nDanach");
+    assert.equal(r.bloecke, 1);
+    assert.deepEqual(r.befunde, []);
+  });
+  test("zwei Blöcke, eine einzelne Leerzeile und Zeilen ohne Leerzeile bleiben erhalten", () => {
+    const r = s(["A", PB_START, "x", PB_ENDE, "B", "", PB_START, "y", PB_ENDE, "", "C"].join("\n"));
+    assert.equal(r.text, "A\nB\n\nC");
+    assert.equal(r.bloecke, 2);
+  });
+  test("CRLF-Zeilen mit Marker werden erkannt", () => {
+    assert.equal(s(["A", `${PB_START}\r`, "x", `${PB_ENDE}\r`, "B"].join("\n")).bloecke, 1);
+  });
+  test("Befunde: Start ohne Ende, Ende ohne Start, verschachtelt, Marker in Textzeile", () => {
+    assert.match(s(`A\n${PB_START}\nx`).befunde.join("|"), /Zeile 2 ohne Ende/);
+    assert.match(s(`A\n${PB_ENDE}`).befunde.join("|"), /Zeile 2 ohne Start/);
+    assert.match(s(`${PB_START}\n${PB_START}\n${PB_ENDE}`).befunde.join("|"), /Zeile 2 beginnt vor dem Ende/);
+    assert.match(s(`Text ${PB_START} mehr`).befunde.join("|"), /Zeile 1 steht nicht allein/);
+    assert.match(s(`Text ${PB_ENDE}`).befunde.join("|"), /Zeile 1 steht nicht allein/);
+  });
+});
+
+describe("schreibeRollenUm (#1936)", () => {
+  const paare: [string, string][] = [
+    ["alt-planer", "neu-planer"],
+    ["alt-lens", "neu-lens"],
+  ];
+  test("schreibt ganze Wörter um und zählt jede Stelle", () => {
+    const r = lib.schreibeRollenUm("Der alt-planer und `alt-lens`, alt-lens.", paare);
+    assert.equal(r.text, "Der neu-planer und `neu-lens`, neu-lens.");
+    assert.equal(r.anzahl, 3);
+  });
+  test("Teilwörter bleiben: Bindestrich, Buchstabe, Unterstrich und Ziffer davor oder dahinter", () => {
+    const text = "x-alt-lens alt-lens-x alt-lensx _alt-lens alt-lens_ 2alt-lens alt-lens2";
+    const r = lib.schreibeRollenUm(text, paare);
+    assert.equal(r.text, text);
+    assert.equal(r.anzahl, 0);
+  });
+  test("gleiche Werte und leere Quelle entfallen, ein neuer Name trifft nicht ein zweites Mal", () => {
+    assert.equal(lib.schreibeRollenUm("alt-lens", [["alt-lens", "alt-lens"]]).anzahl, 0);
+    assert.equal(lib.schreibeRollenUm("alt-lens", [["", "x"]]).text, "alt-lens");
+    assert.equal(lib.schreibeRollenUm("a b", [["a", "b"], ["b", "a"]]).text, "b a");
+  });
+  test("ein Name mit Regex-Zeichen wird wörtlich genommen", () => {
+    assert.equal(lib.schreibeRollenUm("a.b und axb", [["a.b", "neu"]]).text, "neu und axb");
   });
 });
 
