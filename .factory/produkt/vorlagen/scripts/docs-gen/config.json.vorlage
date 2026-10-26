@@ -6,8 +6,10 @@
     "descriptions": {
       "typecheck": "voll `strict`, ganzes Projekt",
       "lint": "ESLint typbewusst, `--max-warnings 0`, `any` blockt, Komplexität je Funktion",
+      "check:size": "God-File-Frühwarnung (Zeilen-Budget je Modul)",
       "check:contextsize": "Größenbudget jeder AGENTS.md (Zeichen)",
       "check:anysuppress": "Ratchet auf die Zahl begründeter `any`-Ausnahmen",
+      "check:docmap": "jede Quell-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten",
       "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
       "check:docgen": "generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein",
       "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
