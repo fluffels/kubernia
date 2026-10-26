@@ -740,8 +740,8 @@ describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
           dismissed(2, { dismissed_by: { login: "github-actions[bot]", type: "Bot" } }),
           dismissed(3, { dismissed_by: fremd }),
           dismissed(4, { dismissed_by: null }),
-          rohAlert(5),
-          rohAlert(6, { state: "fixed" }),
+          rohAlert(5, { dismissed_by: owner }),
+          rohAlert(6, { state: "fixed", dismissed_by: owner }),
         ],
         OWNER,
       );
