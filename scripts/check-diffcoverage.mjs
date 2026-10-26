@@ -190,10 +190,11 @@ export function teilweiseGetestet(changed, lcov, branches, quelle = strukturAus(
  *  `include` der Coverage-Config für die Quellwurzel (`struktur.quelle` der Projekt-Config) — Content-JSON, Assets und Skripte
  *  außerhalb der Quellwurzel sind kein ausführbarer Quellcode und fallen raus.
  *
- *  `.d.ts` ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile, und ein
+ *  Endungen `.ts`, `.mts`, `.mjs`, `.cjs`, `.js` (das Factory-Repo hat seine Quellwurzel unter `scripts` mit `.mjs`; im Spiel-Repo liegt unter der Quellwurzel nur `.ts`).
+ *  `.d.ts` (auch `.d.mts`, `.d.cts`) ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile, und ein
  *  Vitest-Bump, der sie aus dem Report nimmt, machte jeden PR darauf falsch rot. */
 export function isMeasured(path, quelle = strukturAus(ladeProjektConfig()).quelle) {
-  return path.startsWith(`${quelle}/`) && path.endsWith(".ts") && !path.endsWith(".d.ts");
+  return path.startsWith(`${quelle}/`) && /\.(?:ts|mts|mjs|cjs|js)$/.test(path) && !/\.d\.[cm]?ts$/.test(path);
 }
 
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
