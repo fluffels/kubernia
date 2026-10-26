@@ -190,7 +190,7 @@ export function teilweiseGetestet(changed, lcov, branches, quelle = strukturAus(
  *  `include` der Coverage-Config für die Quellwurzel (`struktur.quelle` der Projekt-Config) — Content-JSON, Assets und Skripte
  *  außerhalb der Quellwurzel sind kein ausführbarer Quellcode und fallen raus.
  *
- *  Endungen `.ts`, `.mts`, `.mjs`, `.cjs`, `.js` (das Factory-Repo hat seine Quellwurzel unter `scripts` mit `.mjs`; im Spiel-Repo liegt unter der Quellwurzel nur `.ts`).
+ *  Endungen `.ts`, `.mts`, `.mjs`, `.cjs`, `.js` (das Factory-Repo hat seine Quellwurzel unter `scripts` mit `.mjs`; in einem Repo mit `src/` als Quellwurzel liegt dort nur `.ts`).
  *  `.d.ts` (auch `.d.mts`, `.d.cts`) ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile, und ein
  *  Vitest-Bump, der sie aus dem Report nimmt, machte jeden PR darauf falsch rot. */
 export function isMeasured(path, quelle = strukturAus(ladeProjektConfig()).quelle) {
