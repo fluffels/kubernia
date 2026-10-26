@@ -29,6 +29,9 @@ export const BOARD_ROLLEN = ["produkt", "factory"];
 /** Kern-Bereiche der Ticket-Auswahl (`--bereich`) mit Anzeigenamen; das Label für „agentic“ ist `labels.harness`. Projektspezifische Namen sind Aliase (`bereiche.aliase`). */
 export const BEREICHE = Object.freeze({ agentic: "Agentic Engineering", produkt: "Produktentwicklung" });
 
+/** Das Board, auf dem ein Kern-Bereich auswählt (Rolle aus `BOARD_ROLLEN`). */
+export const BEREICH_BOARD = Object.freeze({ agentic: "factory", produkt: "produkt" });
+
 /** Pur: die Bereichs-Aliase der Config (Alias → Kern-Bereich); ohne Schlüssel leer. Die Form prüft `pruefeBereiche`. */
 export function bereichAliaseAus(config) {
   const aliase = config?.bereiche?.aliase;

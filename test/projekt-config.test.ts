@@ -211,6 +211,16 @@ describe("pruefeProjektConfig", () => {
   });
 });
 
+describe("Bereich zu Board-Rolle", () => {
+  const roh = rawPc as unknown as { BEREICHE: object; BEREICH_BOARD: Record<string, string>; BOARD_ROLLEN: string[] };
+
+  test("jeder Kern-Bereich zeigt auf genau eine Board-Rolle, keine Rolle ohne Bereich", () => {
+    assert.deepEqual(Object.keys(roh.BEREICH_BOARD), Object.keys(roh.BEREICHE));
+    for (const rolle of Object.values(roh.BEREICH_BOARD)) assert.ok(roh.BOARD_ROLLEN.includes(rolle), rolle);
+    assert.deepEqual(Object.values(roh.BEREICH_BOARD).sort(), [...roh.BOARD_ROLLEN].sort());
+  });
+});
+
 describe("Bereichs-Aliase (#1943)", () => {
   const mit = (wert: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), bereiche: wert });
 
