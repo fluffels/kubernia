@@ -3,10 +3,11 @@
  * Das oberste FREIE Ticket der Board-Auswahl (#1428 Z4): ersetzt die Handarbeit „Board-Liste per jq lesen, dann je Kandidat Assignee,
  * Blocker, Branch, Worktree und offenen PR einzeln prüfen“ (AGENTS.md § Auswahl des nächsten Tickets).
  *
- *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel          # erste Zeile `#<nr>\t<Titel>`, danach die übersprungenen Kandidaten; nur das Factory- bzw. nur das Produkt-Board (#1552, #1729); Notfälle 🚨/🔒 zählen in beiden
- *   node scripts/naechstes-ticket.mjs --bereich agentic|spiel --json   # { bereich, ticket, uebersprungen, verzug, hinweise?, reparieren? } (`verzug`: Nummern des Board-Verzugs, leere Liste ohne Verzug)
+ *   node scripts/naechstes-ticket.mjs --bereich agentic|produkt          # erste Zeile `#<nr>\t<Titel>`, danach die übersprungenen Kandidaten; nur das Factory- bzw. nur das Produkt-Board (#1552, #1729); Notfälle 🚨/🔒 zählen in beiden
+ *   node scripts/naechstes-ticket.mjs --bereich agentic|produkt --json   # { bereich, ticket, uebersprungen, verzug, hinweise?, reparieren? } (`verzug`: Nummern des Board-Verzugs, leere Liste ohne Verzug)
  *   node scripts/naechstes-ticket.mjs --ticket <nr>   # Einzelprüfung einer vorgegebenen Nummer (#1621): alle Kriterien außer Status und Bereich; Exit 1 = nicht frei, Grund in der Ausgabe
  *
+ * `--bereich` nimmt die Kern-Namen `agentic` und `produkt`; ein Alias aus `bereiche.aliase` der Projekt-Config gilt als sein Kern-Name (#1943), ohne Alias ist ein anderer Name unbekannt (Exit 2).
  * Ohne `--bereich` und ohne `--ticket` ist der Aufruf ein Fehler (Exit 2): es gibt keinen Auswahlmodus über beide Seiten. Zwei Boards (ADR 0022 F11, #1729):
  * zuerst die Kopf-Items (Rang nach `kopfRang`; mit Bereich die der eigenen Seite plus die Notfälle beider), dann das oberste freie Item der eigenen Seite,
  * ohne Ausweichen auf die andere. Die Spielquote bleibt eine Kennzahl (`spielquote-lib.mjs`), sie steuert die Auswahl nicht.
@@ -31,7 +32,7 @@ import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { BEREICHE, bereichAliaseAus, configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./spielquote-lib.mjs";
 import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
@@ -71,38 +72,54 @@ export function messfensterGrund(fenster, stand) {
   return "";
 }
 
-/** Nutzersichtbare Bereichsnamen (#1552); das Label für „agentic“ ist `labels.harness` der Projekt-Config. */
-export const BEREICHE = { agentic: "Agentic Engineering", spiel: "Spielentwicklung" };
+/** Löst den rohen `--bereich`-Wert auf: ein Kern-Bereich oder ein Alias aus `bereiche.aliase` (#1943); sonst `undefined`. Pur. */
+function bereichAus(roh, aliase) {
+  if (Object.hasOwn(BEREICHE, roh)) return roh;
+  const ziel = Object.hasOwn(aliase, roh) ? aliase[roh] : undefined;
+  return typeof ziel === "string" && Object.hasOwn(BEREICHE, ziel) ? ziel : undefined;
+}
 
 /** Skript-eigene Texte für einen fehlenden Wert (die übrigen Arten nehmen die Standardtexte von `flagsLesen`). */
 const OHNE_WERT = {
-  "--bereich": "--bereich erwartet agentic oder spiel (bekommen: nichts)",
+  "--bereich": "--bereich erwartet agentic oder produkt (bekommen: nichts)",
   "--ticket": "--ticket erwartet eine Ticketnummer (bekommen: nichts)",
 };
+
+/** Der `--bereich`-Wert des Aufrufs: `{ bereich }` (null ohne Schalter) oder `{ fehler }` bei einem unbekannten Namen. Pur. */
+function bereichLesen(rohWert, aliase) {
+  if (rohWert === undefined) return { bereich: null };
+  const bereich = bereichAus(rohWert, aliase);
+  return bereich === undefined ? { fehler: `--bereich erwartet agentic oder produkt (bekommen: „${rohWert}“)` } : { bereich };
+}
+
+/** Die `--ticket`-Nummer des Aufrufs: `{ ticket }` (null ohne Schalter) oder `{ fehler }`. Pur. */
+function ticketLesen(nr) {
+  if (nr === undefined) return { ticket: null };
+  const m = /^#?(\d+)$/.exec(nr);
+  return !m || Number(m[1]) <= 0 ? { fehler: `--ticket erwartet eine Ticketnummer (bekommen: „${nr}“)` } : { ticket: Number(m[1]) };
+}
 
 /**
  * Liest den Aufruf über `flagsLesen` (`--bereich <wert>`, `--ticket <nr>` auch als `--x=<wert>` und `#<nr>`, `--json`) und prüft die Werte:
  * `{ bereich, ticket, json }` (`bereich` und `ticket` null ohne Schalter) oder `{ fehler }`. Pur, ohne I/O.
  * Schließt `--ticket` und `--bereich` gegenseitig aus und verlangt genau eines davon.
  */
-export function aufrufLesen(argv) {
+export function aufrufLesen(argv, { aliase = {} } = {}) {
   const r = flagsLesen(argv, { bereich: { type: "string" }, ticket: { type: "string" }, json: { type: "boolean" }, maengel: { type: "boolean" } }, {
     meldung: (art, flag) => (art === "ohne-wert" ? OHNE_WERT[flag] : undefined),
   });
   if (r.fehler) return { fehler: r.fehler.text };
-  const { bereich: roh, ticket: nr, json, maengel } = r.werte;
-  if (roh !== undefined && !Object.hasOwn(BEREICHE, roh)) return { fehler: `--bereich erwartet agentic oder spiel (bekommen: „${roh}“)` };
-  let ticket = null;
-  if (nr !== undefined) {
-    const m = /^#?(\d+)$/.exec(nr);
-    if (!m || Number(m[1]) <= 0) return { fehler: `--ticket erwartet eine Ticketnummer (bekommen: „${nr}“)` };
-    ticket = Number(m[1]);
-  }
-  const bereich = roh ?? null;
+  const { bereich: rohWert, ticket: nr, json, maengel } = r.werte;
+  const b = bereichLesen(rohWert, aliase);
+  if (b.fehler) return { fehler: b.fehler };
+  const tk = ticketLesen(nr);
+  if (tk.fehler) return { fehler: tk.fehler };
+  const { bereich } = b;
+  const { ticket } = tk;
   if (maengel === true && ticket !== null) return { fehler: "--maengel und --ticket schließen sich aus" };
   if (maengel === true) return { bereich, ticket: null, json: json === true, maengel: true };
   if (ticket !== null && bereich) return { fehler: "--ticket und --bereich schließen sich aus" };
-  if (ticket === null && !bereich) return { fehler: "Aufruf ohne Auswahl: --bereich agentic|spiel (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)" };
+  if (ticket === null && !bereich) return { fehler: "Aufruf ohne Auswahl: --bereich agentic|produkt (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)" };
   return { bereich, ticket, json: json === true };
 }
 
@@ -175,7 +192,7 @@ function kopfKandidaten(listen, eigene) {
  * Liefert `{ ticket, uebersprungen, hinweise? }`. Pur.
  */
 export function waehleUeberBoards({ produkt, factory, bereich, config, ...belegung }) {
-  if (!Object.hasOwn(BEREICHE, bereich ?? "")) throw new Error("waehleUeberBoards: bereich erwartet agentic oder spiel");
+  if (!Object.hasOwn(BEREICHE, bereich ?? "")) throw new Error("waehleUeberBoards: bereich erwartet agentic oder produkt");
   const listen = seitenListen(produkt, factory, config);
   const hinweise = listenHinweise(listen);
   const eigene = bereich === "agentic" ? "factory" : "produkt";
@@ -261,7 +278,7 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = 
  * mit `bereich` nur dessen Board); Kopf-, Sammel- und Epic-Tickets sind vom Gate ausgenommen. Das Messfenster zählt hier nicht. Liefert `{ anzahl, maengel: [{ nr, titel, fehlt }] }`. Pur.
  */
 export function listeMaengel({ produkt, factory, bereich = null, config, offene, refs = [], worktrees = [], prHeads = [], owner = "", hartAb = 0, namen }) {
-  if (bereich !== null && !Object.hasOwn(BEREICHE, bereich)) throw new Error("listeMaengel: bereich erwartet agentic oder spiel");
+  if (bereich !== null && !Object.hasOwn(BEREICHE, bereich)) throw new Error("listeMaengel: bereich erwartet agentic oder produkt");
   const listen = seitenListen(produkt, factory, config);
   const items = bereich === null ? [...listen.produkt, ...listen.factory] : listen[bereich === "agentic" ? "factory" : "produkt"];
   const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
@@ -295,7 +312,7 @@ export function formatiere({ ticket, uebersprungen, bereich, einzel = null, hinw
 
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
-  const aufruf = aufrufLesen(argv);
+  const aufruf = aufrufLesen(argv, { aliase: bereichAliaseAus(io.config) });
   if (aufruf.fehler) return fehlerErgebnis(aufruf.fehler);
   try {
     if (aufruf.maengel) {
@@ -429,7 +446,7 @@ if (istDirektaufruf(import.meta.url)) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
   const { args, config, fehler: configFehler } = configAusAufruf(process.argv.slice(2)); // --config <pfad>, vor jedem I/O; übersteuert Sprache, Labels, Namen und hartAb, Repo und Board-IDs kommen aus der Repo-Config (board-lib/inbox-lib)
   direktaufruf(args, {
-    pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufLesen(argv)),
+    pruefe: (argv) => (configFehler ? { fehler: configFehler } : aufrufLesen(argv, { aliase: bereichAliaseAus(config) })),
     fehlerErgebnis: (_argv, vorab) => fehlerErgebnis(vorab.fehler),
     vorbereiten: () => mitKontingent("naechstes-ticket", { arten: ["core"] }), // nur REST zählt: das eine GraphQL (Verzug) ist fail-open, ein knappes GraphQL-Kontingent sperrt den Einstieg nicht
     io: () => {

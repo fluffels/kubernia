@@ -76,7 +76,17 @@ const lib = rawLib as unknown as {
 };
 const docdrift = rawDocdrift as unknown as { auditDocDrift(wurzel: string): { deadCommands: { file: string; script: string }[]; deadLinks: { file: string; target: string; resolved: string }[]; deadAnchors: { file: string; target: string }[] } };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
-const { projektwertLauf, PROJEKT_BLOCK_START: PB_START, PROJEKT_BLOCK_ENDE: PB_ENDE } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] }; PROJEKT_BLOCK_START: string; PROJEKT_BLOCK_ENDE: string };
+const {
+  projektwertLauf,
+  rendereProjektwerte,
+  PROJEKT_BLOCK_START: PB_START,
+  PROJEKT_BLOCK_ENDE: PB_ENDE,
+} = rawBesitz as unknown as {
+  projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] };
+  rendereProjektwerte: (text: string, config: unknown, pfad?: string) => string;
+  PROJEKT_BLOCK_START: string;
+  PROJEKT_BLOCK_ENDE: string;
+};
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const temp: string[] = [];
@@ -994,8 +1004,9 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     assert.ok(quelle.length > 0, `${quellPfad} fehlt im Export`);
     const factory = JSON.parse(text(".factory/projekt.json")) as { agenten: { ticketSkill: string } };
     assert.ok(quelle.split("\n").join("|").includes(`# factory:projektwert agenten.ticketSkill|name: ${factory.agenten.ticketSkill}|`), "Marker und Name der Config stehen untereinander");
-    assert.ok(quelle.includes("--bereich spiel"));
+    assert.ok(quelle.includes("--bereich produkt"));
     assert.ok(!quelle.includes("--bereich agentic"));
+    assert.equal(quelle, rendereProjektwerte(leser.lies(quellPfad) ?? "", factory, quellPfad), "der Export enthält die gerenderte Quelle, keine Handkopie");
     const zeiger = text(`${String(ZEIGER_WURZEL)}/${ordner}/SKILL.md`);
     assert.equal(zeiger, (zeigerText as (n: string, t: string) => string)(ordner, quelle), "der Zeiger ist aus der gerenderten Quelle berechnet");
     const z = leerOrdner();
@@ -1003,6 +1014,21 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     const stand = (rawSkills as unknown as { liesStand(w: string): unknown; pruefeSkills(s: unknown): unknown[] });
     assert.deepEqual(stand.pruefeSkills(stand.liesStand(z)), []);
     assert.doesNotMatch(quelle + zeiger, /kubernia|KQ/i);
+  }, 60_000);
+
+  test("#1943: eine Änderung an der Quelle des Ticket-Skills kommt im Export an, der Zeiger folgt aus ihr, der Alias des Projekts bleibt draußen", () => {
+    const quellPfad = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+    const original = leser.lies(quellPfad) ?? "";
+    const geaendert = original.replace("effort: medium", "effort: high") + "\nProbe-Zeile 1943\n";
+    assert.notEqual(geaendert, original, "die Probe ändert die Quelle");
+    const r = ex.baueExport({ leser: mitAenderung(leser, { [quellPfad]: geaendert }) });
+    assert.deepEqual(r.befunde, []);
+    const text = (p: string): string => r.dateien.get(p)?.text ?? "";
+    assert.ok(text(quellPfad).includes("Probe-Zeile 1943"), "die Quelländerung steht in der Exportdatei");
+    assert.ok(text(`${String(ZEIGER_WURZEL)}/${String(TICKET_SKILL_NAME)}/SKILL.md`).includes("effort: high"), "der Zeiger ist aus der geänderten Quelle berechnet");
+    assert.ok(!(echt.dateien.get(quellPfad)?.text ?? "").includes("Probe-Zeile 1943"), "ohne Änderung fehlt die Probe-Zeile");
+    const config = JSON.parse(text(".factory/projekt.json")) as { bereiche: { aliase: Record<string, string> } };
+    assert.deepEqual(config.bereiche.aliase, {}, "der Alias des Projekts wandert nicht ins Factory-Repo");
   }, 60_000);
 
   test("#1931: die Settings-Vorlage trägt die Kontext-Schalter und gibt jeden Server der .mcp.json frei, die Ergänzung der Config erreicht permissions", () => {
@@ -1108,17 +1134,18 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     });
 
 
-    test("#1930: fehlt die Vorlage des Ticket-Skills, bricht der Export ab", () => {
+    test("#1943: eine wieder angelegte Vorlage des Ticket-Skills ist ohne Verwendung und bricht den Export ab (der Export rendert die Quelle)", () => {
       const vorlage = `.factory/produkt/vorlagen/${(ROLLEN_PFADE as Record<string, string>).ticketSkill}.vorlage`;
-      abbruch({ [vorlage]: null }, /SKILL\.md\.vorlage: Vorlage fehlt/);
+      assert.equal(leser.pfade.includes(vorlage), false, "die Vorlage ist aus dem Repo entfernt");
+      befund({ [vorlage]: "Handkopie" }, /SKILL\.md\.vorlage: Vorlage ohne Verwendung/);
     });
 
-    test("#1930: ohne Eintrag der Quelle in der Extraktionsliste und ohne Vorlage meldet der Export den fehlenden Ticket-Skill statt abzustürzen", () => {
+    test("#1943: ohne Eintrag der Quelle in der Extraktionsliste und ohne Quelle meldet der Export den fehlenden Ticket-Skill statt abzustürzen", () => {
       const quelle = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
       const alle = basisText(".factory/extraktion.json").split("\n");
       const liste = alle.filter((z) => !z.includes(`"muster":"${quelle}"`));
       assert.equal(liste.length, alle.length - 1, "genau ein Eintrag entfällt");
-      befund({ ".factory/extraktion.json": liste.join("\n"), [`.factory/produkt/vorlagen/${quelle}.vorlage`]: null }, /Vorlage der Rolle ticketSkill fehlt im Export/);
+      befund({ ".factory/extraktion.json": liste.join("\n"), [quelle]: null }, /Quelle der Rolle ticketSkill fehlt/);
     });
 
     test("#1929: fehlt die Vorlage einer der neuen Daten-Dateien, bricht der Export ab", () => {

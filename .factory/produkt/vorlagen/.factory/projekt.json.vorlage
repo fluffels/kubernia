@@ -16,6 +16,9 @@
     "quelle": "scripts",
     "moduldoku": "docs"
   },
+  "bereiche": {
+    "aliase": {}
+  },
   "ausnahmen": {
     "groesse": [],
     "kontext": []

@@ -30,6 +30,7 @@ interface Pc {
   umschriftAus(config: unknown): string[];
   strukturAus(config: unknown): { quelle: string; moduldoku: string };
   escapeKopienAus(config: unknown): string[];
+  bereichAliaseAus(config: unknown): Record<string, string>;
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
   umgebungsWert(env: Record<string, string | undefined>, name: string): string | undefined;
   kernEnvNamen(ordner: string): string[];
@@ -206,6 +207,40 @@ describe("pruefeProjektConfig", () => {
     for (const schlecht of [5, [], null, {}, { hartAb: 0 }, { hartAb: -3 }, { hartAb: 1.5 }, { hartAb: "7" }]) {
       assert.match(mit(schlecht).join("\n"), /spezifikation\.hartAb/);
     }
+  });
+});
+
+describe("Bereichs-Aliase (#1943)", () => {
+  const mit = (wert: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), bereiche: wert });
+
+  test("gültig: Alias auf einen Kern-Bereich, auch mit leeren aliase oder ohne aliase", () => {
+    assert.deepEqual(mit({ aliase: { spiel: "produkt" } }), []);
+    assert.deepEqual(mit({ aliase: {} }), []);
+    assert.deepEqual(mit({}), []);
+    assert.deepEqual(mit({ aliase: { "spiel-2": "produkt" } }), [], "Ziffer und Bindestrich sind im Alias-Namen erlaubt");
+  });
+
+  test("Negativfälle: Form, Alias-Name, Überdeckung eines Kern-Namens, Ziel kein Kern-Bereich", () => {
+    assert.match(mit([]).join("\n"), /bereiche muss ein Objekt/);
+    assert.match(mit({ aliase: [] }).join("\n"), /bereiche\.aliase muss ein Objekt/);
+    assert.match(mit({ aliase: { Spiel: "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
+    assert.match(mit({ aliase: { "x y": "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
+    assert.match(mit({ aliase: { "2spiel": "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
+    assert.match(mit({ aliase: { "-spiel": "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
+    assert.match(mit({ aliase: { agentic: "produkt" } }).join("\n"), /überdeckt einen Kern-Bereich/);
+    assert.match(mit({ aliase: { spiel: "x" } }).join("\n"), /muss auf einen Kern-Bereich zeigen/);
+    assert.match(mit({ aliase: { spiel: ["produkt"] } }).join("\n"), /muss auf einen Kern-Bereich zeigen/);
+  });
+
+  test("bereichAliaseAus: ohne Schlüssel oder Config leer, sonst die Zuordnung", () => {
+    assert.deepEqual(pc.bereichAliaseAus({}), {});
+    assert.deepEqual(pc.bereichAliaseAus(undefined), {});
+    for (const kaputt of [null, [], "x", 5]) assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: kaputt } }), {}, JSON.stringify(kaputt));
+    assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: { spiel: "produkt" } } }), { spiel: "produkt" });
+  });
+
+  test("die echte Config führt den Alias spiel auf produkt", () => {
+    assert.deepEqual(pc.bereichAliaseAus(JSON.parse(readFileSync(WURZEL + ".factory/projekt.json", "utf8"))), { spiel: "produkt" });
   });
 });
 
