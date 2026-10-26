@@ -24,7 +24,7 @@
 # SSOT der geschuetzten Pfade ist .github/protected-paths.json (#1157): der Abschluss-
 # Waechter scripts/umsetzer-abschluss.mjs gleicht den Diff CODEOWNERS-artig gegen sie ab. GitHub kann
 # CODEOWNERS nicht aus einer Datei einbinden, darum steht die Liste hier noch einmal - neue Pfade ZUERST
-# in der Quelle eintragen, dann hier nachziehen. Den Abgleich hält test/harness/projekt-schutz-projekt.test.ts.
+# in der Quelle eintragen, dann hier nachziehen. Den Abgleich hält test/harness/harness-approval-projekt.test.ts.
 
 # Gate-Config
 /.dependency-cruiser.cjs   @fluffels

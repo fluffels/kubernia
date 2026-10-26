@@ -1,7 +1,7 @@
 /* Projekt-Teil des Freigabe-Wächters (#1929, vorher in harness-approval.test.ts): die Projekt-Stopps im Projekt-Block der AGENTS.md,
  * der Freigabe-Stopp des Forum-Skills und die modul-lokale AGENTS.md im Scan-Umfang. Gegenstand ist Projektinhalt (Forum, Bild-Dienst,
  * `src/content/AGENTS.md`), kein Besitz: dieser Test ist ein `projekt-test` und reist nicht mit dem Kern. Der Kern-Teil (Kern-Stopps
- * im Kern-Block, Permissions) steht im Factory-Repo (`harness-approval.test.ts`).
+ * im Kern-Block, Permissions) steht in `harness-approval-projekt.test.ts`.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
@@ -25,7 +25,7 @@ const read = (rel: string) => readFileSync(WURZEL + rel, "utf8");
  * Die festen Pflicht-Stopps: die Kern-Stopps stehen im Kern-Block `kern` der AGENTS.md, die Projekt-Stopps im Projekt-Block als eine
  * wörtlich festgenagelte Zeile; ein Kern-Anker im Projekt-Block zählt nicht. Grenze: geprüft werden Anker-Text und Pin-Zeile, nicht die
  * Bedeutung; ein Abschwächen im Wortlaut, bei dem der Anker bleibt, fängt nur die Pin-Zeile (jede Änderung der Stopp-Zeile). Die Kern-Liste
- * ist dieselbe wie in `harness-approval.test.ts` des Factory-Repos.
+ * ist dieselbe wie in `harness-approval-projekt.test.ts`.
  */
 const KERN_STOPPS = ["gh issue delete", "Ruleset/Secrets/Repo-Einstellungen", "Veröffentlichen"];
 const PROJEKT_STOPPS = ["Forum-Antwort posten", "PixelLab-Key"];

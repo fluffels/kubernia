@@ -144,4 +144,4 @@ Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta,
 
 Ein MCP-Server oder Plugin, das einen Eigenbau ersetzt, muss vorher durch Netz-Allowlist, Token-Deny und Fremdtext-Abgleich: [arc42 §10](arc42-architektur.md#10-qualitätsanforderungen-qualitätsbaum), [Sicherheit der Agenten](sicherheit-agenten.md) und die Herleitung in #1429.
 
-Bewacht von [`harness-inventar.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.1.0/test/harness/harness-inventar.test.ts) (Prüfstand-Marker, Vollständigkeit gegen die generierte Tabelle, festes Vokabular).
+Bewacht von [`harness-inventar.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.1.0/test/harness/harness-inventar.test.ts) (läuft nur im Factory-Repo, für kubernia offen: [Grenzen der Fortschreibung #1882](adr/fortschreibungen/0022-1882-sync-vom-tag-in-kubernia.md#grenzen)) (Prüfstand-Marker, Vollständigkeit gegen die generierte Tabelle, festes Vokabular).

@@ -195,7 +195,9 @@ describe("Jeder in Markdown genannte Testpfad existiert (#1882)", () => {
     assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/x.md", inhalt: text }], existiert), []);
     const block = `${SCHNAPPSCHUSS_START}\n2026-01-01 ${weg}\n${SCHNAPPSCHUSS_ENDE}`;
     assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/x.md", inhalt: block }], existiert), []);
-    for (const pfad of ["docs/adr/0001-x.md", "docs/analyse-2026-07-03-x.md", "docs/x.txt", BESITZ.find((p) => p.endsWith(".md")) ?? "AGENTS.md"]) {
+    const besitzMarkdown = BESITZ.find((p) => p.endsWith(".md"));
+    assert.ok(besitzMarkdown, "Vorbedingung: der Besitz führt mindestens eine ganze Markdown-Datei");
+    for (const pfad of ["docs/adr/0001-x.md", "docs/analyse-2026-07-03-x.md", "docs/x.txt", besitzMarkdown]) {
       assert.deepEqual(fehlendeTestpfade([{ pfad, inhalt: weg }], existiert), [], pfad);
     }
   });
