@@ -95,6 +95,15 @@ describe("alertsAus", () => {
     expect(c.ort).toBeNull();
     expect(d.ort).toBeNull();
   });
+  test("Ort nur mit ganzzahligen Zeilen, sonst null", () => {
+    const ortFuer = (loc: Record<string, unknown>) =>
+      C.alertsAus([roh({ number: 1, most_recent_instance: { location: loc } })]) as unknown as { ort: unknown }[];
+    expect(ortFuer({ start_line: "13" })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 1.5 })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 13, end_line: "14" })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 13, end_line: 14.5 })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 13, end_line: 14 })[0].ort).toEqual({ von: 13, bis: 14 });
+  });
   test("kein Array oder fehlende Nummer wirft", () => {
     expect(() => C.alertsAus({})).toThrow();
     expect(() => C.alertsAus([roh({ number: "x" })])).toThrow();
@@ -765,6 +774,9 @@ describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
     test("nur Leerraum in der markierten Zeile: leer", () => {
       expect(C.codeAusschnitt("a\n   \nb", { von: 2, bis: 2 })).toBe("");
     });
+    test("mehrzeiliger Bereich nur aus Leerraum: leer (kein Umbruch übrig)", () => {
+      expect(C.codeAusschnitt("a\n \n \nb", { von: 2, bis: 3 })).toBe("");
+    });
   });
 
   describe("nachfolgerJeAlert", () => {
@@ -785,11 +797,14 @@ describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
       ["andere Regel", { rule: { id: "js/andere", severity: "error", security_severity_level: "high" } }, {}],
       ["anderer Pfad", { most_recent_instance: instanz({ location: { path: "scripts/b.mjs", start_line: 14, end_line: 14 } }) }, {}],
       ["andere Meldung", { most_recent_instance: instanz({ message: { text: "anders" }, location: { path: "scripts/a.mjs", start_line: 14, end_line: 14 } }) }, {}],
-      ["anderes Tool", { tool: { name: "Semgrep" } }, {}],
     ])("%s: kein Nachfolger", (_n, spitzeRoh, _v) => {
       const a = eins(spitzeRoh);
       const lies = liesNach({ ...dateien, "c1:scripts/b.mjs": neu });
       expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: vor(), lies }).size).toBe(0);
+    });
+    test("Vorgänger eines anderen Tools (sonst identisch): kein Nachfolger", () => {
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor({ tool: { name: "Semgrep" } }), lies: liesNach(dateien) }).size).toBe(0);
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies: liesNach(dateien) }).size).toBe(1);
     });
     test("geänderte Codezeile bleibt Spitze", () => {
       const lies = liesNach({ ...dateien, "c1:scripts/a.mjs": datei("const y = a.replace(/\\|/g, 'x');", "NEU\n") });
@@ -801,15 +816,44 @@ describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
       expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies: liesNach({ "c1:scripts/a.mjs": neu }) }).size).toBe(0);
     });
     test("leerer Ausschnitt in beiden Dateien ist kein Treffer", () => {
-      const leer = datei("   ", "NEU\n");
-      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies: liesNach({ "c0:scripts/a.mjs": leer, "c1:scripts/a.mjs": leer }) }).size).toBe(0);
+      const lies = liesNach({ "c0:scripts/a.mjs": datei("   "), "c1:scripts/a.mjs": datei("   ", "NEU\n") });
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies }).size).toBe(0);
     });
-    test("ohne Ort, ohne Commit oder ohne Meldung am Alert: kein Nachfolger", () => {
-      for (const inst of [{ location: { path: "scripts/a.mjs" } }, { commit_sha: "" }, { message: { text: "" } }]) {
-        const a = eins({ most_recent_instance: instanz(inst) });
-        const v = C.vorgaengerAus([dismissed(75, { most_recent_instance: instanz({ commit_sha: "c0", ...inst }) })], OWNER);
-        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: v, lies: liesNach(dateien) }).size).toBe(0);
-      }
+    describe("Guards am Alert und am Vorgänger (Datei liefert für jeden Commit dieselben, gleichen Zeilen)", () => {
+      const gleich = datei("same;", "", "same;\n");
+      const lies = () => gleich;
+      const ort = { path: "scripts/a.mjs", start_line: 14, end_line: 14 };
+      const ortV = { path: "scripts/a.mjs", start_line: 13, end_line: 13 };
+      const regelFalsch = { id: "bad id!", severity: "error", security_severity_level: "high" };
+      test("Kontrolle: ohne Guard-Verletzung ist es ein Nachfolger", () => {
+        expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies }).size).toBe(1);
+      });
+      test("Alert ohne Commit: kein Nachfolger", () => {
+        const a = eins({ most_recent_instance: instanz({ commit_sha: "", location: ort }) });
+        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: vor(), lies }).size).toBe(0);
+      });
+      test("Vorgänger ohne Commit: kein Nachfolger (die Contents-API läse sonst den Standard-Branch)", () => {
+        const v = vor({ most_recent_instance: instanz({ commit_sha: "", location: ortV }) });
+        expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: v, lies }).size).toBe(0);
+      });
+      test("Alert und Vorgänger ohne Meldung: kein Nachfolger", () => {
+        const a = eins({ most_recent_instance: instanz({ message: { text: "" }, location: ort }) });
+        const v = vor({ most_recent_instance: instanz({ commit_sha: "c0", message: { text: "" }, location: ortV }) });
+        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: v, lies }).size).toBe(0);
+      });
+      test("Alert ohne Ort: kein Nachfolger", () => {
+        const a = eins({ most_recent_instance: instanz({ location: { path: "scripts/a.mjs" } }) });
+        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: vor(), lies }).size).toBe(0);
+      });
+      test("unlesbare Regel-ID (beide unbekannt): kein Nachfolger", () => {
+        const a = eins({ rule: regelFalsch });
+        const v = vor({ rule: regelFalsch });
+        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: v, lies }).size).toBe(0);
+      });
+    });
+    test("zwei passende Vorgänger: aufsteigend, der Grund des kleinsten gewinnt", () => {
+      const v = C.vorgaengerAus([dismissed(80, { dismissed_reason: "false positive" }), dismissed(75)], OWNER);
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: v, lies: liesNach(dateien) }).get(109)).toEqual({ vorgaenger: [75, 80], grund: "won't fix" });
     });
     test("Zeilen-Klasse und test/-Pfade werden nicht befragt (kein lies-Aufruf)", () => {
       let aufrufe = 0;
@@ -864,6 +908,39 @@ describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
       const p = C.plane({ alerts: [a109], bekannt, offenesIssue: null, nachfolger: folger });
       expect(p.zeilen).toEqual([]);
       expect(p.issue.art).toBe("nichts");
+    });
+    test("Nummer schon in offener Zeile: auch das Log nennt den Nachfolger nicht erneut", () => {
+      const bekannt = { ...keine, nummern: new Set([109]) };
+      expect(C.plane({ alerts: [a109], bekannt, offenesIssue: null, nachfolger: folger }).nachfolger).toEqual([]);
+    });
+    test("regelweite Wiedervorlage hält einen Nachfolger nicht still, das Feld alerts schon", () => {
+      const regelWv = { ...keine, regeln: new Set(["js-incomplete-sanitization"]) };
+      expect(C.plane({ alerts: [a109], bekannt: regelWv, offenesIssue: null, nachfolger: folger }).zeilen.map((g) => g.nummern)).toEqual([[109]]);
+      const alertWv = { ...keine, alerts: new Set([109]) };
+      expect(C.plane({ alerts: [a109], bekannt: alertWv, offenesIssue: null, nachfolger: folger }).zeilen).toEqual([]);
+    });
+    test("Kommentar beim Schließen nennt deckendes Issue und Nachfolger zusammen", () => {
+      const bekannt = { ...keine, issues: [{ number: 42, titel: "x", body: "Code-Scanning-Alert 110" }] };
+      const p = C.plane({ alerts: [a109, alert({ nummer: 110 })], bekannt, offenesIssue: { number: 1952, body: "x" }, nachfolger: folger });
+      expect(p.issue).toEqual({ art: "schliessen", nummer: 1952, abgedecktDurch: [42], nachfolger: [109] });
+      const kommentare: string[] = [];
+      C.fuehreAus({ plan: p, io: { schliesse: (_n: number, k: string) => kommentare.push(k), zielSammelticket: () => 5, postZeilen: () => undefined, log: () => undefined } });
+      expect(kommentare[0]).toContain("#42");
+      expect(kommentare[0]).toContain("Alert 109");
+    });
+    test("zwei Nachfolger desselben Vorgängers: Vorgänger und Grund je einmal, Vorgänger aufsteigend", () => {
+      const f: Folger = new Map([
+        [109, { vorgaenger: [80, 75], grund: "won't fix" }],
+        [111, { vorgaenger: [75], grund: "won't fix" }],
+      ]);
+      const p = C.plane({ alerts: [a109, alert({ nummer: 111, regel: "js/incomplete-sanitization" })], bekannt: keine, offenesIssue: null, nachfolger: f });
+      const text = C.zeilenText(p.zeilen[0]);
+      expect(text).toContain("Vorgänger Nr. 75, 80 (");
+      expect(text).toContain("geschlossen als won't fix)");
+    });
+    test("Vorgänger ohne Grund: geschlossen als unbekannt", () => {
+      const p = C.plane({ alerts: [a109], bekannt: keine, offenesIssue: null, nachfolger: new Map([[109, { vorgaenger: [75], grund: "" }]]) });
+      expect(C.zeilenText(p.zeilen[0])).toContain("geschlossen als unbekannt)");
     });
     test("ohne Nachfolger-Map verhält sich der Plan wie bisher (Spitze)", () => {
       expect(C.plane({ alerts: [a109], bekannt: keine, offenesIssue: null }).issue.art).toBe("anlegen");

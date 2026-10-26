@@ -60,6 +60,15 @@ function ortAus(loc) {
   return Number.isInteger(von) && Number.isInteger(bis) && von >= 1 && bis >= von ? { von, bis } : null;
 }
 
+/** Felder der jüngsten Instanz eines Alerts (Pfad, GHSA-IDs, Meldung, Ort, Commit). Pur. */
+const instanzAus = (inst) => ({
+  pfad: String(inst?.location?.path ?? ""),
+  ghsa: ghsaIn(inst?.message?.text),
+  meldung: String(inst?.message?.text ?? ""),
+  ort: ortAus(inst?.location),
+  commit: String(inst?.commit_sha ?? ""),
+});
+
 /** Normalisiert die Roh-Liste (jeder Zustand); wirft bei Nicht-Liste oder Nummer ohne Ganzzahl. Pur. */
 function alertListeAus(liste) {
   if (!Array.isArray(liste)) throw new Error("Unerwartete Code-Scanning-Antwort (keine Liste).");
@@ -67,7 +76,6 @@ function alertListeAus(liste) {
     if (!Number.isInteger(a?.number)) throw new Error(`Unerwartete Form eines Alerts: ${JSON.stringify(a)?.slice(0, 120)}`);
     const id = String(a?.rule?.id ?? "");
     const stufe = a?.rule?.security_severity_level;
-    const inst = a?.most_recent_instance;
     return {
       nummer: a.number,
       tool: String(a?.tool?.name ?? "unbekannt"),
@@ -75,11 +83,7 @@ function alertListeAus(liste) {
       stufe: typeof stufe === "string" && stufe !== "" ? stufe.toLowerCase() : null,
       schwere: String(a?.rule?.severity ?? "").toLowerCase(),
       state: String(a?.state ?? ""),
-      pfad: String(inst?.location?.path ?? ""),
-      ghsa: ghsaIn(inst?.message?.text),
-      meldung: String(inst?.message?.text ?? ""),
-      ort: ortAus(inst?.location),
-      commit: String(inst?.commit_sha ?? ""),
+      ...instanzAus(a?.most_recent_instance),
       geschlossenVon: a?.dismissed_by ?? null,
       grund: String(a?.dismissed_reason ?? ""),
     };
@@ -91,11 +95,10 @@ export function vorgaengerAus(liste, owner) {
   return alertListeAus(liste).filter((a) => a.state === "dismissed" && istVertraut(a.geschlossenVon, owner));
 }
 
-/** Die markierten Zeilen `ort` aus `text` (CRLF-fest, 1-basiert), getrimmt und mit Zeilenumbruch verbunden; ohne Ort oder außerhalb des Textes "". Pur. */
+/** Die markierten Zeilen `ort` aus `text` (1-basiert; das Trimmen je Zeile entfernt auch ein `\r`), mit Zeilenumbruch verbunden; ohne Ort oder außerhalb des Textes "". Pur. */
 export function codeAusschnitt(text, ort) {
   if (typeof text !== "string" || !ort) return "";
-  const zeilen = text.split(/\r?\n/);
-  if (ort.von > zeilen.length) return "";
+  const zeilen = text.split("\n");
   return zeilen.slice(ort.von - 1, ort.bis).map((z) => z.trim()).join("\n").trim();
 }
 
@@ -109,9 +112,10 @@ export function nachfolgerJeAlert({ alerts, vorgaenger, lies }) {
   const karte = new Map();
   const ausschnitt = (a) => codeAusschnitt(lies(a.pfad, a.commit), a.ort);
   for (const a of alerts) {
-    if (klasse(a) !== "spitze" || !a.ort || !a.commit || !a.meldung || a.regel === "unbekannt") continue;
+    if (klasse(a) !== "spitze" || !a.commit || !a.meldung || a.regel === "unbekannt") continue;
+    // Ohne Commit läse die Contents-API den Standard-Branch, also nie einen Vorgänger ohne Commit gelten lassen.
     const kandidaten = vorgaenger
-      .filter((v) => v.nummer !== a.nummer && v.tool === a.tool && v.regel === a.regel && v.pfad === a.pfad && v.meldung === a.meldung && v.ort && v.commit)
+      .filter((v) => v.nummer !== a.nummer && v.tool === a.tool && v.regel === a.regel && v.pfad === a.pfad && v.meldung === a.meldung && v.commit)
       .sort((x, y) => x.nummer - y.nummer);
     if (kandidaten.length === 0) continue;
     const eigen = ausschnitt(a);
@@ -258,10 +262,10 @@ export function plane({ alerts, bekannt, offenesIssue, repo, nachfolger = new Ma
   const kandidaten = alerts.filter((a) => klasse(a) === "spitze" && !bekannt.alerts?.has(a.nummer) && !deckt(a));
   const folger = kandidaten.filter((a) => nachfolger.has(a.nummer));
   const spitze = gruppiere(kandidaten.filter((a) => !nachfolger.has(a.nummer)));
-  // Ein Nachfolger wird nur still, wenn seine Nummer schon in einer offenen Zeile steht (K4); die regelweite Wiedervorlage deckt keine Spitze.
+  // Ein Nachfolger wird nur still, wenn seine Nummer schon in einer offenen Zeile steht; die regelweite Wiedervorlage deckt keine Spitze.
   const folgerZeilen = gruppiere(folger.filter((a) => !bekannt.nummern.has(a.nummer)), nachfolger);
   const zeilen = [...gruppiere(alerts.filter((a) => klasse(a) === "zeile" && !stumm(a) && !bekannt.alerts?.has(a.nummer) && !deckt(a))), ...folgerZeilen];
-  const nachfolgerLog = folger.map((a) => ({ nummer: a.nummer, vorgaenger: nachfolger.get(a.nummer).vorgaenger }));
+  const nachfolgerLog = folger.filter((a) => !bekannt.nummern.has(a.nummer)).map((a) => ({ nummer: a.nummer, vorgaenger: nachfolger.get(a.nummer).vorgaenger }));
   if (spitze.length === 0) {
     const durch = [...new Set(abgedeckt.map((x) => x.issue))].sort((x, y) => x - y);
     const schliessen = {
@@ -384,7 +388,7 @@ export function lauf({ io, trocken = false }) {
     return 1;
   }
   const code = fuehreAus({ plan, io, trocken });
-  if (plan.issue.art === "nichts" && plan.zeilen.length === 0 && plan.abgedeckt.length === 0 && plan.nachfolger.length === 0) log("Code-Scanning-Inbox: nichts Neues.");
+  if (plan.issue.art === "nichts" && plan.zeilen.length === 0 && plan.abgedeckt.length === 0) log("Code-Scanning-Inbox: nichts Neues.");
   return code;
 }
 
