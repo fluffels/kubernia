@@ -26,6 +26,29 @@ const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v
 
 export const BOARD_ROLLEN = ["produkt", "factory"];
 
+/** Kern-Bereiche der Ticket-Auswahl (`--bereich`) mit Anzeigenamen; das Label für „agentic“ ist `labels.harness`. Projektspezifische Namen sind Aliase (`bereiche.aliase`). */
+export const BEREICHE = Object.freeze({ agentic: "Agentic Engineering", produkt: "Produktentwicklung" });
+
+/** Pur: die Bereichs-Aliase der Config (Alias → Kern-Bereich); ohne Schlüssel leer. Die Form prüft `pruefeBereiche`. */
+export function bereichAliaseAus(config) {
+  const aliase = config?.bereiche?.aliase;
+  return istObjekt(aliase) ? aliase : {};
+}
+
+/** Pur: prüft `bereiche` (optional; `aliase` bildet je Name einen Kern-Bereich ab, ohne einen Kern-Namen zu überdecken). */
+function pruefeBereiche(b) {
+  if (!istObjekt(b)) return ["bereiche muss ein Objekt mit aliase sein"];
+  if (b.aliase === undefined) return [];
+  if (!istObjekt(b.aliase)) return ["bereiche.aliase muss ein Objekt (Alias → Kern-Bereich) sein"];
+  const fehler = [];
+  for (const [alias, ziel] of Object.entries(b.aliase)) {
+    if (!/^[a-z][a-z0-9-]*$/.test(alias)) fehler.push(`bereiche.aliase.${alias}: der Alias-Name muss dem Muster ^[a-z][a-z0-9-]*$ entsprechen`);
+    else if (Object.hasOwn(BEREICHE, alias)) fehler.push(`bereiche.aliase.${alias} überdeckt einen Kern-Bereich (${Object.keys(BEREICHE).join(", ")})`);
+    if (!Object.hasOwn(BEREICHE, ziel)) fehler.push(`bereiche.aliase.${alias} muss auf einen Kern-Bereich zeigen (${Object.keys(BEREICHE).join(", ")})`);
+  }
+  return fehler;
+}
+
 /** Pur: prüft ein Board-Objekt; `praefix` ist der Schlüsselpfad für die Fehlermeldungen (z. B. `boards.1.`). */
 function pruefeBoard(b, praefix) {
   const fehler = [];
@@ -433,6 +456,7 @@ export function pruefeProjektConfig(wert) {
   }
   if (wert.sprache !== undefined) fehler.push(...pruefeSprache(wert.sprache));
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
+  if (wert.bereiche !== undefined) fehler.push(...pruefeBereiche(wert.bereiche));
   if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));

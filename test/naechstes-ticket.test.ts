@@ -162,20 +162,20 @@ describe("fuehreAus", () => {
     },
   });
   test("gefunden: Exit 0, erste Zeile `#nr<TAB>Titel`", () => {
-    const r = N.fuehreAus(["--bereich", "spiel"], io({ items: norm([item(7)]), offene: new Set() }));
+    const r = N.fuehreAus(["--bereich", "produkt"], io({ items: norm([item(7)]), offene: new Set() }));
     expect(r.code).toBe(0);
     expect(r.out.split("\n")[0]).toBe("#7\tT7");
   });
   test("kein freies: Exit 1", () => {
-    expect(N.fuehreAus(["--bereich", "spiel"], io({ items: [], offene: new Set() })).code).toBe(1);
+    expect(N.fuehreAus(["--bereich", "produkt"], io({ items: [], offene: new Set() })).code).toBe(1);
   });
   test("Fehler beim Laden: Exit 2 mit Meldung", () => {
-    const r = N.fuehreAus(["--bereich", "spiel"], io(new Error("kein Netz")));
+    const r = N.fuehreAus(["--bereich", "produkt"], io(new Error("kein Netz")));
     expect(r.code).toBe(2);
     expect(r.err).toContain("kein Netz");
   });
   test("--json: parsebar; der Body erscheint nie in der Ausgabe", () => {
-    const r = N.fuehreAus(["--json", "--bereich", "spiel"], io({ items: norm([item(7, { body: "GEHEIMER BODY" })]), offene: new Set() }));
+    const r = N.fuehreAus(["--json", "--bereich", "produkt"], io({ items: norm([item(7, { body: "GEHEIMER BODY" })]), offene: new Set() }));
     expect((JSON.parse(r.out) as Ergebnis).ticket?.nr).toBe(7);
     expect(r.out).not.toContain("GEHEIMER");
   });
@@ -194,22 +194,40 @@ describe("Bereich (#1552)", () => {
 
   test("aufrufLesen: --bereich in beiden Schreibweisen, neben --json", () => {
     expect(N.aufrufLesen(["--bereich", "agentic"])).toEqual({ bereich: "agentic", ticket: null, json: false });
-    expect(N.aufrufLesen(["--bereich=spiel"])).toEqual({ bereich: "spiel", ticket: null, json: false });
-    expect(N.aufrufLesen(["--json", "--bereich", "spiel"])).toEqual({ bereich: "spiel", ticket: null, json: true });
+    expect(N.aufrufLesen(["--bereich=produkt"])).toEqual({ bereich: "produkt", ticket: null, json: false });
+    expect(N.aufrufLesen(["--json", "--bereich", "produkt"])).toEqual({ bereich: "produkt", ticket: null, json: true });
+  });
+  test("Bereichs-Alias (#1943): ein Alias aus der Config wird auf den Kern-Bereich normalisiert, ohne Alias ist der Name unbekannt", () => {
+    const aliase = { spiel: "produkt" };
+    expect(N.aufrufLesen(["--bereich", "spiel"], { aliase })).toEqual({ bereich: "produkt", ticket: null, json: false });
+    expect(N.aufrufLesen(["--bereich=spiel", "--json"], { aliase })).toEqual({ bereich: "produkt", ticket: null, json: true });
+    expect(N.aufrufLesen(["--bereich", "spiel"]).fehler).toBe("--bereich erwartet agentic oder produkt (bekommen: „spiel“)");
+    expect(N.aufrufLesen(["--bereich", "spiel"], { aliase: { spiel: "x" } }).fehler).toMatch(/bekommen: „spiel“/);
+    expect(N.aufrufLesen(["--bereich", "toString"], { aliase }).fehler).toMatch(/bekommen: „toString“/);
+  });
+  test("Bereichs-Alias (#1943, AK3): ohne Alias in der Config endet --bereich spiel mit Exit 2 vor jedem Laden, mit Alias gilt der Kern-Name", () => {
+    const spion = { n: 0 };
+    const ohne = N.fuehreAus(["--bereich", "spiel"], io([item(1)], spion));
+    expect(ohne.code).toBe(2);
+    expect(ohne.err).toMatch(/bekommen: „spiel“/);
+    expect(spion.n).toBe(0);
+    const mit = N.fuehreAus(["--json", "--bereich", "spiel"], { ...io([item(1)], spion), config: { ...CFG, bereiche: { aliase: { spiel: "produkt" } } } });
+    expect(mit.code).toBe(0);
+    expect((JSON.parse(mit.out) as { bereich: string }).bereich).toBe("produkt");
   });
   test("aufrufLesen: fehlender oder unbekannter --bereich-Wert ist ein Fehler mit dem alten Text", () => {
     for (const argv of [["--bereich"], ["--bereich", "--json"], ["--bereich="]]) {
-      expect(N.aufrufLesen(argv).fehler, argv.join(" ")).toBe("--bereich erwartet agentic oder spiel (bekommen: nichts)");
+      expect(N.aufrufLesen(argv).fehler, argv.join(" ")).toBe("--bereich erwartet agentic oder produkt (bekommen: nichts)");
     }
     for (const argv of [["--bereich", "harness"], ["--bereich", "Agentic"], ["--bereich", "constructor"], ["--bereich", ""]]) {
-      expect(N.aufrufLesen(argv).fehler, argv.join(" ")).toMatch(/^--bereich erwartet agentic oder spiel \(bekommen: „.*“\)$/);
+      expect(N.aufrufLesen(argv).fehler, argv.join(" ")).toMatch(/^--bereich erwartet agentic oder produkt \(bekommen: „.*“\)$/);
     }
   });
   test("aufrufLesen: unbekanntes Flag, Positionsargument, doppeltes Flag, beide Schalter und keine Auswahl sind Fehler", () => {
     expect(N.aufrufLesen(["--bogus"]).fehler).toBe("Unbekanntes Argument: --bogus");
-    expect(N.aufrufLesen(["--bereich", "spiel", "x"]).fehler).toBe("Unbekanntes Argument: x");
-    expect(N.aufrufLesen(["--bereich", "spiel", "--bereich", "agentic"]).fehler).toBe("--bereich ist doppelt angegeben");
-    expect(N.aufrufLesen(["--ticket", "1", "--bereich", "spiel"]).fehler).toBe("--ticket und --bereich schließen sich aus");
+    expect(N.aufrufLesen(["--bereich", "produkt", "x"]).fehler).toBe("Unbekanntes Argument: x");
+    expect(N.aufrufLesen(["--bereich", "produkt", "--bereich", "agentic"]).fehler).toBe("--bereich ist doppelt angegeben");
+    expect(N.aufrufLesen(["--ticket", "1", "--bereich", "produkt"]).fehler).toBe("--ticket und --bereich schließen sich aus");
     expect(N.aufrufLesen([]).fehler).toMatch(/^Aufruf ohne Auswahl: /);
     expect(N.aufrufLesen(["--json"]).fehler).toMatch(/^Aufruf ohne Auswahl: /);
   });
@@ -223,8 +241,8 @@ describe("Bereich (#1552)", () => {
     expect(r.ticket?.nr).toBe(2);
     expect(r.uebersprungen).toEqual([{ nr: 1, grund: `Assignee @${OWNER}` }]);
   });
-  test("spiel: Harness-Tickets werden weder gewählt noch gemeldet", () => {
-    const r = frei([item(1, harness), item(2)], { bereich: "spiel" });
+  test("produkt: Harness-Tickets werden weder gewählt noch gemeldet", () => {
+    const r = frei([item(1, harness), item(2)], { bereich: "produkt" });
     expect(r.ticket?.nr).toBe(2);
     expect(r.uebersprungen).toEqual([]);
   });
@@ -238,9 +256,9 @@ describe("Bereich (#1552)", () => {
     expect(j.ticket?.nr).toBe(2);
   });
   test("nichts frei im Bereich: Exit 1 mit Bereichsname, kein Ausweichen aufs ganze Board", () => {
-    const r = N.fuehreAus(["--bereich", "spiel"], io([item(1, harness)]));
+    const r = N.fuehreAus(["--bereich", "produkt"], io([item(1, harness)]));
     expect(r.code).toBe(1);
-    expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Spielentwicklung");
+    expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Produktentwicklung");
     const a = N.fuehreAus(["--bereich", "agentic"], io([item(1)]));
     expect(a.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Agentic Engineering");
   });
@@ -248,14 +266,14 @@ describe("Bereich (#1552)", () => {
     const spion = { n: 0 };
     const r = N.fuehreAus(["--bereich", "foo"], io([item(1)], spion));
     expect(r.code).toBe(2);
-    expect(r.err).toMatch(/agentic.*spiel/);
+    expect(r.err).toMatch(/agentic.*produkt/);
     expect(spion.n).toBe(0);
   });
   test("Notfälle (rot-main, security) gelten in beiden Bereichen", () => {
     const rot = item(1, { title: "🚨 CI rot auf main: x", labels: [{ name: "area:architektur" }] });
     const sec = item(2, { title: "🔒 Security: y", labels: [{ name: HARNESS }] });
     expect(frei([rot], { bereich: "agentic" }).ticket?.nr).toBe(1);
-    expect(frei([sec], { bereich: "spiel" }).ticket?.nr).toBe(2);
+    expect(frei([sec], { bereich: "produkt" }).ticket?.nr).toBe(2);
   });
   test("die Notfall-Ausnahme bleibt eng: Dependabot folgt dem Label", () => {
     const dep = item(1, { title: "🤖 Dependabot-PRs auflösen", labels: [{ name: "area:architektur" }] });
@@ -380,11 +398,11 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
   });
   test("unlesbare Zeile: fail-closed, der Body-Text taucht nirgends auf", () => {
     const eingabe = { items: norm([item(1, { body: `Messfenster: n ≥ GEHEIM ${UMS} nach #1` })]), offene: new Set<number>() };
-    const r = N.fuehreAus(["--json", "--bereich", "spiel"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG });
+    const r = N.fuehreAus(["--json", "--bereich", "produkt"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG });
     expect(r.code).toBe(1);
     expect(r.out).toContain("unlesbar");
     expect(r.out).not.toContain("GEHEIM");
-    expect(N.fuehreAus(["--bereich", "spiel"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG }).out).not.toContain("GEHEIM");
+    expect(N.fuehreAus(["--bereich", "produkt"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG }).out).not.toContain("GEHEIM");
   });
 });
 
@@ -565,7 +583,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
   });
   test("fuehreAus: --ticket mit --bereich, ungültige Nummer oder Ladefehler sind Exit 2, bei der Bereichskollision ohne jeden Ladeaufruf", () => {
     const i = io();
-    expect(N.fuehreAus(["--ticket", "7", "--bereich", "spiel"], i).code).toBe(2);
+    expect(N.fuehreAus(["--ticket", "7", "--bereich", "produkt"], i).code).toBe(2);
     expect(i.aufrufe).toEqual({ lade: 0, einzeln: 0 });
     expect(N.fuehreAus(["--ticket", "abc"], i).code).toBe(2);
     const r = N.fuehreAus(["--ticket", "7"], io(new Error("kein Netz")));
@@ -637,7 +655,7 @@ describe("Spezifikations-Gate (#1615)", () => {
     const vergeben = { body: OHNE_NEGATIV, assignees: [{ login: OWNER }] };
     for (const c of [fremd, forum, vergeben]) {
       const { eingang } = io([roh(1, c), item(2)]);
-      const r = GateN.fuehreAus(["--json", "--bereich", "spiel"], eingang);
+      const r = GateN.fuehreAus(["--json", "--bereich", "produkt"], eingang);
       const j = JSON.parse(r.out) as GateErgebnis;
       expect(j.reparieren).toBeUndefined();
       expect(r.out).not.toContain("reparieren");
@@ -673,7 +691,7 @@ describe("Spezifikations-Gate (#1615)", () => {
   };
   test("hart übersprungenes vertrautes Ticket: `reparieren`-Zeile direkt nach Kopf, erste Zeile und Exit-Code unverändert, Body nie ausgegeben", () => {
     const { eingang } = io([roh(1, { body: `${OHNE_NEGATIV}GEHEIM` }), item(2)]);
-    const r = GateN.fuehreAus(["--bereich", "spiel"], eingang);
+    const r = GateN.fuehreAus(["--bereich", "produkt"], eingang);
     const zeilen = r.out.split("\n");
     expect(r.code).toBe(0);
     expect(zeilen[0]).toBe("#2\tT2");
@@ -684,31 +702,31 @@ describe("Spezifikations-Gate (#1615)", () => {
   });
   test("JSON: `reparieren` nur wenn nicht leer, mit nr und fehlt", () => {
     const { eingang } = io([roh(1, { body: OHNE_NEGATIV }), item(2)]);
-    const j = JSON.parse(GateN.fuehreAus(["--json", "--bereich", "spiel"], eingang).out) as GateErgebnis;
+    const j = JSON.parse(GateN.fuehreAus(["--json", "--bereich", "produkt"], eingang).out) as GateErgebnis;
     expect(j.reparieren?.map((r) => r.nr)).toEqual([1]);
     expect(j.reparieren?.[0].fehlt.join(" ")).toContain("kein Negativfall");
-    const sauber = JSON.parse(GateN.fuehreAus(["--json", "--bereich", "spiel"], io([item(2)]).eingang).out) as GateErgebnis;
+    const sauber = JSON.parse(GateN.fuehreAus(["--json", "--bereich", "produkt"], io([item(2)]).eingang).out) as GateErgebnis;
     expect("reparieren" in sauber).toBe(false);
   });
   test("ohne freies Ticket bleibt Exit 1 und `reparieren` steht trotzdem in der Ausgabe", () => {
-    const r = GateN.fuehreAus(["--bereich", "spiel"], io([roh(1, { body: OHNE_NEGATIV })]).eingang);
+    const r = GateN.fuehreAus(["--bereich", "produkt"], io([roh(1, { body: OHNE_NEGATIV })]).eingang);
     expect(r.code).toBe(1);
-    expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Spielentwicklung");
+    expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Produktentwicklung");
     expect(r.out.split("\n")[1]).toMatch(/^reparieren #1: /);
   });
   test("Ticket mit vollständiger Spezifikation: weder `reparieren` noch übersprungen", () => {
-    const r = GateN.fuehreAus(["--json", "--bereich", "spiel"], io([item(1)]).eingang);
+    const r = GateN.fuehreAus(["--json", "--bereich", "produkt"], io([item(1)]).eingang);
     const j = JSON.parse(r.out) as GateErgebnis;
     expect(j.reparieren).toBeUndefined();
     expect(j.uebersprungen).toEqual([]);
   });
   test("Bestand (unter hartAb) bleibt Hinweis, nicht `reparieren`", () => {
-    const r = GateN.fuehreAus(["--bereich", "spiel"], io([roh(5, { body: "" })], { hartAb: 100 }).eingang);
+    const r = GateN.fuehreAus(["--bereich", "produkt"], io([roh(5, { body: "" })], { hartAb: 100 }).eingang);
     expect(r.out).toContain("hinweis #5");
     expect(r.out).not.toContain("reparieren");
   });
   test("Reihenfolge der Ausgabe: Kopf, Hinweis, `reparieren`, übersprungen", () => {
-    const r = GateN.fuehreAus(["--bereich", "spiel"], io([roh(200, { body: "" }), roh(5, { body: "" })], { hartAb: 100 }).eingang);
+    const r = GateN.fuehreAus(["--bereich", "produkt"], io([roh(200, { body: "" }), roh(5, { body: "" })], { hartAb: 100 }).eingang);
     const zeilen = r.out.trim().split("\n");
     expect(zeilen[0]).toBe("#5\tT5");
     expect(zeilen[1]).toMatch(/^hinweis #5:/);
@@ -723,8 +741,8 @@ describe("Spezifikations-Gate (#1615)", () => {
       kommentareVon: (nr: number) => void gelesen.push(nr),
       kommentiere: (nr: number) => void gepostet.push(nr),
     };
-    GateN.fuehreAus(["--bereich", "spiel"], eingang);
-    GateN.fuehreAus(["--json", "--bereich", "spiel"], eingang);
+    GateN.fuehreAus(["--bereich", "produkt"], eingang);
+    GateN.fuehreAus(["--json", "--bereich", "produkt"], eingang);
     expect(gelesen).toEqual([]);
     expect(gepostet).toEqual([]);
   });
@@ -742,9 +760,9 @@ describe("Spezifikations-Gate (#1615)", () => {
 
   test("hartAb aus io erreicht die Auswahl", () => {
     const { eingang } = io([roh(5, { body: "" })], { hartAb: 100 });
-    expect(GateN.fuehreAus(["--bereich", "spiel"], eingang).code).toBe(0);
+    expect(GateN.fuehreAus(["--bereich", "produkt"], eingang).code).toBe(0);
     const { eingang: hart } = io([roh(5, { body: "" })], { hartAb: 5 });
-    expect(GateN.fuehreAus(["--bereich", "spiel"], hart).code).toBe(1);
+    expect(GateN.fuehreAus(["--bereich", "produkt"], hart).code).toBe(1);
   });
 });
 
@@ -753,7 +771,7 @@ describe("Zwei Boards (#1729)", () => {
   const vergeben = { assignees: [{ login: OWNER }] };
   type Opt = { argv?: string[]; spion?: { n: number } };
   const lauf = (produkt: unknown[], factory: unknown[], o: Opt = {}) =>
-    N.fuehreAus(o.argv ?? ["--json", "--bereich", "spiel"], {
+    N.fuehreAus(o.argv ?? ["--json", "--bereich", "produkt"], {
       owner: OWNER, namen: NAMEN,
       config: CFG,
       lade: () => {
@@ -766,7 +784,7 @@ describe("Zwei Boards (#1729)", () => {
   const rot = { title: "🚨 CI rot auf main: x" };
   const status = { title: "Langfuse-Status überprüfen", ...H };
 
-  test("der Bereich bestimmt die Seite: spiel wählt Produkt, agentic Factory, ohne Ausweichen auf die andere", () => {
+  test("der Bereich bestimmt die Seite: produkt wählt Produkt, agentic Factory, ohne Ausweichen auf die andere", () => {
     expect(json(lauf([item(1)], [item(10, H)])).ticket?.nr).toBe(1);
     expect(json(lauf([item(1)], [item(10, H)], { argv: AG })).ticket?.nr).toBe(10);
     expect(lauf([], [item(10, H)]).code).toBe(1);
@@ -795,15 +813,15 @@ describe("Zwei Boards (#1729)", () => {
   test("--bereich agentic: ein freies Status-Ticket auf dem Factory-Board wird als Kopf-Item gewählt, vor dem Factory-Item davor", () => {
     expect(json(lauf([item(1)], [item(10, H), item(2, status)], { argv: AG })).ticket?.nr).toBe(2);
   });
-  test("ein geclaimtes Factory-Item in Arbeit lenkt nicht um: agentic wählt das nächste freie Factory-Item, spiel bleibt auf Produkt", () => {
+  test("ein geclaimtes Factory-Item in Arbeit lenkt nicht um: agentic wählt das nächste freie Factory-Item, produkt bleibt auf Produkt", () => {
     const factory = [item(10, { ...H, ...vergeben }), item(11, H)];
     expect(json(lauf([item(1)], factory, { argv: AG })).ticket?.nr).toBe(11);
     expect(json(lauf([item(1)], factory)).ticket?.nr).toBe(1);
   });
   test("kein freies Item auf der eigenen Seite: Exit 1, auch wenn die andere Seite frei ist (kein Rückfall, kein Hinweis)", () => {
-    const r = lauf([item(1, vergeben)], [item(10, H)], { argv: ["--bereich", "spiel"] });
+    const r = lauf([item(1, vergeben)], [item(10, H)], { argv: ["--bereich", "produkt"] });
     expect(r.code).toBe(1);
-    expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Spielentwicklung");
+    expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Produktentwicklung");
     expect(r.out).not.toContain("Rückfall");
   });
   test("ein Item auf beiden Boards: Hinweis, gezählt nur auf dem Board laut Trennregel", () => {
@@ -832,12 +850,12 @@ describe("Zwei Boards (#1729)", () => {
     expect(leer.code).toBe(1);
     expect(leer.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Agentic Engineering");
   });
-  test("--bereich spiel: nur die Produkt-Seite, ein Factory-Item wird nie gewählt", () => {
+  test("--bereich produkt: nur die Produkt-Seite, ein Factory-Item wird nie gewählt", () => {
     expect(json(lauf([item(1)], [item(10, H)])).ticket?.nr).toBe(1);
-    expect(lauf([], [item(10, H)], { argv: ["--bereich", "spiel"] }).code).toBe(1);
+    expect(lauf([], [item(10, H)], { argv: ["--bereich", "produkt"] }).code).toBe(1);
   });
-  test("ein Status-Ticket auf dem Factory-Board gehört nicht zum Bereich spiel", () => {
-    expect(lauf([item(1)], [item(2, status)], { argv: ["--bereich", "spiel"] }).out.split("\n")[0]).toBe("#1	T1");
+  test("ein Status-Ticket auf dem Factory-Board gehört nicht zum Bereich produkt", () => {
+    expect(lauf([item(1)], [item(2, status)], { argv: ["--bereich", "produkt"] }).out.split("\n")[0]).toBe("#1	T1");
   });
   test("Text: Zeile 1 bleibt `#nr TAB Titel`, danach die Hinweise (keine Seiten-Infozeile)", () => {
     const zeilen = lauf([item(5, H), item(6)], [item(10, H)], { argv: ["--bereich", "agentic"] }).out.trim().split("\n");
@@ -848,7 +866,7 @@ describe("Zwei Boards (#1729)", () => {
     expect("hinweise" in json(lauf([item(1)], []))).toBe(false);
   });
   test("Lader-Fehler: Exit 2 mit Meldung", () => {
-    const r = N.fuehreAus(["--bereich", "spiel"], { owner: OWNER, namen: NAMEN, config: CFG, lade: () => { throw new Error("kein Netz"); } });
+    const r = N.fuehreAus(["--bereich", "produkt"], { owner: OWNER, namen: NAMEN, config: CFG, lade: () => { throw new Error("kein Netz"); } });
     expect(r.code).toBe(2);
     expect(r.err).toContain("kein Netz");
   });
@@ -868,7 +886,7 @@ describe("Aufruf ohne --bereich und ohne --ticket", () => {
       const spion = { n: 0 };
       const r = N.fuehreAus(argv, io(spion));
       expect(r.code, argv.join(" ")).toBe(2);
-      expect(r.err).toContain("--bereich agentic|spiel");
+      expect(r.err).toContain("--bereich agentic|produkt");
       expect(r.err).toContain("--ticket <nr>");
       expect(spion.n).toBe(0);
     }
@@ -924,7 +942,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     expect(M.aufrufLesen(["--maengel"])).toMatchObject({ maengel: true, bereich: null, ticket: null, json: false });
     expect(M.aufrufLesen(["--maengel", "--bereich", "agentic", "--json"])).toMatchObject({ maengel: true, bereich: "agentic", json: true });
     expect(M.aufrufLesen(["--maengel", "--ticket", "5"]).fehler).toMatch(/schließen sich aus/);
-    expect(M.aufrufLesen(["--bereich", "spiel"]).maengel).toBeUndefined();
+    expect(M.aufrufLesen(["--bereich", "produkt"]).maengel).toBeUndefined();
   });
   test("listet Tickets mit Mangel in Board-Reihenfolge, Exit 0, Body nie ausgegeben", () => {
     const r = lauf([roh(3, { body: `${OHNE_NEGATIV}GEHEIM` }), item(4), roh(2, { body: "" })]);
@@ -964,7 +982,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     const spiel = roh(1, { body: OHNE_NEGATIV });
     const harness = roh(2, { body: OHNE_NEGATIV, ...H });
     const nur = (bereich: string) => (JSON.parse(lauf([spiel], [harness], ["--maengel", "--bereich", bereich, "--json"]).out) as MErgebnis).maengel.map((m) => m.nr);
-    expect(nur("spiel")).toEqual([1]);
+    expect(nur("produkt")).toEqual([1]);
     expect(nur("agentic")).toEqual([2]);
     const beide = JSON.parse(lauf([spiel], [harness], ["--maengel", "--json"]).out) as MErgebnis;
     expect(beide.anzahl).toBe(2);
@@ -981,7 +999,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
   });
   test("listeMaengel wirft bei einem unbekannten Bereich", () => {
     const liste = (N as unknown as { listeMaengel: (a: unknown) => unknown }).listeMaengel;
-    expect(() => liste({ produkt: [], factory: [], bereich: "unfug", config: CFG, offene: new Set(), namen: {} })).toThrow(/bereich erwartet agentic oder spiel/);
+    expect(() => liste({ produkt: [], factory: [], bereich: "unfug", config: CFG, offene: new Set(), namen: {} })).toThrow(/bereich erwartet agentic oder produkt/);
   });
   test("Ladefehler: Exit 2 mit Ursache, kein Stacktrace", () => {
     const r = M.fuehreAus(["--maengel"], { owner: OWNER, namen: NAMEN, config: CFG, lade: () => { throw new Error("gh kaputt"); } });
@@ -999,7 +1017,7 @@ describe("Board-Verzug (#1866)", () => {
     ladeFrisch: (lade: (a: { anzahl: number }) => unknown) => Frisch;
   };
   const frischer = (number: number, projektIds: string[] = []) => ({ number, titel: `T${number}`, projektIds });
-  const lauf = (frisch: Frisch | undefined, argv = ["--json", "--bereich", "spiel"]) =>
+  const lauf = (frisch: Frisch | undefined, argv = ["--json", "--bereich", "produkt"]) =>
     N.fuehreAus(argv, {
       owner: OWNER, namen: NAMEN,
       config: CFG,
@@ -1009,7 +1027,7 @@ describe("Board-Verzug (#1866)", () => {
 
   test("Nummern mit Item auf einem der Boards, in keiner REST-Liste: Verzug, sortiert; Textzeile direkt unter dem Ticket, JSON-Feld, Exit unverändert", () => {
     const frisch: Frisch = { issues: [frischer(1885, [FACT]), frischer(1871, [PROD]), frischer(1), frischer(10, [FACT])], ...alle };
-    const t = lauf(frisch, ["--bereich", "spiel"]);
+    const t = lauf(frisch, ["--bereich", "produkt"]);
     expect(t.code).toBe(0);
     expect(t.out.split("\n")[0]).toBe("#1\tT1");
     expect(t.out.split("\n")[1]).toBe("VERZUG #1871, #1885: Board-REST-Liste hinkt, die Auswahl sieht sie nicht");
@@ -1017,13 +1035,13 @@ describe("Board-Verzug (#1866)", () => {
   });
   test("ein Issue ohne Board-Item oder mit fremdem Projekt ist kein Verzug", () => {
     expect(V.verzugNummern({ frisch: [frischer(5, []), frischer(6, ["PRJ_fremd"])], produkt: [], factory: [], ...alle })).toEqual([]);
-    const t = lauf({ issues: [frischer(5, [])], ...alle }, ["--bereich", "spiel"]);
+    const t = lauf({ issues: [frischer(5, [])], ...alle }, ["--bereich", "produkt"]);
     expect(t.out).not.toContain("VERZUG");
     expect(JSON.parse(lauf({ issues: [frischer(5, [])], ...alle }).out)).toMatchObject({ verzug: [] });
   });
   test("GraphQL-Fehler: fail-open, gleiche Auswahl, Hinweis statt VERZUG", () => {
-    const mit = lauf({ fehler: "Rate-Limit" }, ["--bereich", "spiel"]);
-    const ohne = lauf(undefined, ["--bereich", "spiel"]);
+    const mit = lauf({ fehler: "Rate-Limit" }, ["--bereich", "produkt"]);
+    const ohne = lauf(undefined, ["--bereich", "produkt"]);
     expect(mit.code).toBe(ohne.code);
     expect(mit.out.split("\n")[0]).toBe(ohne.out.split("\n")[0]);
     expect(mit.out).toContain("hinweis Board-Verzug nicht prüfbar (GraphQL): Rate-Limit");

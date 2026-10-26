@@ -6,12 +6,15 @@
  * (Null-Regel); was ein Projekt konkret in Config und Projekt-Block trägt, prüft dieser Projekt-Test. Er zieht nicht ins Factory-Repo.
  *
  * Grenze: geprüft wird nur, dass die Pflicht-Begriffe in der Config stehen und die Leitfrage samt Messlatten-Zeile im Projekt-Block
- * der AGENTS.md; die Bedeutung des Textes prüft kein Wächter. Dieser Test importiert nichts aus einer anderen `*.test.ts`. */
+ * der AGENTS.md; die Bedeutung des Textes prüft kein Wächter. Der Spielwort-Wächter (#1943) prüft nur drei Dateien (Kern-Skill `factory`,
+ * sein Ablauf, die Ticket-Skill-Quelle), nicht die Kern-Agenten und nicht den Rest des Kerns (Befund im Sammelticket). Dieser Test importiert nichts aus einer anderen `*.test.ts`. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { projektConfig } from "../support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -47,9 +50,13 @@ describe("Projekt-Block der AGENTS.md (#1709, #1903)", () => {
     assert.ok(messlatte, "der Projekt-Block nennt die Optik-Messlatte mit ihrer Referenzdatei");
     assert.ok(existsSync(WURZEL + "docs/stardew-referenz.md"), "die Referenzdatei existiert");
   });
-  test("der Projekt-Block trägt den Projektteil der Ticket-Auswahl (--bereich spiel, Spielquote) (#1932)", () => {
-    assert.match(projektBlock, /--bereich spiel/);
+  test("der Projekt-Block trägt den Projektteil der Ticket-Auswahl (--bereich produkt, Spielquote) (#1932, #1943)", () => {
+    assert.match(projektBlock, /--bereich produkt/);
     assert.match(projektBlock, /Spielquote/);
+  });
+  test("der Alias spiel kommt aus der Projekt-Config und führt auf den Kern-Bereich produkt (#1943)", () => {
+    const config = projektConfig() as unknown as { bereiche?: { aliase?: Record<string, string> } };
+    assert.equal(config.bereiche?.aliase?.spiel, "produkt");
   });
   test("die Spielquote im Projekt-Block ist an die Konstante der Auswahl gebunden (#1663 T5, #1935)", () => {
     const quote = SPIEL_QUOTE as number;
@@ -59,5 +66,19 @@ describe("Projekt-Block der AGENTS.md (#1709, #1903)", () => {
       assert.ok(z.length >= 1, `Muster ${re} trifft zu selten`);
       assert.deepEqual(z.filter((n) => n !== quote), [], `Muster ${re}: ${z.join(", ")} statt ${quote}`);
     }
+  });
+});
+
+describe("Kern-Skills ohne Spielwort (#1943)", () => {
+  // Wortanfang „spiel“ ohne Groß-/Kleinschreibung; „Beispiel“ trifft nicht (davor steht ein Buchstabe).
+  const SPIELWORT = /(?<!\p{L})spiel/iu;
+  const dateien = [".agents/skills/factory/SKILL.md", ".agents/skills/factory/ablauf.md", ROLLEN_PFADE.ticketSkill as string];
+  test.each(dateien)("%s nennt kein Spielwort (die Spielquote und der Alias sind Projektwissen)", (pfad) => {
+    const treffer = readFileSync(WURZEL + pfad, "utf8").split("\n").filter((z) => SPIELWORT.test(z));
+    assert.deepEqual(treffer, []);
+  });
+  test("das Muster trifft Spielwörter und nicht „Beispiel“", () => {
+    for (const ja of ["Spiel-Tickets", "spiel", "Spielquote", "nächstes Spiel"]) assert.ok(SPIELWORT.test(ja), ja);
+    for (const nein of ["Beispiel", "beispielsweise", "Produkt"]) assert.ok(!SPIELWORT.test(nein), nein);
   });
 });

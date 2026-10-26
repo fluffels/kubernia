@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
-const { ROLLEN_PFADE } = projektRaw as unknown as { ROLLEN_PFADE: Record<string, string> };
+const { ROLLEN_PFADE, BEREICHE } = projektRaw as unknown as { ROLLEN_PFADE: Record<string, string>; BEREICHE: Record<string, string> };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as besitzRaw from "../../scripts/besitz-lib.mjs";
 const { einheitText, leereProjektwerte } = besitzRaw as unknown as {
@@ -276,10 +276,17 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     assert.ok(!/<agenten\.\w+>/.test(liesTicketAblauf()));
   });
   test("der Bereich passt zum Skill und ist nie vertauscht", () => {
-    assert.ok(lies(PRODUKT).includes("--bereich spiel"));
+    assert.ok(lies(PRODUKT).includes("--bereich produkt"));
     assert.ok(!lies(PRODUKT).includes("--bereich agentic"));
     assert.ok(lies(FACTORY).includes("--bereich agentic"));
-    assert.ok(!lies(FACTORY).includes("--bereich spiel"));
+    assert.ok(!lies(FACTORY).includes("--bereich produkt"));
+  });
+  test("jedes `--bereich <wert>` in Skills und Ablauf ist <bereich> oder ein Kern-Bereich, nie ein Alias (#1943)", () => {
+    for (const datei of [PRODUKT, FACTORY, TICKET_ABLAUF]) {
+      const werte = [...lies(datei).matchAll(/--bereich[ =]`?([^\s`.,;)|]+)/g)].map((m) => m[1]);
+      assert.ok(werte.length > 0 || datei === TICKET_ABLAUF, `${datei} nennt keinen --bereich`);
+      for (const w of werte) assert.ok(w === "<bereich>" || Object.hasOwn(BEREICHE, w), `${datei}: --bereich ${w} ist kein Kern-Bereich`);
+    }
   });
   test("jeder Ticket-Skill bleibt in Einstiegsform", () => {
     for (const skill of [PRODUKT, FACTORY]) assert.deepEqual(einstiegAbweichungen(lies(skill)), [], skill);

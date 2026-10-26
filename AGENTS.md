@@ -139,7 +139,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 
 Der Backlog sind **GitHub Issues** auf zwei **Project-Boards** (Trennregel: `area:harness` auf dem Factory-Board, alles andere auf dem Produkt-Board). Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei (#627). Befehl, Sonderfälle und Board-IDs: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)** (die SSOT der Auswahl-Mechanik).
 
-**Ticket-Auswahl im Projekt:** `/kubernia` wählt mit `--bereich spiel` nur auf dem Produkt-Board, `/factory` mit `--bereich agentic` nur auf dem Factory-Board. Soll und Kennzahl im Selbst-Audit, keine Auswahlregel: ein Factory-Merge erst nach 3 Produkt-Merges (Spielquote 1:3) seit dem letzten.
+**Ticket-Auswahl im Projekt:** `/kubernia` wählt mit `--bereich produkt` nur auf dem Produkt-Board, `/factory` mit `--bereich agentic` nur auf dem Factory-Board. Soll und Kennzahl im Selbst-Audit, keine Auswahlregel: ein Factory-Merge erst nach 3 Produkt-Merges (Spielquote 1:3) seit dem letzten.
 
 **Der Agent managt das Board (nur kubernia):**
 - **GitHub ist die Single Source of Truth für den Stand:** Erledigtes sofort dort schließen (mit Ergebnis-Kommentar), Board-Status aktuell halten.

@@ -26,7 +26,7 @@
     {"muster":"scripts/setup.mjs","art":"infrastruktur-anteil","grund":"One-Command-Setup: Projektname und Spiel-Schritte entfallen"},
     {"muster":".gitignore","art":"infrastruktur-anteil","grund":"Ignorier-Liste: nur die Zeilen, die das Factory-Repo braucht (die versionierten .claude-Ordner sind Kern)"},
     {"muster":".mcp.json","art":"infrastruktur-anteil","grund":"MCP-Server: im Factory-Repo nur der Browser-Server über gepinntes npx"},
-    {"muster":".agents/skills/factory-ticket/SKILL.md","art":"infrastruktur-anteil","grund":"Ticket-Skill der Rolle ticketSkill: Vorlage im Factory-Repo (Bereich spiel, ohne Projektwörter), der Name kommt aus dem Projektwert-Marker"},
+    {"muster":".agents/skills/factory-ticket/SKILL.md","art":"infrastruktur-anteil","grund":"Ticket-Skill der Rolle ticketSkill: ohne Vorlage, der Export rendert die Quelle (Name aus dem Projektwert-Marker der Factory-Config)"},
     {"muster":".claude/skills/factory-ticket/SKILL.md","art":"infrastruktur-anteil","grund":"Zeiger der Ticket-Skill-Quelle: berechnet aus der Quelle, kein Vorlagen-File"},
     {"muster":"docs/adr/0014-leitplanken-ohne-label-riegel.md","art":"factory-seite","grund":"Link-Ziel des Besitzes, die Factory führt eine Kopie"},
     {"muster":"docs/adr/0027-regeln-lockern.md","art":"factory-seite","grund":"Link-Ziel des Besitzes, die Factory führt eine Kopie"},

@@ -1,6 +1,6 @@
 # Ticket-Ablauf
 
-Gemeinsamer Ablauf der Ticket-Skills: der Produkt-Skill (Name `agenten.ticketSkill`, Bereich `spiel`) und `factory` (Bereich `agentic`). Die Skill-Dateien legen nur Bereich und Auslöser fest; jede Ablaufregel steht nur hier (Wächter `test/harness/ticket-ablauf.test.ts`).
+Gemeinsamer Ablauf der Ticket-Skills: der Produkt-Skill (Name `agenten.ticketSkill`, Bereich `produkt`) und `factory` (Bereich `agentic`). Die Skill-Dateien legen nur Bereich und Auslöser fest; jede Ablaufregel steht nur hier (Wächter `test/harness/ticket-ablauf.test.ts`).
 
 **Projektwerte.** Die Platzhalter `<agenten.…>`, `<labels.…>`, `<praefixe.…>` und `<skills.…>` stehen mit ihren Werten im Block darunter; der Hauptchat setzt sie in Vorlagen und Befehle ein, ohne `.factory/projekt.json` zu lesen.
 
@@ -24,7 +24,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
-**Bereich.** Der aufrufende Skill legt ihn fest; er geht als `--bereich <bereich>` an `naechstes-ticket.mjs`, ohne `AskUserQuestion` und ohne Spielquote; er gilt für alle Tickets dieses Aufrufs; eine Ticketnummer im Auslöser braucht keinen Bereich (`--ticket`).
+**Bereich.** Der aufrufende Skill legt ihn fest; er geht als `--bereich <bereich>` an `naechstes-ticket.mjs`, ohne `AskUserQuestion`; er gilt für alle Tickets dieses Aufrufs; eine Ticketnummer im Auslöser braucht keinen Bereich (`--ticket`).
 
 ## Im Hauptchat
 

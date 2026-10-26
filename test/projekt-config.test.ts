@@ -209,6 +209,35 @@ describe("pruefeProjektConfig", () => {
   });
 });
 
+describe("Bereichs-Aliase (#1943)", () => {
+  const mit = (wert: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), bereiche: wert });
+
+  test("gültig: Alias auf einen Kern-Bereich, auch mit leeren aliase oder ohne aliase", () => {
+    assert.deepEqual(mit({ aliase: { spiel: "produkt" } }), []);
+    assert.deepEqual(mit({ aliase: {} }), []);
+    assert.deepEqual(mit({}), []);
+  });
+
+  test("Negativfälle: Form, Alias-Name, Überdeckung eines Kern-Namens, Ziel kein Kern-Bereich", () => {
+    assert.match(mit([]).join("\n"), /bereiche muss ein Objekt/);
+    assert.match(mit({ aliase: [] }).join("\n"), /bereiche\.aliase muss ein Objekt/);
+    assert.match(mit({ aliase: { Spiel: "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
+    assert.match(mit({ aliase: { "x y": "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
+    assert.match(mit({ aliase: { agentic: "produkt" } }).join("\n"), /überdeckt einen Kern-Bereich/);
+    assert.match(mit({ aliase: { spiel: "x" } }).join("\n"), /muss auf einen Kern-Bereich zeigen/);
+  });
+
+  test("bereichAliaseAus: ohne Schlüssel oder Config leer, sonst die Zuordnung", () => {
+    assert.deepEqual(pc.bereichAliaseAus({}), {});
+    assert.deepEqual(pc.bereichAliaseAus(undefined), {});
+    assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: { spiel: "produkt" } } }), { spiel: "produkt" });
+  });
+
+  test("die echte Config führt den Alias spiel auf produkt", () => {
+    assert.deepEqual(pc.bereichAliaseAus(JSON.parse(readFileSync(WURZEL + ".factory/projekt.json", "utf8"))), { spiel: "produkt" });
+  });
+});
+
 describe("boardPfad", () => {
   test("user ergibt users/…, org ergibt orgs/…; die echte Config bleibt beim bisherigen Board-Pfad", () => {
     const b = gueltig().boards?.[0];

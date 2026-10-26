@@ -176,8 +176,8 @@ const ZEILEN: Zeile[] = [
     exit: 2,
     erste: (m) => `✖ naechstes-ticket: ${m}`,
     aufruf: /\n$/,
-    faelle: { unbekannt: ["--bogus"], ohneWert: ["--bereich"], doppelt: ["--bereich", "spiel", "--bereich", "agentic"] },
-    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--bereich erwartet agentic oder spiel (bekommen: nichts)", doppelt: "--bereich ist doppelt angegeben" },
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--bereich"], doppelt: ["--bereich", "produkt", "--bereich", "agentic"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--bereich erwartet agentic oder produkt (bekommen: nichts)", doppelt: "--bereich ist doppelt angegeben" },
   },
   {
     skript: "ticket-lock",
@@ -262,8 +262,9 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["lauf-ergebnis", ["--start-agent"], 1, "--start-agent erwartet einen Agent-Typ"],
     ["kontext-treiber", ["--ticket"], 2, "--ticket erwartet eine Ticketnummer, nicht nichts"],
     ["kontext-treiber", ["--delta", "vielleicht"], 2, "--delta erwartet ja|nein, nicht vielleicht"],
-    ["naechstes-ticket", [], 2, "✖ naechstes-ticket: Aufruf ohne Auswahl: --bereich agentic|spiel (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)"],
-    ["naechstes-ticket", ["--ticket", "1", "--bereich", "spiel"], 2, "✖ naechstes-ticket: --ticket und --bereich schließen sich aus"],
+    ["naechstes-ticket", [], 2, "✖ naechstes-ticket: Aufruf ohne Auswahl: --bereich agentic|produkt (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)"],
+    ["naechstes-ticket", ["--ticket", "1", "--bereich", "produkt"], 2, "✖ naechstes-ticket: --ticket und --bereich schließen sich aus"],
+    ["naechstes-ticket", ["--config", "test/fixtures/projekt-fremd.json", "--bereich", "spiel"], 2, "✖ naechstes-ticket: --bereich erwartet agentic oder produkt (bekommen: „spiel“)"], // Config ohne Alias (#1943)
     ["ticket-lock", ["claim", "999999", "--nonce", "x"], 2, "✖ ticket-lock: Unbekanntes Argument: --nonce"],
     ["ticket-lock", ["freigeben", "999999"], 2, "✖ ticket-lock: --nonce fehlt"],
     ["ticket-lock", ["pruefe", "999999", "--nonce", ""], 2, "✖ ticket-lock: --nonce braucht einen Wert"],

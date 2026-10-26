@@ -49,6 +49,9 @@
     "moduldoku": "docs/module",
     "escapeKopien": [".dependency-cruiser.cjs", "src/content/drills/shared.ts"]
   },
+  "bereiche": {
+    "aliase": { "spiel": "produkt" }
+  },
   "ausnahmen": {
     "groesse": [
       { "datei": "src/sim.ts", "grund": "#893 (Split offen): sim.ts entflechten, God-File von der Ausnahmeliste." }
