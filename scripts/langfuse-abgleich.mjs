@@ -53,6 +53,17 @@ const FEHLEND_ANZEIGE = 20;
 /** Liegen die Langfuse-Kosten bei gleichen Calls strikt unter (1 − PREIS_TOLERANZ) · Transkript-Kosten, bepreist die Instanz das Modell nicht oder zu niedrig (Hinweis Modellpreis). */
 export const PREIS_TOLERANZ = 0.1;
 
+/**
+ * Preisvergleich bei gleichen Calls und gleichen Tokens (keine Lücke, keine Dublette, keine Token-Abweichung, T > 0, L bekannt):
+ * `preisabweichung` = L − T in $ (positiv: Langfuse bepreist höher, z. B. veralteter Preis in der Instanzdefinition; negativ: niedriger),
+ * `hinweisUeberpreis` = L strikt über (1 + PREIS_TOLERANZ) · T. Sonst `preisabweichung` null, Hinweis false. Disjunkt zur Überzählung (die setzt Dubletten voraus).
+ */
+export function preisVergleich({ fehlend, dubletten, tokenAbweichung, kostenT, kostenL }) {
+  const vergleichbar = fehlend === 0 && dubletten === 0 && !tokenAbweichung && kostenT > 0 && Number.isFinite(kostenL);
+  if (!vergleichbar) return { preisabweichung: null, hinweisUeberpreis: false };
+  return { preisabweichung: kostenL - kostenT, hinweisUeberpreis: kostenL > (1 + PREIS_TOLERANZ) * kostenT };
+}
+
 /** Transkript-Kosten eines Solls in $; die Preisabbildung ist `costDetails` (`langfuse-otlp.mjs`), dieselbe, die der Nachlieferer an Langfuse sendet. Calls ohne Preis zählen in `ohnePreis`, nie als 0 $ in der Summe. */
 function kostenAusSoll(soll) {
   let kosten = 0;
@@ -84,6 +95,7 @@ export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = n
   // Gleiche Calls, aber Langfuse-Kosten klar unter dem Transkript: Modelldefinition der Instanz fehlt oder ist zu niedrig.
   const hinweisModellpreis = fehlend === 0 && dubletten === 0 && kostenT > 0 && kostenL !== null && kostenL < (1 - PREIS_TOLERANZ) * kostenT;
   const tokenAbweichung = ist.tokens !== null && !gleich(tokensT, ist.tokens);
+  const { preisabweichung, hinweisUeberpreis } = preisVergleich({ fehlend, dubletten, tokenAbweichung, kostenT, kostenL });
   const laeuft = now - mtime < RUHEFRIST_MIN * 60_000;
   let status = "vollständig";
   if (laeuft) status = "läuft";
@@ -108,6 +120,8 @@ export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = n
     ohnePreis,
     ueberzaehlung,
     hinweisModellpreis,
+    preisabweichung,
+    hinweisUeberpreis,
     fehlend,
     dubletten,
     leer: diff?.leer?.length ?? 0,
@@ -134,6 +148,7 @@ export function summenzeile(bewertungen) {
     kostenLangfuse: bekannt("kostenLangfuse"),
     ohneKostenExport: fest.length - mitExport.length,
     ueberzaehlung: bekannt("ueberzaehlung"),
+    preisabweichung: bekannt("preisabweichung"),
     sessions: fest.length,
     laeuft: bewertungen.length - fest.length,
     scoreAusstehend: fest.filter((b) => b.score === "ausstehend").length,
@@ -154,6 +169,21 @@ const paar = (a, b) => `${fmt(a)} / ${b === null ? "–" : fmt(b)}`;
 const usd = (n) => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const paarUsd = (a, b) => `${usd(a)} / ${b === null ? "–" : usd(b)}`;
 const kuerzel = (liste) => liste.map((x) => String(x.session).slice(0, 8)).join(", ");
+
+/** Berichtszeilen zur Preisabweichung (je mit führender Leerzeile); leer ohne vergleichbare Session bzw. ohne Hinweis. */
+function preisZeilen(festeSessions) {
+  const out = [];
+  const mitAbweichung = festeSessions.filter((x) => x.preisabweichung !== null);
+  if (mitAbweichung.length) {
+    const betrag = mitAbweichung.reduce((s, x) => s + x.preisabweichung, 0);
+    out.push("", `Preisabweichung bei gleichen Calls und Tokens: ${betrag > 0 ? "+" : ""}${usd(betrag)} $ in ${mitAbweichung.length} Session(s) (${kuerzel(mitAbweichung)}): Langfuse-Wochensummen um diesen Betrag bereinigen (Checkliste Punkt 7).`);
+  }
+  const ueberpreis = festeSessions.filter((x) => x.hinweisUeberpreis);
+  if (ueberpreis.length) {
+    out.push("", `Hinweis Überpreis: ${ueberpreis.length} Session(s) mit gleichen Calls und Tokens, Langfuse-Kosten über ${Math.round((1 + PREIS_TOLERANZ) * 100)} % des Transkripts (${kuerzel(ueberpreis)}): Modelldefinition der Instanz prüfen (docs/langfuse-hook-patch.md › Modelldefinitionen der Instanz).`);
+  }
+  return out;
+}
 
 export function renderMarkdown(bewertungen, sum) {
   const kopf = ["Session", "Ticket", "Status", "Calls T/L", "Input T/L", "Output T/L", "Cache-Read T/L", "Cache-Write T/L", "Kosten T/L ($)", "fehlend", "Dubletten", "Quote"];
@@ -193,6 +223,7 @@ export function renderMarkdown(bewertungen, sum) {
   if (unterpreis.length) {
     out.push("", `Hinweis Modellpreis: ${unterpreis.length} Session(s) mit gleichen Calls, Langfuse-Kosten unter ${Math.round((1 - PREIS_TOLERANZ) * 100)} % des Transkripts (${kuerzel(unterpreis)}): Modelldefinition der Instanz prüfen (docs/langfuse-hook-patch.md › Modelldefinitionen der Instanz).`);
   }
+  out.push(...preisZeilen(festeSessions));
   out.push("", `Hinweis: Aufzeichnungen ohne TTL-Aufteilung der Cache-Writes (vor dem Hook-Patch, vor ${STICHTAG.slice(0, 10)}) passen nicht auf den Fingerabdruck und erscheinen als fehlend plus Dublette.`);
   return out.join("\n");
 }
