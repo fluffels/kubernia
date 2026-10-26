@@ -21,6 +21,7 @@ import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./
 import {
   entlinkeSeiten,
   KANDIDATEN,
+  laufFehlerZeile,
   kuberniaBegriffe,
   lockAuszug,
   schreibePraefixUm,
@@ -37,7 +38,7 @@ import {
   vorlagenZiel,
 } from "./factory-export-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ergaenzungAusText, PROJEKT_CONFIG, pruefeProjektConfig, repoName, ROLLEN_PFADE, TICKET_SKILL_NAME, TICKET_SKILL_ZEIGER } from "./projekt-config-lib.mjs";
+import { ergaenzungAusText, PROJEKT_CONFIG, PROJEKT_ROLLEN, pruefeProjektConfig, repoName, ROLLEN_PFADE, TICKET_SKILL_NAME, TICKET_SKILL_ZEIGER } from "./projekt-config-lib.mjs";
 import { zeigerText } from "./skill-pfade.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -336,7 +337,7 @@ function streicheBloeckeInSeiten(k, seiten) {
 
 /** Rollen-Namen (#1936): in den Factory-Seiten steht der Name der Factory-Config statt dem der Quelle (Planer, Umsetzer, Lens, Gruppe; der Ticket-Skill nicht, er ist zugleich der Spielname). Rückgabe: Zahl der Stellen. */
 function schreibeRollenInSeiten(k, seiten) {
-  const paare = ["planer", "umsetzer", "lens", "gruppe"].map((r) => [k.kubConfig.agenten[r], k.factoryConfig.agenten[r]]);
+  const paare = Object.keys(ROLLEN_PFADE).filter((r) => !PROJEKT_ROLLEN.includes(r)).map((r) => [k.kubConfig.agenten[r], k.factoryConfig.agenten[r]]);
   let anzahl = 0;
   for (const p of seiten) {
     const d = k.dateien.get(p);
@@ -362,8 +363,7 @@ function generiereDoku(k) {
     }
     const lauf = spawnSync(process.execPath, ["scripts/docs-gen.mjs", "--write"], { cwd: staging, encoding: "utf8", timeout: 120_000 });
     if (lauf.status !== 0) {
-      const zeile = `${lauf.stderr ?? ""}${lauf.stdout ?? ""}`.split("\n").find((z) => z.trim() !== "") ?? `Exit ${lauf.status}`;
-      k.befunde.push(`docs-gen im Export scheitert: ${zeile.trim()}`);
+      k.befunde.push(`docs-gen im Export scheitert: ${laufFehlerZeile(lauf)}`);
       return 0;
     }
     let anzahl = 0;

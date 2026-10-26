@@ -26,7 +26,7 @@ import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawSkills from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ROLLEN_PFADE, TICKET_SKILL_NAME } from "../../scripts/projekt-config-lib.mjs";
+import { PROJEKT_ROLLEN, ROLLEN_PFADE, TICKET_SKILL_NAME } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ZEIGER_WURZEL, zeigerText } from "../../scripts/skill-pfade.mjs";
 import { hookSkripte, importeAus } from "./hook-importe";
@@ -69,6 +69,7 @@ const lib = rawLib as unknown as {
   schreibeRollenUm(text: string, paare: [string, string][]): { text: string; anzahl: number };
   pruefeKommandos(texte: Map<string, string>, skripte: Set<string>): { befunde: string[] };
   entlinke(text: string, seite: string, h: { gibt(p: string): boolean; ueberschriften(p: string): Set<string> | null }): { text: string; links: number; anker: number; ziele: Map<string, number> };
+  laufFehlerZeile(lauf: { status: number | null; signal?: string | null; error?: Error; stderr?: string | null; stdout?: string | null }): string;
   entlinkeSeiten(e: { dateien: Map<string, { text: string }>; exportPfade: Set<string>; seiten: Set<string> }): { links: number; anker: number; ziele: [string, number][] };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
@@ -282,6 +283,26 @@ describe("entlinke (#1935)", () => {
     assert.equal(r.text, "a mitte b und c");
     assert.equal(r.ziele.get("docs/t.md"), 2);
     assert.equal(r.ziele.size, 2);
+  });
+});
+
+describe("Rollen der Umschreibung (#1942)", () => {
+  test("alle Rollen der Kern-Pfade außer den Projekt-Rollen sind es, die der Export in Factory-Seiten umschreibt", () => {
+    const rollen = Object.keys(ROLLEN_PFADE as Record<string, string>).filter((r) => !(PROJEKT_ROLLEN as string[]).includes(r));
+    assert.deepEqual(rollen, ["planer", "umsetzer", "lens", "gruppe"]);
+  });
+});
+
+describe("laufFehlerZeile (#1942)", () => {
+  test("Exit-Code ungleich 0: die erste nicht leere Ausgabezeile, stderr vor stdout, sonst der Exit-Code", () => {
+    assert.equal(lib.laufFehlerZeile({ status: 1, stderr: "\n  Fehler A \nzweite", stdout: "out" }), "Fehler A");
+    assert.equal(lib.laufFehlerZeile({ status: 1, stderr: "", stdout: "nur out\n" }), "nur out");
+    assert.equal(lib.laufFehlerZeile({ status: 3, stderr: " \n", stdout: null }), "Exit 3");
+  });
+  test("ohne Status (Signal oder Startfehler) steht nie 'Exit null': error.message vor Signal", () => {
+    assert.equal(lib.laufFehlerZeile({ status: null, signal: "SIGTERM", error: new Error("spawnSync node ETIMEDOUT"), stderr: "halb", stdout: "" }), "spawnSync node ETIMEDOUT");
+    assert.equal(lib.laufFehlerZeile({ status: null, signal: "SIGKILL", stderr: "", stdout: "" }), "Signal SIGKILL");
+    assert.doesNotMatch(lib.laufFehlerZeile({ status: null, stderr: null, stdout: null }), /Exit null/);
   });
 });
 
@@ -782,7 +803,7 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
       const t = (m: Record<string, string>) => lib.pruefeKommandos(new Map(Object.entries(m)), skripte).befunde;
       assert.match(t({ "a.md": "npm test" }).join(), /a\.md: Kommando `npm run test`/);
       assert.deepEqual(t({ "a.md": "npm run verify" }), []);
-      assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", "docs/node_modules/x.md": "npm run nein", ".claude/settings/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
+      assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", "docs/node_modules/x.md": "npm run nein", ".claude/settings/x.md": "npm run nein", ".claude/commands/x.md": "npm run nein", ".claude/lose.md": "npm run nein", "dist/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
       assert.equal(t({ ".claude/agents/x.md": "npm run nein", "docs/b.md": "npm run nein2" }).length, 2);
       assert.equal(t({ ".claude/skills/s.md": "npm run nein", ".claude/workflows/w.md": "npm run nein" }).length, 2);
     });

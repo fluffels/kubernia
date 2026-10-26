@@ -31,6 +31,11 @@ import { QUELL_VERZEICHNIS, ZEIGER_MARKE } from "../../scripts/skill-pfade.mjs";
 
 const WURZEL = process.cwd();
 const SEITE = "docs/harness-inventar.md";
+const VORLAGE = ".factory/produkt/vorlagen/docs/harness-inventar.md.vorlage";
+/** Bausteine, die nur das Spiel-Repo hat und die die Vorlage des Factory-Repos bewusst nicht beschreibt (Grenze des Vorlagen-Abgleichs, #1942). */
+const PROJEKT_BAUSTEINE: string[] = ["likec4"];
+/** Namen der Rollen-Agenten und des Ticket-Skills in der Vorlage (Factory-Config des Exports): die Zeilen des Spiel-Repos heißen dort anders. */
+const ROLLEN_IN_VORLAGE: Record<string, string> = { planer: "sih-planer", umsetzer: "sih-umsetzer", lens: "sih-lens", gruppe: "sih-gruppe", ticketSkill: "sih-ticket" };
 const WERKZEUGE = ["Claude Code", "Langfuse", "PixelLab", "Playwright", "GitHub"] as const;
 const MARKER = /^- Geprüft bis (Claude Code|Langfuse|PixelLab|Playwright|GitHub) (v?\d+\.\d+\.\d+|\d{4}-\d{2}-\d{2})$/gm;
 const KOPF = "| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Projektunabhängig |";
@@ -153,6 +158,16 @@ describe("harness-inventar.md: Vollständigkeit gegen die generierte Tabelle (#1
     const namen = generierteNamen(inventarApi.harnessInventarGenerator({ rootDir: WURZEL, config }));
     expect(namen.length).toBeGreaterThan(10);
     expect(ohneZeile(namen, inventarZeilen(seite()))).toEqual([]);
+  });
+
+  test("#1942: auch die Vorlage des Factory-Repos hat für jeden generierten Baustein eine Zeile (Projekt-Bausteine ausgenommen)", () => {
+    const config = docsGenApi.loadConfig(WURZEL);
+    const namen = generierteNamen(inventarApi.harnessInventarGenerator({ rootDir: WURZEL, config }));
+    const agenten = (JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as { agenten: Record<string, string> }).agenten;
+    const rolle = new Map(Object.entries(ROLLEN_IN_VORLAGE).map(([r, vorlagenName]) => [agenten[r], vorlagenName]));
+    const vorlage = readFileSync(join(WURZEL, VORLAGE), "utf8").replace(/\r\n/g, "\n");
+    expect(inventarZeilen(vorlage).length).toBeGreaterThan(10);
+    expect(ohneZeile(namen.filter((n) => !PROJEKT_BAUSTEINE.includes(n)).map((n) => rolle.get(n) ?? n), inventarZeilen(vorlage))).toEqual([]);
   });
 
   test("Negativ: fehlende Zeile wird gemeldet, `demo` wird nicht durch `demo-lens` gedeckt", () => {
