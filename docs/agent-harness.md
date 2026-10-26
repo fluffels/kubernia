@@ -265,6 +265,8 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Absicherung:** **nicht-blockierend**, kein Required Check, aber ohne `continue-on-error` (der Lauf ist deterministisch, ein verstecktes Rot wäre kein Signal). Ein fehlendes Schema ist ein Fehler (kein `-ignore-missing-schemas`). `defaults.run.shell: bash` ist tragend: nur so bricht `helm template | kubeconform -` bei einem helm-Fehler ab. Der Workflow zählt nicht im `festgefahren`-Zähler (der hört nur auf „CI“). Eine Hochstufung zum Required Check ist eine Ruleset-Änderung (vorher klären, `paths:` dann durch einen job-internen Skip ersetzen).
 - **Grenze:** kubeconform prüft Schemas, keine Semantik (ein unbekannter `pathType`-Wert geht durch); Verweise in der Doku auf archivierte Upstream-Repos findet der Job nicht.
 
+<!-- factory-projekt:ende -->
+
 ### Code-Scanning und Posture (`codeql.yml`, `scorecard.yml`, #875)
 - **WAS:** [`codeql.yml`](../.github/workflows/codeql.yml) fährt CodeQL (Default-Suite) für `javascript-typescript` und `actions` bei Push auf `main`, auf PRs, wöchentlich und per `workflow_dispatch`; [`scorecard.yml`](../.github/workflows/scorecard.yml) fährt die OpenSSF Scorecard bei Push auf `main`, wöchentlich und per Dispatch. Beide laden SARIF in den Security-Tab (Code-Scanning).
 - **WARUM:** SAST und Posture-Prüfung laufen regelmäßig und sichtbar, ohne eine Repo-Einstellung zu ändern: Advanced-Setup als versionierter, reviewbarer Workflow statt Default-Setup (das bleibt `not-configured`).
@@ -272,8 +274,6 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Funde ins Board:** [`codescanning-inbox.yml`](../.github/workflows/codescanning-inbox.yml) ordnet die offenen Alerts wöchentlich ein (CodeQL high/critical ein Ticket an der Board-Spitze, sonst eine Zeile je Regel im Harness-Sammelticket; [Mechanik](ticket-reihenfolge.md#code-scanning-inbox-1436)). Ein Alert wird beim Abarbeiten behoben, mit Grund dismisst oder per Wiedervorlage zurückgestellt (umkehrbar, kein Pre-Flight), nicht still offen gelassen.
 - **Funde beheben, Muster:** (1) Pfad-Containment steht **inline** vor dem fs-Aufruf in derselben Funktion (`if (!ziel.startsWith(resolve(basis) + sep)) return null`), nicht in einem Helfer; CodeQL erkennt einen Helfer nicht als Barriere (Alerts 68 bis 70, `mermaid-vorschau.mjs`). Die Inline-Variante schließt die Alerts: der CodeQL-Lauf auf dem PR #1752 führt für die Alerts 68 bis 70, 72, 73 und 94 keine offene Instanz. (2) Eine Regex aus Variablen nur mit escapten Werten bauen, und wo ein Test nur einen Teilstring prüft, `includes` statt `RegExp` nehmen (Alert 94). (3) Funde in `test/` werden `used in tests` mit Grund dismisst oder behoben, nie per CodeQL-Pfadausnahme ausgeblendet; die Inbox führt sie als Zeile, nie als Spitzen-Ticket. (4) Heredoc und `node -e` halbieren Backslashes: Regex-Änderungen nur per Edit-Tool. (5) HTML-Werte in Attributen gehen durch `esc()` (maskiert auch `"` und `'`).
 - **Grenze:** die übrigen Workflows sind noch per Tag gepinnt (#983, erweitert `PIN_PFLICHT`). Der Wächter liest per `yaml`-Bibliothek; zeilenbasiert ist nur die Pin-Prüfung (der Versionskommentar steht nicht im Syntaxbaum).
-
-<!-- factory-projekt:ende -->
 
 <!-- factory-projekt:start -->
 
