@@ -1,4 +1,4 @@
-/* Textreste entfernter Pfade, die an der Projekthistorie hängen (#1906, Fortsetzung von entfernte-pfade.test.ts).
+/* Textreste entfernter Pfade, die an der Projekthistorie hängen (#1906, Fortsetzung des Kern-Tests `entfernte-pfade.test.ts` im Factory-Repo).
  *
  * @harness-waechter – Projekt-Test (bleibt im Projekt, zieht nicht ins Factory-Repo): die Muster leiten sich aus dem echten Repo-Namen
  * und dem Ticket-Skill-Namen der Projekt-Config ab, weil nur dieses Projekt einen Skill `<Repo-Name>-workflow`, ein Workflow-Skript
@@ -10,8 +10,10 @@
  *  - `skills/<Ticket-Skill>/`: keine Fundstelle in `docs/adr/` (`git log -S` auf den Pfad findet dort nichts); die Regel ist nur synthetisch getestet.
  */
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { describe, test } from "vitest";
-import { type Rest, findeReste as findeResteMit, getrackteTextdateien, meldungMitFix } from "../support/entfernte-pfade";
+import { AUSNAHMEN, type Rest, SCHNAPPSCHUSS_ENDE, SCHNAPPSCHUSS_START, findeReste as findeResteMit, getrackteTextdateien, meldungMitFix } from "../support/entfernte-pfade";
 import { projektConfig, repoName } from "../support/fremd-config";
 import { escapeRe as esc } from "../support/regex";
 
@@ -51,7 +53,7 @@ describe("Textreste mit Projektnamen (#1906)", () => {
     [NAME_WORKFLOW, `Der Skill \`${R}-workflow\` startet den Lauf.`],
     [NAME_TICKET, `Workflow({ name: "${R}-ticket" })`],
     [NAME_VERZEICHNIS, `Datei .claude/skills/${C.agenten.ticketSkill}/SKILL.md`],
-    ["Vorlage des Ticket-Skills", `Datei .factory/produkt/vorlagen/.agents/skills/factory-ticket/${"SKILL.md"}.vorlage`], // zerlegt, sonst träfe der Scan diese Zeile
+    ["Vorlage des Ticket-Skills", `Datei Vorlagen/.agents/skills/factory-ticket/${"SKILL.md"}.vorlage`], // zerlegt, sonst träfe der Scan diese Zeile
   ])("Negativfall: ein eingeschleuster Rest wird gefunden (%s)", (name, text) => {
     assert.deepEqual(reste("docs/beispiel.md", `vorher\n${text}\nnachher`), [`docs/beispiel.md:2: ${name}`]);
   });
@@ -61,10 +63,9 @@ describe("Textreste mit Projektnamen (#1906)", () => {
     assert.deepEqual(reste("docs/x.md", sauber), []);
   });
 
-  test("Ausnahmen: ADRs und der Absenz-Test dürfen die Namen tragen, andere Pfade nicht", () => {
+  test("Ausnahmen: ADRs dürfen die Namen tragen, andere Pfade nicht", () => {
     const text = `${R}-ticket.js und ${R}-workflow`;
     assert.deepEqual(reste("docs/adr/0028-ein-ticket-ablauf.md", text), []);
-    assert.deepEqual(reste("test/harness/model-routing.test.ts", text), []);
     assert.ok(reste("docs/modul.md", text).length > 0);
   });
 
@@ -83,4 +84,99 @@ describe("Textreste mit Projektnamen (#1906)", () => {
     const rollen = [C.agenten.planer, C.agenten.umsetzer, C.agenten.lens, C.agenten.gruppe];
     assert.ok(rollen.some((n) => adr("0012").includes(`${n}.md`)), "ADR 0012 trägt alte Agenten-Dateinamen (Regel im Kern-Wächter)");
   }, 30_000);
+});
+
+// ---- Reste der Auslagerung des Kerns ins Factory-Repo (#1882, ADR 0022 F10) ----
+// kubernia bezieht den Kern per Sync; Export-Werkzeug, Extraktionsliste, Produkt-Entwürfe und die Fremd-Config-Probe gibt es hier nicht mehr.
+// Die Musterquellen nutzen Zeichenklassen bzw. zerlegte Literale, damit diese Datei sich nicht selbst trifft. Besitz-Dateien sind ausgenommen
+// (sie pflegt upstream und der Drift-Wächter hält sie byte-gleich zum Tag).
+const BESITZ = (JSON.parse(readFileSync(".factory/besitz.json", "utf8")) as { eintraege: { pfad: string }[] }).eintraege.map((e) => e.pfad);
+const AUSNAHMEN_K9 = [...AUSNAHMEN, ...BESITZ.map((pfad) => ({ praefix: pfad, grund: "Besitz: pflegt upstream (Drift-Wächter)" }))];
+const WEG_K9 = "den Ist-Zustand beschreiben: der Kern kommt per Sync vom Tag des Factory-Repos, das Werkzeug lebt dort";
+const RESTE_K9: Rest[] = [
+  { name: "Export-Werkzeug", muster: /factory-export(?:-lib)?\.mjs/, fix: WEG_K9 },
+  { name: "Extraktionsliste-Datei", muster: /\.factory\/extraktion\.json/, fix: WEG_K9 },
+  { name: "Produkt-Entwürfe-Ordner", muster: /\.factory\/produkt\//, fix: WEG_K9 },
+  { name: "Fremd-Config-Probe-Skript", muster: /probe:fremd[c]onfig/, fix: WEG_K9 },
+];
+const resteK9 = (pfad: string, inhalt: string): string[] => findeResteMit([{ pfad, inhalt }], RESTE_K9, AUSNAHMEN_K9);
+
+describe("Reste der Auslagerung in das Factory-Repo (#1882)", () => {
+  test("das Repo ist frei von Resten außerhalb von ADRs und Besitz", () => {
+    const treffer = findeResteMit(getrackteTextdateien(), RESTE_K9, AUSNAHMEN_K9);
+    assert.deepEqual(treffer, [], `${meldungMitFix(treffer, RESTE_K9)}\nTreffer: ${treffer.join(", ")}`);
+  });
+
+  test.each([
+    ["Export-Werkzeug", `node scripts/${"factory-export"}.mjs`],
+    ["Export-Werkzeug", `scripts/${"factory-export"}-lib.mjs`],
+    ["Extraktionsliste-Datei", `siehe ${".factory"}/extraktion.json`],
+    ["Produkt-Entwürfe-Ordner", `Vorlagen unter ${".factory"}/produkt/vorlagen`],
+    ["Fremd-Config-Probe-Skript", `npm run ${"probe:fremd"}config`],
+  ])("Negativfall: ein eingeschleuster Rest wird gefunden (%s)", (name, text) => {
+    assert.deepEqual(resteK9("docs/beispiel.md", `vorher\n${text}\nnachher`), [`docs/beispiel.md:2: ${name}`]);
+  });
+
+  test("Negativfall: harmlose Nachbarn lösen nicht aus", () => {
+    const sauber = "node scripts/factory-sync.mjs --quelle <klon>; .factory/besitz.json; .factory/projekt.json; scripts/factory-drift.mjs";
+    assert.deepEqual(resteK9("docs/x.md", sauber), []);
+  });
+
+  test("Ausnahmen: ADRs und Besitz-Dateien dürfen die Namen tragen, andere Pfade nicht", () => {
+    const text = `node scripts/${"factory-export"}.mjs`;
+    assert.deepEqual(resteK9("docs/adr/0022-x.md", text), []);
+    assert.deepEqual(resteK9(BESITZ[0], text), []);
+    assert.ok(resteK9("docs/modul.md", text).length > 0);
+  });
+});
+
+// ---- Testpfade in Markdown müssen existieren (#1882) ----
+// Mit der Auslagerung der Kern-Tests nennen Brain-Seiten leicht Testdateien, die es hier nicht mehr gibt. Geschlossener Scan-Umfang: `*.md` und `*.mmd`
+// der getrackten Dateien, ohne `docs/adr/` (historisch), ohne Besitz-Pfade, ohne datierte Schnappschüsse (Dateiname mit JJJJ-MM-TT) und ohne
+// Schnappschuss-Blöcke. Grenzen: Pfade in URLs (davor steht ein Pfadzeichen) und Platzhalter mit `<…>` oder `*` zählen nicht; Nicht-Markdown
+// (CODEOWNERS, JSON, Kommentare im Code) prüft nur die Breitensuche oben.
+const TESTPFAD = /(?<![\w./-])test\/[\w./-]+\.(?:ts|mjs|json)/g;
+const istDatiert = (pfad: string): boolean => /-\d{4}-\d{2}-\d{2}/.test(pfad);
+const istScope = (pfad: string): boolean => /\.(?:md|mmd)$/.test(pfad) && !pfad.startsWith("docs/adr/") && !BESITZ.includes(pfad) && !istDatiert(pfad);
+
+/** Pur: die genannten Testpfade je Zeile ohne Schnappschuss-Blöcke, als `pfad:zeile: testpfad`, die es nicht gibt (`existiert`). */
+function fehlendeTestpfade(dateien: { pfad: string; inhalt: string }[], existiert: (p: string) => boolean): string[] {
+  const aus: string[] = [];
+  for (const d of dateien.filter((x) => istScope(x.pfad))) {
+    let imBlock = false;
+    d.inhalt.split("\n").forEach((zeile, i) => {
+      const marker = zeile.trim();
+      if (marker === SCHNAPPSCHUSS_START) imBlock = true;
+      else if (marker === SCHNAPPSCHUSS_ENDE) imBlock = false;
+      else if (!imBlock) for (const m of zeile.matchAll(TESTPFAD)) if (!existiert(m[0])) aus.push(`${d.pfad}:${i + 1}: ${m[0]}`);
+    });
+  }
+  return aus;
+}
+
+describe("Jeder in Markdown genannte Testpfad existiert (#1882)", () => {
+  const getrackt = new Set(execFileSync("git", ["ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean));
+  const existiert = (p: string): boolean => getrackt.has(p);
+
+  test("das Repo nennt keinen Testpfad, den es nicht gibt (Kern-Tests leben im Factory-Repo: verlinken statt Pfad nennen)", () => {
+    const fehlend = fehlendeTestpfade(getrackteTextdateien(), existiert);
+    assert.deepEqual(fehlend, [], "Die Datei gibt es hier nicht mehr: den Kern-Test im Factory-Repo verlinken oder den Satz löschen");
+  });
+
+  test("Negativfall: ein genannter, nicht vorhandener Testpfad wird gefunden", () => {
+    assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/x.md", inhalt: "a\nsiehe `test/harness/gibt-es-nicht.test.ts`." }], existiert), ["docs/x.md:2: test/harness/gibt-es-nicht.test.ts"]);
+  });
+
+  test("harmlose Nachbarn: vorhandener Pfad, URL, Platzhalter, ADR, Schnappschuss-Block, datierte Datei, Nicht-Markdown", () => {
+    const echt = "test/harness/spielbezug.test.ts";
+    assert.ok(existiert(echt), "Vorbedingung: der Beispielpfad ist getrackt");
+    const weg = "test/harness/gibt-es-nicht.test.ts";
+    const text = `${echt}\nhttps://github.com/x/y/blob/main/${weg}\ntest/harness/<name>.test.ts und test/harness/*.test.ts`;
+    assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/x.md", inhalt: text }], existiert), []);
+    const block = `${SCHNAPPSCHUSS_START}\n2026-01-01 ${weg}\n${SCHNAPPSCHUSS_ENDE}`;
+    assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/x.md", inhalt: block }], existiert), []);
+    for (const pfad of ["docs/adr/0001-x.md", "docs/analyse-2026-07-03-x.md", "docs/x.txt", BESITZ.find((p) => p.endsWith(".md")) ?? "AGENTS.md"]) {
+      assert.deepEqual(fehlendeTestpfade([{ pfad, inhalt: weg }], existiert), [], pfad);
+    }
+  });
 });

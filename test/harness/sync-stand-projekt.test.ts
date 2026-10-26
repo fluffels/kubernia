@@ -7,8 +7,11 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, test } from "vitest";
-import { pruefeDrift } from "../../scripts/check-factory-drift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pruefeDrift as pruefeDriftRoh } from "../../scripts/check-factory-drift.mjs";
 
+type DriftErgebnis = { entfaellt: boolean; fehler: string[] };
+const pruefeDrift = pruefeDriftRoh as (lies: (pfad: string) => string | null) => DriftErgebnis;
 const SYNC_WEG = "npm run factory:sync -- --quelle <klon> --tag <name>";
 
 describe("Sync-Stand von einem Tag", () => {
@@ -26,7 +29,7 @@ describe("Sync-Stand von einem Tag", () => {
       const text = readFileSync(p, "utf8");
       return p === "scripts/check-size.mjs" ? `${text}\n// von Hand geändert\n` : text;
     };
-    const r = pruefeDrift(lies) as { entfaellt: boolean; fehler: string[] };
+    const r = pruefeDrift(lies);
     assert.equal(r.entfaellt, false);
     const f = r.fehler.find((x) => x.includes("scripts/check-size.mjs"));
     assert.ok(f, `kein Fehler zur geänderten Datei: ${r.fehler.join(" | ")}`);
@@ -35,7 +38,7 @@ describe("Sync-Stand von einem Tag", () => {
   });
 
   test("ohne Sync-Stand meldet das Drift-Gate nur „entfällt“ (darum der Test oben)", () => {
-    const r = pruefeDrift((p: string) => (p === ".factory/sync-stand.json" ? null : existsSync(p) ? readFileSync(p, "utf8") : null)) as { entfaellt: boolean };
+    const r = pruefeDrift((p: string) => (p === ".factory/sync-stand.json" ? null : existsSync(p) ? readFileSync(p, "utf8") : null));
     assert.equal(r.entfaellt, true);
   });
 });

@@ -140,16 +140,6 @@
       "count": 1
     }
   },
-  "scripts/factory-export-lib.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "scripts/factory-export.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/factory-sync-lib.mjs": {
     "complexity": {
       "count": 1
@@ -747,14 +737,6 @@
       "count": 1
     }
   },
-  "test/any-suppressions.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    }
-  },
   "test/bundle.test.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 9
@@ -773,14 +755,6 @@
       "count": 69
     }
   },
-  "test/context-size.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
   "test/contexts-quiz.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 7
@@ -789,17 +763,6 @@
   "test/cronjob-job-quiz.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 7
-    }
-  },
-  "test/docdrift.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
     }
   },
   "test/docker-images-quest.test.ts": {
@@ -816,30 +779,6 @@
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 12
-    }
-  },
-  "test/doctickets.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    }
-  },
-  "test/festgefahren.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    }
-  },
-  "test/filesize.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
     }
   },
   "test/forum-sanitize.test.ts": {
@@ -877,28 +816,9 @@
       "count": 5
     }
   },
-  "test/harness/stop-verify-hook.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    }
-  },
   "test/loader.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 6
-    }
-  },
-  "test/lockfile.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
     }
   },
   "test/manifest-lib.test.ts": {

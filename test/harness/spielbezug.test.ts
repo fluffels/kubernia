@@ -6,12 +6,12 @@
  * (Null-Regel); was ein Projekt konkret in Config und Projekt-Block trägt, prüft dieser Projekt-Test. Er zieht nicht ins Factory-Repo.
  *
  * Grenze: geprüft wird nur, dass die Pflicht-Begriffe in der Config stehen und die Leitfrage samt Messlatten-Zeile im Projekt-Block
- * der AGENTS.md; die Bedeutung des Textes prüft kein Wächter. Der Spielwort-Wächter (#1943, #1942) prüft den Kern (alle Einheiten der Besitz-Ringe), die Skill-Quelle und die
- * Projekt-Vorlagen, nicht die Factory-Seiten. Dieser Test importiert nichts aus einer anderen `*.test.ts`. */
+ * der AGENTS.md; die Bedeutung des Textes prüft kein Wächter. Der Spielwort-Wächter (#1943, #1942) prüft den Kern (alle Einheiten der Besitz-Ringe), die Skill-Quelle,
+ * nicht die Factory-Seiten. Dieser Test importiert nichts aus einer anderen `*.test.ts`. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { projektConfig } from "../support/fremd-config";
 import { ladeBesitzManifest } from "../support/besitz-anker";
@@ -86,14 +86,12 @@ describe("Bereichs-Alias der Projekt-Config (#1943)", () => {
   });
 });
 
-describe("Kern und Vorlagen ohne Spielwort (#1943, #1942)", () => {
+describe("Kern ohne Spielwort (#1943, #1942)", () => {
   // Wortanfang „spiel“ ohne Groß-/Kleinschreibung; „Beispiel“ trifft nicht (davor steht ein Buchstabe).
   const SPIELWORT = /(?<!\p{L})spiel/iu;
   const lies = (pfad: string): string | null => (existsSync(WURZEL + pfad) ? readFileSync(WURZEL + pfad, "utf8").replace(/\r\n/g, "\n") : null);
-  const vorlagen = (ordner: string): string[] =>
-    readdirSync(WURZEL + ordner, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? vorlagen(`${ordner}/${d.name}`) : [`${ordner}/${d.name}`]));
   // Umfang: Einheiten der Ringe kern, kern-nach-entkopplung und oberflaeche (AGENTS.md nur als Kern-Block, ohne Projekt-Block), die Skill-Quelle,
-  // der Factory-Skill samt Ablauf und die Projekt-Vorlagen. Grenze: Factory-Seiten (eigene Extraktion) liegen außerhalb.
+  // der Factory-Skill samt Ablauf. Grenze: Factory-Seiten (eigene Extraktion) liegen außerhalb.
   const einheiten = (): [string, string][] => {
     const out: [string, string][] = [];
     for (const e of ladeBesitzManifest<{ pfad: string; ring: string; block?: string; schluessel?: string }>().eintraege) {
@@ -101,15 +99,15 @@ describe("Kern und Vorlagen ohne Spielwort (#1943, #1942)", () => {
       const einheit = text === null ? null : einheitText(e, text);
       if (einheit !== null) out.push([e.block || e.schluessel ? `${e.pfad} (${e.block ?? e.schluessel})` : e.pfad, einheit]);
     }
-    for (const pfad of [".agents/skills/factory/SKILL.md", ".agents/skills/factory/ablauf.md", ROLLEN_PFADE.ticketSkill, ...vorlagen(".factory/produkt/vorlagen")]) {
+    for (const pfad of [".agents/skills/factory/SKILL.md", ".agents/skills/factory/ablauf.md", ROLLEN_PFADE.ticketSkill]) {
       const text = lies(pfad);
       if (text !== null) out.push([pfad, text]);
     }
     return out;
   };
-  test("der Umfang ist nicht leer und trägt Kern, Oberfläche, Skill-Quelle und Vorlagen", () => {
+  test("der Umfang ist nicht leer und trägt Kern, Oberfläche und Skill-Quelle", () => {
     const namen = einheiten().map(([n]) => n);
-    for (const teil of ["scripts/naechstes-ticket.mjs", ".agents/skills/factory/SKILL.md", ROLLEN_PFADE.ticketSkill, ".factory/produkt/vorlagen/AGENTS.md.vorlage", "AGENTS.md (kern)"]) {
+    for (const teil of ["scripts/naechstes-ticket.mjs", ".agents/skills/factory/SKILL.md", ROLLEN_PFADE.ticketSkill, "AGENTS.md (kern)"]) {
       assert.ok(namen.includes(teil), `${teil} fehlt im Scan`);
     }
     assert.ok(namen.length > 100, `nur ${namen.length} Einheiten`);

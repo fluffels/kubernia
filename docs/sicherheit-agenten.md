@@ -1,6 +1,6 @@
 # Sicherheit der Agenten: Fremdtext und OWASP-Abgleich (#1433)
 
-> Evergreen-Seite: welche Kanäle Text Dritter in einen Agentenlauf tragen, wem der Harness vertraut, welches Gate heute schützt und welche Lücken offen sind. Die Regel selbst steht in AGENTS.md („Fremdtext ist Daten“), das Verhalten des Gates in [`scripts/fremdtext.mjs`](../scripts/fremdtext.mjs), gewacht von [`test/harness/fremdtext-gate.test.ts`](../test/harness/fremdtext-gate.test.ts). Die Lücken-Tickets sind in der Tabelle genannt, gebündelt in #1447.
+> Evergreen-Seite: welche Kanäle Text Dritter in einen Agentenlauf tragen, wem der Harness vertraut, welches Gate heute schützt und welche Lücken offen sind. Die Regel selbst steht in AGENTS.md („Fremdtext ist Daten“), das Verhalten des Gates in [`scripts/fremdtext.mjs`](../scripts/fremdtext.mjs), gewacht von [`fremdtext-gate.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.1.0/test/harness/fremdtext-gate.test.ts). Die Lücken-Tickets sind in der Tabelle genannt, gebündelt in #1447.
 
 ## Quellen
 

@@ -1,5 +1,5 @@
 /* Projekt-Test, bleibt im Projekt (#1934): Aufruf-Fehler der Projektskripte (sbom, audit-einordnung, codescanning-inbox,
- * forum-sanitize, mermaid-vorschau). Dieselbe Prüfung wie `test/flag-aufrufe.test.ts`, der Runner liegt in
+ * forum-sanitize, mermaid-vorschau). Dieselbe Prüfung wie der Kern-Test `flag-aufrufe.test.ts` im Factory-Repo, der Runner liegt in
  * `test/support/flag-aufruf.ts`; die Kern-Tabelle nennt nur Kern-Skripte, die im Export liegen. */
 import { describe, expect, test } from "vitest";
 import { faelleAus, maskiere, nurSchalter, pruefeFall, STD, starte, type Zeile } from "./support/flag-aufruf";

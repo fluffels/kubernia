@@ -29,7 +29,6 @@
     "check:docmap": "node scripts/check-docmap.mjs",
     "check:docdrift": "node scripts/check-docdrift.mjs",
     "check:internalrefs": "node scripts/check-internalrefs.mjs",
-    "probe:fremdconfig": "node scripts/fremd-config-probe.mjs",
     "check:factorydrift": "node scripts/check-factory-drift.mjs",
     "factory:sync": "node scripts/factory-sync.mjs",
     "check:steuerbytes": "node scripts/check-steuerbytes.mjs",
