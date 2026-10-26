@@ -42,6 +42,7 @@ const C = raw as unknown as {
   plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null; repo?: string; nachfolger?: Folger }) => Plan;
   fuehreAus: (a: Record<string, unknown>) => number;
   lauf: (a: Record<string, unknown>) => number;
+  dateiAusGh: (repo: string, pfad: string, commit: string, gh?: (args: string[]) => string) => string | null;
 };
 
 const roh = (o: Record<string, unknown> = {}) => ({
@@ -560,6 +561,25 @@ describe("fuehreAus", () => {
   });
 });
 
+describe("dateiAusGh (#1942)", () => {
+  test("Pfad-Segmente und ref werden codiert, Schrägstriche bleiben", () => {
+    let args: string[] = [];
+    const r = C.dateiAusGh("o/r", "a b/c#d.mjs", "x/y z", (a) => {
+      args = a;
+      return "inhalt";
+    });
+    expect(r).toBe("inhalt");
+    expect(args.at(-1)).toBe("repos/o/r/contents/a%20b/c%23d.mjs?ref=x%2Fy%20z");
+  });
+  test("ein Fehler ergibt null", () => {
+    expect(
+      C.dateiAusGh("o/r", "a.mjs", "c1", () => {
+        throw new Error("404");
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("lauf", () => {
   const kontext = { offenesIssue: null, kommentare: [], owner: OWNER, wiedervorlagen: [], sammelTitel: [] };
   test("Alerts nicht lesbar: Exit 1 und kein Schreib-Aufruf (fail-closed, nie schliessen)", () => {
@@ -1011,6 +1031,38 @@ describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
         },
       });
       expect(geladen).toBe(0);
+    });
+    describe("still werdende Spitzen-Alerts laden keine Nachfolger-Daten (#1942)", () => {
+      const zaehle = (kontextExtra: Record<string, unknown>) => {
+        const aufrufe = { vorgaenger: 0, datei: 0 };
+        lauf({
+          ladeAlerts: alerts,
+          ladeKontext: () => ({ ...kontext, ...kontextExtra }),
+          ladeVorgaenger: () => {
+            aufrufe.vorgaenger += 1;
+            return [dismissed(75)];
+          },
+          ladeDatei: (p: string, c: string) => {
+            aufrufe.datei += 1;
+            return lies(p, c);
+          },
+          legeIssueAn: () => 7,
+          projectToken: undefined,
+        });
+        return aufrufe;
+      };
+      test("Wiedervorlage mit der Alert-Nummer: 0 Aufrufe", () => {
+        expect(zaehle({ wiedervorlagen: [{ id: "codescanning-js-incomplete-sanitization", alerts: [109] }] })).toEqual({ vorgaenger: 0, datei: 0 });
+      });
+      test("deckendes Issue (Code-Scanning-Alert 109): 0 Aufrufe", () => {
+        const i = { number: 12, title: "Befund", body: "Code-Scanning-Alert 109 wird behoben", user: owner };
+        expect(zaehle({ offeneIssues: [i] })).toEqual({ vorgaenger: 0, datei: 0 });
+      });
+      test("echter Kandidat lädt Vorgänger und Dateien", () => {
+        const a = zaehle({});
+        expect(a.vorgaenger).toBe(1);
+        expect(a.datei).toBeGreaterThan(0);
+      });
     });
     test("ohne ladeDatei in io: kein Nachfolger (Alert bleibt Spitze)", () => {
       const angelegt: string[] = [];
