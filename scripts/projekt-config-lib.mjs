@@ -44,7 +44,7 @@ function pruefeBereiche(b) {
   for (const [alias, ziel] of Object.entries(b.aliase)) {
     if (!/^[a-z][a-z0-9-]*$/.test(alias)) fehler.push(`bereiche.aliase.${alias}: der Alias-Name muss dem Muster ^[a-z][a-z0-9-]*$ entsprechen`);
     else if (Object.hasOwn(BEREICHE, alias)) fehler.push(`bereiche.aliase.${alias} überdeckt einen Kern-Bereich (${Object.keys(BEREICHE).join(", ")})`);
-    if (!Object.hasOwn(BEREICHE, ziel)) fehler.push(`bereiche.aliase.${alias} muss auf einen Kern-Bereich zeigen (${Object.keys(BEREICHE).join(", ")})`);
+    if (typeof ziel !== "string" || !Object.hasOwn(BEREICHE, ziel)) fehler.push(`bereiche.aliase.${alias} muss auf einen Kern-Bereich zeigen (${Object.keys(BEREICHE).join(", ")})`);
   }
   return fehler;
 }

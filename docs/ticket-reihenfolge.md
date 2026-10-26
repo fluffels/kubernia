@@ -28,7 +28,7 @@ Die Auswahl kennt keinen Modus über beide Seiten: jeder Aufruf nennt `--bereich
 Die Auswahl lädt beide Boards (Trennregel: Label `area:harness` ergibt das Factory-Board, alles andere das Produkt-Board). Reihenfolge der Entscheidung:
 
 1. **Kopf-Items zuerst:** Notfälle, Dependabot, Forum, Wiedervorlage und das Status-Ticket (Titelmarker, `istKopfItem`), geordnet nach `kopfRang` (Notfall-Art vor Status-Ticket), bei Gleichstand Produkt vor Factory; es zählen die Kopf-Items der eigenen Seite plus die Notfälle (🚨, 🔒) beider Boards.
-2. **Dann das oberste freie Item der eigenen Seite** (`agentic` Factory, `spiel` Produkt), ohne Ausweichen auf die andere. Ist nichts frei, Exit 1 mit dem Bereichsnamen.
+2. **Dann das oberste freie Item der eigenen Seite** (`agentic` Factory, `produkt` Produkt), ohne Ausweichen auf die andere. Ist nichts frei, Exit 1 mit dem Bereichsnamen.
 
 Ein Item nur auf dem falschen Board zählt auf seiner Trennregel-Seite (hinten angehängt, ein Sammelhinweis), ein Item auf beiden Boards nur auf dem Board laut Trennregel (`hinweis`, `::warning::` im Board-Takt, Meldung in `board-place`); die Wächter melden nur, sie entfernen nichts (Reparatur: `node scripts/board-place.mjs --umzug [--dry-run]`, Absatz „Umzug“ unten). `board-place` wählt sein Board über die Labels der Nummern (gemischte Nummern oder ein `--after`-Anker auf dem anderen Board: Exit 2), `board-takt` nimmt fehlende Issues nach der Trennregel auf und führt Status-Ticket, Harness-Takt und Sammelticket-Korrektur auf dem Factory-Board aus.
 

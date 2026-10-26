@@ -11,4 +11,4 @@ effort: medium
 
 **Lies `.agents/skills/factory/ablauf.md` und folge ihm mit diesem Bereich.** Dort steht der ganze Ablauf (Claim, Planer, Umsetzer, Übergabe, Abnahme, Abschluss); diese Datei legt nur Bereich und Auslöser fest.
 
-Nennt der Auslöser Produkt-Tickets, gilt der Produkt-Skill (Name `agenten.ticketSkill` in `.factory/projekt.json`).
+Nennt der Auslöser Tickets des Produkt-Boards, gilt der Produkt-Skill (Name `agenten.ticketSkill` in `.factory/projekt.json`).

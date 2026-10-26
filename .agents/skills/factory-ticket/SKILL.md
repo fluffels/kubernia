@@ -1,12 +1,12 @@
 ---
 # factory:projektwert agenten.ticketSkill
 name: kubernia
-description: Arbeitet EIN Ticket des Produkt-Boards end-to-end ab (claimen, planen, Umsetzung bis zum Merge); Epics werden aufgeteilt. Auslösen bei "nimm das nächste Produkt-Ticket", "nächstes Produkt-Ticket", "mehrere Produkt-Tickets", "mach mit #<nr> weiter".
+description: Arbeitet EIN Ticket des Produkt-Boards end-to-end ab (claimen, planen, Umsetzung bis zum Merge); Epics werden aufgeteilt. Auslösen bei "nimm das nächste Ticket des Produkt-Boards", "nächstes Produkt-Board-Ticket", "mehrere Produkt-Board-Tickets", "mach mit #<nr> weiter".
 model: sonnet
 effort: medium
 ---
 
-# Produkt-Ticket abarbeiten
+# Ticket des Produkt-Boards abarbeiten
 
 **Bereich: `produkt`.** Die Auswahl läuft mit `--bereich produkt` und sieht nur das Produkt-Board; die Notfälle (CI rot auf `main`, Security) gelten auf beiden Boards. Es wird nie ein Harness-Ticket gezogen, keine Rückfrage.
 

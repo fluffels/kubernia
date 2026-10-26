@@ -217,6 +217,7 @@ describe("Bereichs-Aliase (#1943)", () => {
     assert.deepEqual(mit({ aliase: { spiel: "produkt" } }), []);
     assert.deepEqual(mit({ aliase: {} }), []);
     assert.deepEqual(mit({}), []);
+    assert.deepEqual(mit({ aliase: { "spiel-2": "produkt" } }), [], "Ziffer und Bindestrich sind im Alias-Namen erlaubt");
   });
 
   test("Negativfälle: Form, Alias-Name, Überdeckung eines Kern-Namens, Ziel kein Kern-Bereich", () => {
@@ -226,11 +227,13 @@ describe("Bereichs-Aliase (#1943)", () => {
     assert.match(mit({ aliase: { "x y": "produkt" } }).join("\n"), /Alias-Name muss dem Muster/);
     assert.match(mit({ aliase: { agentic: "produkt" } }).join("\n"), /überdeckt einen Kern-Bereich/);
     assert.match(mit({ aliase: { spiel: "x" } }).join("\n"), /muss auf einen Kern-Bereich zeigen/);
+    assert.match(mit({ aliase: { spiel: ["produkt"] } }).join("\n"), /muss auf einen Kern-Bereich zeigen/);
   });
 
   test("bereichAliaseAus: ohne Schlüssel oder Config leer, sonst die Zuordnung", () => {
     assert.deepEqual(pc.bereichAliaseAus({}), {});
     assert.deepEqual(pc.bereichAliaseAus(undefined), {});
+    for (const kaputt of [null, [], "x", 5]) assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: kaputt } }), {}, JSON.stringify(kaputt));
     assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: { spiel: "produkt" } } }), { spiel: "produkt" });
   });
 
