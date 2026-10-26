@@ -192,6 +192,7 @@
     {"muster":"test/internalrefs.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/kontext-treiber.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/langfuse-takt.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
+    {"muster":"test/modelldefinitionen.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz (Preistabelle und die Seite des Hook-Patches)"},
     {"muster":"test/lauf-ergebnis.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
     {"muster":"test/layering.test.ts","art":"projekt-test","grund":"importiert src/, Projektcode"},
     {"muster":"test/lockfile.test.ts","art":"kern-test","grund":"Gegenstand ist Besitz"},
