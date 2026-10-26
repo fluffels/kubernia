@@ -741,6 +741,18 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
       assert.doesNotMatch(r.text, /^\s+at /m, skript);
     }
   });
+  test("#1942: check:docmap prüft sonst nichts und ist dann rot: Quellwurzel ohne .ts-Datei oder ohne Ordner (kein stilles Grün, kein Stacktrace)", () => {
+    const leer = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
+    rmSync(join(leer, "lib", "gross.ts"));
+    writeFileSync(join(leer, "lib", "typen.d.ts"), "export {};\n");
+    const fehlt = fremdrepo({ quelle: "gibts-nicht", moduldoku: "handbuch/module" });
+    for (const d of [leer, fehlt]) {
+      const r = lauf(d, "check-docmap.mjs");
+      assert.equal(r.status, 1, r.text);
+      assert.match(r.text, /✖ check:docmap prüft nichts: keine `[\w-]+\/\*\*\/\*\.ts`/);
+      assert.doesNotMatch(r.text, /^\s+at /m);
+    }
+  });
 });
 
 describe("Struktur-Pfade als Projektwert (#1843)", () => {
