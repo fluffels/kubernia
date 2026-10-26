@@ -189,7 +189,7 @@ function schrittDateien(k) {
   return schrittTicketSkill(k);
 }
 
-/** Der Ticket-Skill (#1943): die Quelle der Rolle ticketSkill, gerendert mit den Projektwerten der Factory-Config, plus der aus ihr berechnete Zeiger. */
+/** Der Ticket-Skill (#1943): die Quelle der Rolle ticketSkill samt dem aus ihr berechneten Zeiger; `schrittProjektwerte` rendert beide mit den Projektwerten der Factory-Config. */
 function schrittTicketSkill(k) {
   const pfad = ROLLEN_PFADE.ticketSkill;
   const quelle = k.lies(pfad);
@@ -197,13 +197,7 @@ function schrittTicketSkill(k) {
     k.befunde.push(`${pfad}: Quelle der Rolle ticketSkill fehlt`);
     return true;
   }
-  let text;
-  try {
-    text = rendereProjektwerte(normalisiereEol(quelle), k.factoryConfig, pfad);
-  } catch (err) {
-    k.befunde.push(err.message);
-    return true;
-  }
+  const text = normalisiereEol(quelle);
   k.lege(pfad, text, "extraktion");
   k.lege(TICKET_SKILL_ZEIGER, zeigerText(TICKET_SKILL_NAME, text), "berechnet");
   return true;
