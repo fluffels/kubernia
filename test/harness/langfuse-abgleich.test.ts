@@ -32,7 +32,7 @@ type Usage = { input: number; output: number; cacheRead: number; cacheWrite5m: n
 type Eintrag = { id: string; traceId: string; session: string; messageId: string; model: string | null; ts: string; usage: Usage; rolle: Record<string, unknown> | null; ticket: string | null };
 type Obs = Record<string, unknown>;
 type Ist = { calls: number | null; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number } | null; kosten?: number | null };
-type Bewertung = { kostenTranskript: number; kostenLangfuse: number | null; ohnePreis: number; ueberzaehlung: number | null; hinweisModellpreis: boolean; status: string; score: string | null; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
+type Bewertung = { kostenTranskript: number; kostenLangfuse: number | null; ohnePreis: number; ueberzaehlung: number | null; hinweisModellpreis: boolean; preisabweichung?: number | null; hinweisUeberpreis?: boolean; status: string; score: string | null; fehlend: number; dubletten: number; quote: number; callsTranskript: number; callsLangfuse: number; fehlendeCalls: { messageId: string }[] | null; schluessel: string };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>;
 // Der Kern (langfuse-abgleich-kern.mjs) trägt IDs, Soll, Sessions, Ist und Diff; der Einstieg Bewertung, Bericht und CLI.
 // Das Worktree-Präfix kommt aus der Projekt-Config; die Wrapper reichen es durch, damit die Tests ihre Eingaben wie bisher schreiben.
@@ -58,6 +58,7 @@ const A = {
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
   findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null; alleOrdner?: boolean }) => { id: string; pfad: string; mtime: number; groesse: number; ausserhalb?: boolean }[];
   PREIS_TOLERANZ: number;
+  preisVergleich: (o: { fehlend: number; dubletten: number; tokenAbweichung: boolean; kostenT: number; kostenL: number | null | undefined }) => { preisabweichung: number | null; hinweisUeberpreis: boolean };
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown>; kosten: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
   schluesselArt: (o: Obs[]) => string;
@@ -67,7 +68,7 @@ const A = {
   OHNE_ZUGANG: string;
   AUFRUFHILFE: string;
   bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null; ausserhalb?: boolean }) => Bewertung;
-  summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number };
+  summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number; preisabweichung: number | null };
   pruefen: (
     args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string },
     d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null; config?: unknown },
@@ -967,6 +968,15 @@ describe("pruefen (Ablauf)", () => {
     expect(unter.sessions[0]).toMatchObject({ kostenLangfuse: 0, hinweisModellpreis: true, ueberzaehlung: null });
     expect(unter.summe.kostenLangfuse).toBe(0);
     expect((await lauf([{ sessionId: "s1", count_count: 1, sum_totalCost: 0 }])).text).toContain("Hinweis Modellpreis: 1 Session(s)");
+    // Überpreis (#1919): gleiche Calls und Tokens, L = 1,2 · T: beide Felder in JSON, Zeilen im Text
+    const t = unter.sessions[0].kostenTranskript;
+    const ueber = JSON.parse((await lauf([{ sessionId: "s1", count_count: 1, sum_totalCost: 1.2 * t }], true)).text) as { sessions: Bewertung[]; summe: Record<string, number> };
+    expect(ueber.sessions[0]).toMatchObject({ status: "vollständig", hinweisUeberpreis: true });
+    expect(ueber.sessions[0].preisabweichung).toBeCloseTo(0.2 * t, 12);
+    expect(ueber.summe.preisabweichung).toBeCloseTo(0.2 * t, 12);
+    const ueberText = (await lauf([{ sessionId: "s1", count_count: 1, sum_totalCost: 1.2 * t }])).text;
+    expect(ueberText).toContain("Preisabweichung bei gleichen Calls und Tokens:");
+    expect(ueberText).toContain("Hinweis Überpreis: 1 Session(s)");
     const dub = (await lauf([{ sessionId: "s1", count_count: 2, sum_totalCost: 1 }])).text;
     expect(dub).toContain("Überzählung durch Dubletten:");
     expect((await lauf([{ sessionId: "s1", count_count: 2 }])).text).not.toContain("Überzählung durch Dubletten");
@@ -1094,5 +1104,73 @@ describe("strikte Argumente (#1790)", () => {
     };
     const r = await A.pruefen({ pruefen: true, json: false, seit: null, session: null, ist: [], fehler: "X" }, { env: {}, projectsRoot: "X:/gibt-es-nicht", repoRoot: "X:/repo", fetchImpl: wirft, leseDatei: wirft });
     expect(r).toEqual({ exitCode: 2, text: `X\n${A.AUFRUFHILFE}` });
+  });
+});
+
+describe("Preisabweichung und Hinweis Überpreis (#1919)", () => {
+  const now = 1_000_000_000_000;
+  const PREIS = rawPreise as unknown as { priceCall: (c: Record<string, unknown>) => number | null };
+  const e1 = eintrag(1);
+  const T = PREIS.priceCall({ model: e1.model, ts: e1.ts, input: e1.usage.input, output: e1.usage.output, cacheRead: e1.usage.cacheRead, cacheWrite: e1.usage.cacheWrite5m + e1.usage.cacheWrite1h, cacheWrite1h: e1.usage.cacheWrite1h }) as number;
+  const basis = { fehlend: 0, dubletten: 0, tokenAbweichung: false, kostenT: 10, kostenL: 12 };
+  const bew = (kost: number | null | undefined, o: Record<string, unknown> = {}) =>
+    A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: null, ...(kost === undefined ? {} : { kosten: kost }) }, mtime: 0, now, ...o });
+  const md = (b: Bewertung[]) => A.renderMarkdown(b, A.summenzeile(b));
+
+  test("preisVergleich: Betrag L - T, Hinweis nur strikt über 110 % (Grenze und knapp darüber)", () => {
+    expect(A.preisVergleich(basis)).toEqual({ preisabweichung: 2, hinweisUeberpreis: true });
+    const grenze = (1 + A.PREIS_TOLERANZ) * 10;
+    expect(A.preisVergleich({ ...basis, kostenL: grenze }).hinweisUeberpreis).toBe(false);
+    expect(A.preisVergleich({ ...basis, kostenL: grenze + 1e-9 }).hinweisUeberpreis).toBe(true);
+    // Langfuse niedriger: negativer Betrag, kein Überpreis-Hinweis
+    expect(A.preisVergleich({ ...basis, kostenL: 8 })).toEqual({ preisabweichung: -2, hinweisUeberpreis: false });
+  });
+
+  test("preisVergleich: darf NICHT passieren: bei Lücke, Dublette, Token-Abweichung, unbekanntem L oder T = 0 kein Betrag und kein Hinweis", () => {
+    const leer = { preisabweichung: null, hinweisUeberpreis: false };
+    expect(A.preisVergleich({ ...basis, fehlend: 1 })).toEqual(leer);
+    expect(A.preisVergleich({ ...basis, dubletten: 1 })).toEqual(leer);
+    expect(A.preisVergleich({ ...basis, tokenAbweichung: true })).toEqual(leer);
+    expect(A.preisVergleich({ ...basis, kostenL: null })).toEqual(leer);
+    expect(A.preisVergleich({ ...basis, kostenL: undefined })).toEqual(leer);
+    expect(A.preisVergleich({ ...basis, kostenL: Number.NaN })).toEqual(leer);
+    expect(A.preisVergleich({ ...basis, kostenT: 0 })).toEqual(leer);
+  });
+
+  test("bewerteSession trägt beide Felder; bei Dublette ist es die Überzählung, nie die Preisabweichung", () => {
+    expect(bew(1.2 * T)).toMatchObject({ hinweisUeberpreis: true, ueberzaehlung: null });
+    expect(bew(1.2 * T).preisabweichung).toBeCloseTo(0.2 * T, 12);
+    expect(bew(undefined)).toMatchObject({ preisabweichung: null, hinweisUeberpreis: false });
+    const dub = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 2 * T }, mtime: 0, now });
+    expect(dub).toMatchObject({ preisabweichung: null, hinweisUeberpreis: false });
+    expect(dub.ueberzaehlung).toBeGreaterThan(0);
+  });
+
+  test("Summenzeile: Σ der bekannten Preisabweichungen, ohne bekannte null, Ruhefrist-Sessions fallen heraus", () => {
+    const a = bew(1.2 * T);
+    const b = bew(0.9 * T);
+    const laeuft = bew(2 * T, { mtime: now - 60_000 });
+    expect(A.summenzeile([a, b, laeuft]).preisabweichung).toBeCloseTo(0.1 * T, 12);
+    expect(A.summenzeile([bew(undefined)]).preisabweichung).toBeNull();
+    expect(A.summenzeile([laeuft]).preisabweichung).toBeNull();
+  });
+
+  test("Bericht: Preisabweichungs- und Überpreis-Zeile nur bei Treffern, getrennt von Überzählung und Hinweis Modellpreis", () => {
+    expect(md([bew(T)])).not.toContain("Hinweis Überpreis");
+    const klein = { ...bew(1.05 * T), session: "abcdefgh-1" };
+    const mdKlein = md([klein]);
+    expect(mdKlein).toMatch(/Preisabweichung bei gleichen Calls und Tokens: \+[\d,.]+ \$ in 1 Session\(s\) \(abcdefgh\): Langfuse-Wochensummen um diesen Betrag bereinigen \(Checkliste Punkt 7\)/);
+    expect(mdKlein).not.toContain("Hinweis Überpreis");
+    const gross = { ...bew(1.3 * T), session: "zyxwvuts-1" };
+    const mdGross = md([gross]);
+    expect(mdGross).toMatch(/Hinweis Überpreis: 1 Session\(s\) mit gleichen Calls und Tokens, Langfuse-Kosten über 110 % des Transkripts \(zyxwvuts\): Modelldefinition der Instanz prüfen/);
+    expect(mdGross).not.toContain("Überzählung durch Dubletten");
+    expect(mdGross).not.toContain("Hinweis Modellpreis");
+    // Unterpreis: negative Abweichung wird gemeldet (mit Vorzeichen), kein Überpreis-Hinweis
+    const unter = md([bew(0.5 * T)]);
+    expect(unter).toMatch(/Preisabweichung bei gleichen Calls und Tokens: -[\d,.]+ \$/);
+    expect(unter).not.toContain("Hinweis Überpreis");
+    // Ruhefrist: keine Zeile
+    expect(md([bew(1.3 * T, { mtime: now - 60_000 })])).not.toContain("Preisabweichung bei");
   });
 });
