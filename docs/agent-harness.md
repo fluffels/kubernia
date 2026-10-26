@@ -273,9 +273,9 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Funde beheben, Muster:** (1) Pfad-Containment steht **inline** vor dem fs-Aufruf in derselben Funktion (`if (!ziel.startsWith(resolve(basis) + sep)) return null`), nicht in einem Helfer; CodeQL erkennt einen Helfer nicht als Barriere (Alerts 68 bis 70, `mermaid-vorschau.mjs`). Die Inline-Variante schließt die Alerts: der CodeQL-Lauf auf dem PR #1752 führt für die Alerts 68 bis 70, 72, 73 und 94 keine offene Instanz. (2) Eine Regex aus Variablen nur mit escapten Werten bauen, und wo ein Test nur einen Teilstring prüft, `includes` statt `RegExp` nehmen (Alert 94). (3) Funde in `test/` werden `used in tests` mit Grund dismisst oder behoben, nie per CodeQL-Pfadausnahme ausgeblendet; die Inbox führt sie als Zeile, nie als Spitzen-Ticket. (4) Heredoc und `node -e` halbieren Backslashes: Regex-Änderungen nur per Edit-Tool. (5) HTML-Werte in Attributen gehen durch `esc()` (maskiert auch `"` und `'`).
 - **Grenze:** die übrigen Workflows sind noch per Tag gepinnt (#983, erweitert `PIN_PFLICHT`). Der Wächter liest per `yaml`-Bibliothek; zeilenbasiert ist nur die Pin-Prüfung (der Versionskommentar steht nicht im Syntaxbaum).
 
-<!-- factory-projekt:start -->
-
 <!-- factory-projekt:ende -->
+
+<!-- factory-projekt:start -->
 
 > **Nicht auf der Liste, aber Teil des Netzes:** die **Save-nie-brechen-Regel** (jede Format-Änderung migriert, alter Stand vorher in den Backup-Slot, `sanitizeState` härtet kaputte Felder ab) und der **Determinismus-Anspruch** (seedbare Zufälligkeit statt `Math.random` in der Domäne) gehören zum selben Netz. Der Determinismus ist seit **#492** als ESLint-Gate (`no-restricted-properties` gegen `Math.random`) + `test/rng.test.ts` für `src/sim/**`+`src/content/**` **erzwungen**; die Ausweitung auf die übrige als „pur/deterministisch" deklarierte Logik (`game/**`, z.B. `spaced-repetition.ts`) ist mit #591 nachgezogen.
 
