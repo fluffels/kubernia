@@ -1066,6 +1066,23 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     assert.deepEqual(config.bereiche.aliase, {}, "der Alias des Projekts wandert nicht ins Factory-Repo");
   }, 60_000);
 
+  test("#1942: der Ticket-Skill im Export ist idempotent gerendert; eine Quelle mit CRLF liefert Quelle und Zeiger nur mit LF, byte-gleich zur LF-Quelle", () => {
+    const quellPfad = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+    const zeigerPfad = `${String(ZEIGER_WURZEL)}/${String(TICKET_SKILL_NAME)}/SKILL.md`;
+    const factory = JSON.parse(echt.dateien.get(".factory/projekt.json")?.text ?? "{}") as unknown;
+    const exportiert = echt.dateien.get(quellPfad)?.text ?? "";
+    assert.equal(rendereProjektwerte(exportiert, factory, quellPfad), exportiert, "ein zweites Rendern ändert nichts");
+    const crlf = (leser.lies(quellPfad) ?? "").replace(/\r?\n/g, "\r\n");
+    assert.ok(crlf.includes("\r\n"), "die Probe-Quelle trägt CRLF");
+    const r = ex.baueExport({ leser: mitAenderung(leser, { [quellPfad]: crlf }) });
+    assert.deepEqual(r.befunde, []);
+    for (const pfad of [quellPfad, zeigerPfad]) {
+      const text = r.dateien.get(pfad)?.text ?? "";
+      assert.ok(!text.includes("\r"), `${pfad} trägt kein CR`);
+      assert.equal(text, echt.dateien.get(pfad)?.text);
+    }
+  }, 60_000);
+
   test("#1931: die Settings-Vorlage trägt die Kontext-Schalter und gibt jeden Server der .mcp.json frei, die Ergänzung der Config erreicht permissions", () => {
     const text = (p: string): string => echt.dateien.get(p)?.text ?? "";
     const settings = JSON.parse(text(".claude/settings.json")) as { enabledPlugins: Record<string, boolean>; enabledMcpjsonServers: string[]; permissions: { allow: string[]; ask: string[] } };
@@ -1181,6 +1198,11 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
       const liste = alle.filter((z) => !z.includes(`"muster":"${quelle}"`));
       assert.equal(liste.length, alle.length - 1, "genau ein Eintrag entfällt");
       befund({ ".factory/extraktion.json": liste.join("\n"), [quelle]: null }, /Quelle der Rolle ticketSkill fehlt/);
+    });
+
+    test("#1942: ein kaputter Projektwert-Marker in der Quelle des Ticket-Skills ist ein Befund des Exports, kein Absturz", () => {
+      const quelle = (ROLLEN_PFADE as Record<string, string>).ticketSkill;
+      befund({ [quelle]: `${basisText(quelle)}\n# factory:projektwert agenten.gibtsnicht-1942\nname: x\n` }, /SKILL\.md:\d+: Projektwert-Zeilen-Marker steht außerhalb des führenden Frontmatters/);
     });
 
     test("#1929: fehlt die Vorlage einer der neuen Daten-Dateien, bricht der Export ab", () => {

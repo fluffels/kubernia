@@ -52,6 +52,7 @@ const USAGE = "Aufruf: node scripts/factory-export.mjs --ziel <leerer Ordner> [-
 /** Dateien, die der Export aus einer Vorlage nicht braucht: er filtert sie aus dem Quellstand (Lint- und Any-Suppressionen) oder berechnet sie (Zeiger des Ticket-Skills aus der gerenderten Quelle). */
 const BERECHNET = ["eslint-suppressions.json", "any-suppressions.json", TICKET_SKILL_ZEIGER];
 /** Art `infrastruktur-anteil` ohne Vorlage (#1943): der Export rendert die Quelle selbst (Projektwert-Stellen aus der Factory-Config), eine Handkopie gibt es nicht. */
+// Genau eine Datei: kommt eine zweite so gerenderte Rollen-Datei dazu, wird daraus eine eigene Art in .factory/extraktion.json.
 const AUS_QUELLE = [ROLLEN_PFADE.ticketSkill];
 
 const json = (wert) => `${JSON.stringify(wert, null, 2)}\n`;
@@ -193,7 +194,7 @@ function schrittDateien(k) {
   return schrittTicketSkill(k);
 }
 
-/** Der Ticket-Skill (#1943): die Quelle der Rolle ticketSkill samt dem aus ihr berechneten Zeiger; `schrittProjektwerte` rendert beide mit den Projektwerten der Factory-Config. */
+/** Der Ticket-Skill (#1943, #1942): die Quelle der Rolle ticketSkill, mit den Projektwerten der Factory-Config gerendert (ein Fehler ist ein Befund), samt dem aus dem gerenderten Text berechneten Zeiger; `schrittProjektwerte` findet beide danach unverändert (idempotent). */
 function schrittTicketSkill(k) {
   const pfad = ROLLEN_PFADE.ticketSkill;
   const quelle = k.lies(pfad);
@@ -201,7 +202,13 @@ function schrittTicketSkill(k) {
     k.befunde.push(`${pfad}: Quelle der Rolle ticketSkill fehlt`);
     return true;
   }
-  const text = normalisiereEol(quelle);
+  let text = normalisiereEol(quelle);
+  try {
+    text = rendereProjektwerte(text, k.factoryConfig, pfad);
+  } catch (err) {
+    k.befunde.push(err.message);
+    return true;
+  }
   k.lege(pfad, text, "extraktion");
   k.lege(TICKET_SKILL_ZEIGER, zeigerText(TICKET_SKILL_NAME, text), "berechnet");
   return true;
