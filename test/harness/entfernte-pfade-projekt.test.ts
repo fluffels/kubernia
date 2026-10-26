@@ -51,7 +51,7 @@ describe("Textreste mit Projektnamen (#1906)", () => {
     [NAME_WORKFLOW, `Der Skill \`${R}-workflow\` startet den Lauf.`],
     [NAME_TICKET, `Workflow({ name: "${R}-ticket" })`],
     [NAME_VERZEICHNIS, `Datei .claude/skills/${C.agenten.ticketSkill}/SKILL.md`],
-    ["Vorlage des Ticket-Skills", "Datei .factory/produkt/vorlagen/.agents/skills/factory-ticket/SKILL.md.vorlage"],
+    ["Vorlage des Ticket-Skills", `Datei .factory/produkt/vorlagen/.agents/skills/factory-ticket/${"SKILL.md"}.vorlage`], // zerlegt, sonst träfe der Scan diese Zeile
   ])("Negativfall: ein eingeschleuster Rest wird gefunden (%s)", (name, text) => {
     assert.deepEqual(reste("docs/beispiel.md", `vorher\n${text}\nnachher`), [`docs/beispiel.md:2: ${name}`]);
   });
