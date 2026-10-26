@@ -144,10 +144,22 @@
     },
     "credentials": {
       "envVars": [
-        { "name": "GITHUB_TOKEN", "mode": "deny" },
-        { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
-        { "name": "CLAUDE_CODE_OAUTH_TOKEN", "mode": "deny" },
-        { "name": "PIXELLAB_TOKEN", "mode": "deny" }
+        {
+          "name": "GITHUB_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "CLAUDE_CODE_OAUTH_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "PIXELLAB_TOKEN",
+          "mode": "deny"
+        }
       ]
     }
   },
