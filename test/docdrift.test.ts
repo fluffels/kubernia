@@ -175,6 +175,18 @@ describe("Harness-Doku-Drift (#529)", () => {
     );
   });
 
+  test("linkStellen: Ziele in spitzen Klammern verlieren die Klammern, auch mit Leerzeichen, Anker und Titel", () => {
+    const md = '[a](<docs/a b.md#x>) [c](<k.md> "Titel") [d](<https://x.de/y>)';
+    const stellen = linkStellen(md);
+    assert.deepEqual(
+      stellen.map((s) => [md.slice(s.start, s.ende), s.target, s.path, s.anchor]),
+      [
+        ["[a](<docs/a b.md#x>)", "docs/a b.md#x", "docs/a b.md", "x"],
+        ['[c](<k.md> "Titel")', "k.md", "k.md", ""],
+      ],
+    );
+  });
+
   test("linkStellen: Code-Bereiche zählen nicht, Positionen bleiben im Original gültig (auch bei CRLF)", () => {
     const md = ["```", "[bsp](tot.md)", "```", "Code `[y](z.md)` und [echt](ziel.md)."].join("\r\n");
     const stellen = linkStellen(md);

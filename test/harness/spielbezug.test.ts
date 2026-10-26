@@ -15,10 +15,11 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { projektConfig } from "../support/fremd-config";
 import { ladeBesitzManifest } from "../support/besitz-anker";
+import { projektBlock as projektBlockVon } from "../support/projekt-block";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektLib from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START, einheitText as einheitTextRoh } from "../../scripts/besitz-lib.mjs";
+import { einheitText as einheitTextRoh } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { PRODUKT_QUOTE } from "../../scripts/produktquote-lib.mjs";
 
@@ -26,7 +27,7 @@ const ROLLEN_PFADE = (projektLib as unknown as { ROLLEN_PFADE: Record<string, st
 const einheitText = einheitTextRoh as (e: unknown, text: string) => string | null;
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const agents = readFileSync(WURZEL + "AGENTS.md", "utf8").replace(/\r\n/g, "\n");
-const projektBlock = agents.slice(agents.indexOf(PROJEKT_BLOCK_START as string), agents.indexOf(PROJEKT_BLOCK_ENDE as string));
+const projektBlock = projektBlockVon(agents) ?? "";
 
 describe("Projektliterale der Config (#1843, #1903)", () => {
   // Pflicht-Begriffe: Dev-Helfer, Anti-Corruption-Begriff, Engine-Name und Referenzspiel; je ein Projektwort, das der Begriff treffen muss.

@@ -277,8 +277,8 @@ export function linkStellen(md) {
   const clean = codeMaskiert(md);
   const out = [];
   // [text](target) oder ![alt](target), Ziel bis Leerzeichen/Klammer, optionaler "Titel"
-  for (const m of clean.matchAll(/(!?)\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)) {
-    const target = m[3];
+  for (const m of clean.matchAll(/(!?)\[([^\]]*)\]\(\s*(?:<([^>\n]*)>|([^)\s]+))(?:\s+"[^"]*")?\s*\)/g)) {
+    const target = m[3] ?? m[4]; // `<ziel mit Leerzeichen>` (CommonMark) ohne Klammern
     if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)) continue; // http:, mailto:, //cdn …
     const hashAt = target.indexOf("#");
     const path = hashAt < 0 ? target : target.slice(0, hashAt);
