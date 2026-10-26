@@ -13,6 +13,6 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Extraktio
 | `check:docmap` | nur Skript, nicht in `verify` | fail-closed bei 0 Modulen |
 | `check:diffcoverage` | in `verify:full`, misst `.mjs` unter `scripts/` | Floors der Schichten Kern-Skripte (90) und Generatoren (80) |
 | `test:coverage` | in `verify:full` | Aggregat-Floors Zeilen 90 und Zweige 88 |
-| Code-Scanning (CodeQL, Scorecard) | entfällt im Anfangsstand | Pre-Flight in #1881 |
+| Code-Scanning (CodeQL, Scorecard) | entfällt im Anfangsstand (abgelöst durch [#1881](0022-1881-factory-repo.md)) | Pre-Flight in #1881 |
 
 - **Bekannte Grenzen:** die Aggregat-Floors sind ein Schnappschuss der Messung der Probe von #1925 (eine Neumessung im Export ohne Git-Verlauf ist unzuverlässig: dort scheitern die Tests, die Git brauchen, und drücken die Werte); wächst der Kern, werden sie bewusst per reviewtem Commit angehoben, nie gesenkt. Der Abgleich der Inventar-Vorlage kennt die Rollen nur über die Abbildung `ROLLEN_IN_VORLAGE` im Test.
