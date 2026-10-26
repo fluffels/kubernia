@@ -25,6 +25,7 @@ const NAME_VERZEICHNIS = "altes Ticket-Skill-Verzeichnis";
 const RESTE_PROJEKT: Rest[] = [
   { name: NAME_WORKFLOW, muster: new RegExp(`${esc(R)}-workflow`), fix: "den Ist-Zustand beschreiben: der Ticket-Skill ist der einzige Ablauf, oder den Satz löschen" },
   { name: NAME_TICKET, muster: new RegExp(`${esc(R)}-ticket`), fix: "den Ist-Zustand beschreiben: es gibt kein Workflow-Skript für den Ticket-Ablauf, oder den Satz löschen" },
+  { name: "Vorlage des Ticket-Skills", muster: /factory-ticket\/SKILL\.md\.vorlage/, fix: "die Quelle .agents/skills/factory-ticket/SKILL.md nennen: der Export rendert sie, eine Vorlage gibt es nicht" },
   { name: NAME_VERZEICHNIS, muster: new RegExp(`skills/${esc(C.agenten.ticketSkill)}/`), fix: "das Verzeichnis .agents/skills/factory-ticket/ nennen" },
 ];
 

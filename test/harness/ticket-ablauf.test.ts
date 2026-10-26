@@ -4,7 +4,7 @@
  *
  * Regeln:
  *   1. Beide Ticket-Skills (Produkt-Skill nach `agenten.ticketSkill` und `factory`) verweisen auf `.agents/skills/factory/ablauf.md`.
- *   2. Der Produkt-Skill fährt den Bereich `spiel`, `factory` den Bereich `agentic`; nie umgekehrt.
+ *   2. Der Produkt-Skill fährt den Bereich `produkt`, `factory` den Bereich `agentic`; nie umgekehrt.
  *   3. Kein Ablauf-Werkzeug (Agent-Spawn, Skripte des Ablaufs) steht in einer Ticket-Skill-Datei.
  *   4. Kein Satz von 60 oder mehr Zeichen aus dem Ablauf steht wortgleich in einer anderen Skill-Datei.
  *   5. Die Auslöser der beiden `description:` überschneiden sich nicht.
@@ -310,7 +310,7 @@ describe("Ticket-Ablauf: das echte Repo", () => {
   });
   test("keine Aussage mehr, der Ticket-Skill wähle den Bereich agentic", () => {
     const dateien = ["AGENTS.md", "docs/ticket-reihenfolge.md", "docs/harness-glossar.md", ...skillMarkdowns()];
-    for (const rel of dateien) assert.ok(!new RegExp(`/${ECHT.agenten.ticketSkill} (agentic|spiel)`).test(lies(rel)), rel);
+    for (const rel of dateien) assert.ok(!new RegExp(`/${ECHT.agenten.ticketSkill} (agentic|spiel|produkt)`).test(lies(rel)), rel);
   });
   test("festgefahren hält den Lauf über mehrere Tickets nicht an (#1363)", () => {
     const m = /\*\*Mehrere Tickets:\*\*[^\n]*/.exec(lies(TICKET_ABLAUF));

@@ -7,6 +7,7 @@
  *   node scripts/naechstes-ticket.mjs --bereich agentic|produkt --json   # { bereich, ticket, uebersprungen, verzug, hinweise?, reparieren? } (`verzug`: Nummern des Board-Verzugs, leere Liste ohne Verzug)
  *   node scripts/naechstes-ticket.mjs --ticket <nr>   # Einzelprüfung einer vorgegebenen Nummer (#1621): alle Kriterien außer Status und Bereich; Exit 1 = nicht frei, Grund in der Ausgabe
  *
+ * `--bereich` nimmt die Kern-Namen `agentic` und `produkt`; ein Alias aus `bereiche.aliase` der Projekt-Config gilt als sein Kern-Name (#1943), ohne Alias ist ein anderer Name unbekannt (Exit 2).
  * Ohne `--bereich` und ohne `--ticket` ist der Aufruf ein Fehler (Exit 2): es gibt keinen Auswahlmodus über beide Seiten. Zwei Boards (ADR 0022 F11, #1729):
  * zuerst die Kopf-Items (Rang nach `kopfRang`; mit Bereich die der eigenen Seite plus die Notfälle beider), dann das oberste freie Item der eigenen Seite,
  * ohne Ausweichen auf die andere. Die Spielquote bleibt eine Kennzahl (`spielquote-lib.mjs`), sie steuert die Auswahl nicht.

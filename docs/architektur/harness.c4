@@ -186,7 +186,7 @@ views {
   dynamic view ticket-lauf {
     title 'Ein Ticket läuft durch'
     maintainerin -> harness.hauptchat 'Nächstes Ticket'
-    harness.hauptchat -> harness.skills.kuberniaSkill 'Skill kubernia (Bereich spiel)'
+    harness.hauptchat -> harness.skills.kuberniaSkill 'Skill kubernia (Bereich produkt)'
     harness.skills.kuberniaSkill -> github.board 'oberstes freies Item'
     harness.skills.kuberniaSkill -> harness.skills.factorySkill 'Ablauf (ablauf.md); /factory wählt auf dem Factory-Board'
     harness.skills.factorySkill -> github.issues 'Claim: Ticket-Lock und Assignee'
