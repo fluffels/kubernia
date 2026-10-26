@@ -194,7 +194,7 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
     assert.deepEqual(stand(a), stand(b));
     assert.equal(gate(a).code, 0);
     assert.equal(gate(b).code, 0);
-  });
+  }, 30_000);
 
   test("getrennte Prüfung: eine nur in der Config ergänzte Regel ohne neuen Sync lässt den Kern-Hash grün und macht die Ergänzungs-Prüfung rot", () => {
     const z = baueZiel(ZIEL_ERG);

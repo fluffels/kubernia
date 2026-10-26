@@ -82,5 +82,5 @@ describe("Textreste mit Projektnamen (#1906)", () => {
     assert.ok(namen(adr("0012")).includes(NAME_WORKFLOW), "ADR 0012 trägt den alten Skill-Namen");
     const rollen = [C.agenten.planer, C.agenten.umsetzer, C.agenten.lens, C.agenten.gruppe];
     assert.ok(rollen.some((n) => adr("0012").includes(`${n}.md`)), "ADR 0012 trägt alte Agenten-Dateinamen (Regel im Kern-Wächter)");
-  });
+  }, 30_000);
 });

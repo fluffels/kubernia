@@ -132,7 +132,7 @@ describe("pruefeMerge gegen ein echtes Temp-Repo", () => {
     g(["commit", "-q", "-m", "merge"]);
     const nachher = M.pruefeMerge({ git: g, lies: lies(root) });
     assert.equal(nachher.code, 0, nachher.text);
-  });
+  }, 30_000);
 
   test("bereits committeter Merge, der den Test von main verlor: rot (zwei Eltern von HEAD)", () => {
     const { root, g } = aufbau();

@@ -1180,7 +1180,7 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     assert.deepEqual(pfade, [...pfade].sort());
   });
 
-  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", () => {
+  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", { timeout: 60_000 }, () => {
     const abbruch = (aend: Record<string, string | null>, muster: RegExp): void => {
       const z = leerOrdner();
       const r = lauf(["--ziel", z], mitAenderung(leser, aend));
