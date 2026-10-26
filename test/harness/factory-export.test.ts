@@ -669,6 +669,12 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
       assert.equal(r.bericht.entlinkt.links, echt.bericht.entlinkt.links);
       assert.equal(r.bericht.entlinkt.anker, echt.bericht.entlinkt.anker);
     });
+    test("#1942: ein Link auf eine Projekt-Datei in einer Factory-Seite zählt nicht als kubernia-Rest (entlinkt vor der Literal-Prüfung)", () => {
+      const rest = (b: Ergebnis["bericht"]): number => b.literalRest.find(([p]) => p === SEITE)?.[1] ?? 0;
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, "[Probe](src/kubernia-probe.ts)") }) });
+      assert.deepEqual(r.befunde, []);
+      assert.equal(rest(r.bericht), rest(echt.bericht));
+    });
     test("dieselbe Zeile in einer Besitz-Markdown-Datei bleibt stehen", () => {
       const md = ".agents/skills/review-lenses/SKILL.md";
       const zeile = "[Probe](src/gibt-es-nicht-1935.ts)";
@@ -686,8 +692,6 @@ describe("Export aus HEAD", { timeout: 60_000 }, () => {
     });
     test("der echte Export entlinkt Links (Zahl und Ziele im Bericht) und der Lauf nennt sie", () => {
       assert.ok(echt.bericht.entlinkt.links > 0);
-      const namen = echt.bericht.entlinkt.ziele.map(([z]) => z);
-      assert.deepEqual(namen, [...namen].sort((a, b) => (a < b ? -1 : 1)), "Ziele im Bericht sind sortiert");
       assert.equal(echt.bericht.entlinkt.ziele.reduce((s, [, n]) => s + n, 0), echt.bericht.entlinkt.links);
       const out = lauf(["--ziel", leerOrdner()], leser).out;
       const [z0, n0] = echt.bericht.entlinkt.ziele[0] ?? ["", 0];

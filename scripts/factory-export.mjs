@@ -15,12 +15,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { collectHeadingSlugs } from "./docs-gen/markdown.mjs";
 import { istGanzeDatei, normalisiereEol, projektwertDateien, pruefeManifest, rendereProjektwerte } from "./besitz-lib.mjs";
 import { artVon, EXTRAKTION_PFAD, MITZIEHEND, musterRegex, pruefeExtraktion } from "./besitz-extraktion.mjs";
 import { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import {
-  entlinke,
+  entlinkeSeiten,
   KANDIDATEN,
   kuberniaBegriffe,
   lockAuszug,
@@ -306,34 +305,6 @@ function schreibePraefixeUm(k, seiten) {
 }
 
 /**
- * Entlinken (#1935): in den Factory-Seiten werden Links auf Ziele außerhalb des Exports (Spielinhalte, Projekt-Skripte) zu Text, tote Anker gestrichen;
- * Besitz, Vorlagen und berechnete Dateien bleiben byte-gleich. Rückgabe `{ links, anker, ziele }` (`ziele`: sortierte Paare Ziel und Anzahl).
- */
-function entlinkeSeiten(k, seiten) {
-  const { dateien, exportPfade } = k;
-  const dateiPfade = [...exportPfade];
-  const gibt = (ziel) => ziel === "" || exportPfade.has(ziel) || dateiPfade.some((p) => p.startsWith(`${ziel}/`));
-  const ueberschriftenCache = new Map();
-  const ueberschriften = (ziel) => {
-    if (!ueberschriftenCache.has(ziel)) {
-      const d = dateien.get(ziel);
-      ueberschriftenCache.set(ziel, d !== undefined && ziel.endsWith(".md") ? new Set(collectHeadingSlugs(d.text)) : null);
-    }
-    return ueberschriftenCache.get(ziel);
-  };
-  const entlinkt = { links: 0, anker: 0, ziele: new Map() };
-  for (const pfad of [...seiten].sort()) {
-    const d = dateien.get(pfad);
-    const r = entlinke(d.text, pfad, { gibt, ueberschriften });
-    d.text = r.text;
-    entlinkt.links += r.links;
-    entlinkt.anker += r.anker;
-    for (const [z, n] of r.ziele) entlinkt.ziele.set(z, (entlinkt.ziele.get(z) ?? 0) + n);
-  }
-  return { ...entlinkt, ziele: [...entlinkt.ziele].sort(([a], [b]) => (a < b ? -1 : 1)) };
-}
-
-/**
  * Projekt-Blöcke (#1936): in den Factory-Seiten entfallen die Zeilen zwischen den `factory-projekt`-Markern (Spiel-Passagen); eine Besitz-Markdown-Datei darf
  * keine Markerzeile allein auf einer Zeile tragen (ihr Block bliebe sonst im Export stehen). Rückgabe `{ bloecke, seiten }`; Befunde stehen in `k.befunde`.
  */
@@ -445,7 +416,7 @@ export function baueExport({ leser }) {
   if (befunde.length > 0) return aus();
   const rollenUmgeschrieben = schreibeRollenInSeiten(k, seiten);
   const praefixUmgeschrieben = schreibePraefixeUm(k, seiten);
-  const entlinkt = entlinkeSeiten(k, seiten);
+  const entlinkt = entlinkeSeiten({ dateien: k.dateien, exportPfade: k.exportPfade, seiten });
   const generiert = generiereDoku(k);
   pruefeZusammenbau(k, seiten, { praefixUmgeschrieben, entlinkt, gestrichen, rollenUmgeschrieben, generiert });
   return befunde.length > 0 ? aus() : { dateien: k.dateien, befunde, bericht };
