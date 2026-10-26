@@ -40,7 +40,6 @@ export function offeneQuelleBehauptungen(text: string): Behauptung[] {
 /** Flächen, die den Harness selbst beschreiben (nicht: ADRs, Tests, Spielcode, Spiel-Glossar). */
 export function istSelbstbeschreibung(pfad: string): boolean {
   return [
-    /^\.factory\/produkt\//,
     /^README\.md$/,
     /^package\.json$/,
     /^docs\/(agent-harness|harness-)[^/]*\.md$/,
@@ -98,7 +97,6 @@ describe("offeneQuelleBehauptungen", () => {
 
 describe("istSelbstbeschreibung", () => {
   test.each([
-    ".factory/produkt/README.md",
     "README.md",
     "package.json",
     "docs/agent-harness.md",
@@ -129,7 +127,6 @@ describe("istSelbstbeschreibung", () => {
     ".agents/skills/y/z/SKILL.md",
     ".claude/skills/y/other.md",
     "package.json.bak",
-    ".factory/produkt",
   ])("außerhalb: %s", (pfad) => {
     assert.equal(istSelbstbeschreibung(pfad), false);
   });
@@ -137,11 +134,6 @@ describe("istSelbstbeschreibung", () => {
 
 describe("Selbstbeschreibung des Harness", () => {
   const scope = repoDateien().filter(istSelbstbeschreibung);
-
-  test("der Scope enthält die Entwürfe unter .factory/produkt/", () => {
-    assert.ok(scope.includes(".factory/produkt/README.md"), "README-Entwurf fehlt im Scope (nicht versioniert?)");
-    assert.ok(scope.includes(".factory/produkt/LICENSE"), "LICENSE-Entwurf fehlt im Scope (nicht versioniert?)");
-  });
 
   test("der Scope enthält die Skill-Quelle forum unter .agents/skills/ (#1848)", () => {
     assert.ok(scope.includes(".agents/skills/forum/SKILL.md"), "Skill-Quelle fehlt im Scope (nicht versioniert?)");

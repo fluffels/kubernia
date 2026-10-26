@@ -4,7 +4,7 @@
  *
  * Auf Windows führt der Agent Befehle auch über das PowerShell-Tool aus; eine `Bash(…)`-Regel greift dort nicht. Darum hat jede
  * `Bash(<befehl>:*)`-Regel in `deny` und in `ask` eine `PowerShell(<befehl> *)`-Schwester in derselben Liste, außer sie steht mit Begründung in `OHNE_ZWILLING`.
- * Ehrliche Grenze: Prefix-Match, kein Zaun gegen andere Schreibweisen (siehe settings-permissions.test.ts).
+ * Ehrliche Grenze: Prefix-Match, kein Zaun gegen andere Schreibweisen (siehe settings-permissions.test.ts im Factory-Repo).
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";

@@ -1,5 +1,5 @@
 /* Test-Hilfe für Aufruf-Fehler-Tests der Skripte (#1934): Typ `Zeile`, Runner und Prozessumgebung. Kern und Projekt
- * nutzen denselben Runner (`test/flag-aufrufe.test.ts`, `test/skript-aufrufe-projekt.test.ts`); die Tabellen mit den
+ * nutzen denselben Runner (der Kern-Test `flag-aufrufe.test.ts` im Factory-Repo, `test/skript-aufrufe-projekt.test.ts`); die Tabellen mit den
  * Skriptnamen liegen in den Tests, hier steht kein Projektwissen. PATH enthält nur den Ordner von node: ohne gh, git und Netz. */
 import { expect } from "vitest";
 import { spawnSync } from "node:child_process";

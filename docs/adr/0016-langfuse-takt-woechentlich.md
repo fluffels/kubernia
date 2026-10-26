@@ -44,7 +44,7 @@ Weitere Festlegungen:
 - Scheitert die Board-Mutation, endet der Lauf mit Exit 1; die Wiederholung ist idempotent. Fehlt `PROJECT_TOKEN`, warnt er nur.
 - Die Regel „Nachfolger auf Position 20“ entfällt. Agenten legen das Status-Ticket nicht mehr selbst an.
 - Das Sammelticket „Langfuse-Befunde (gesammelt)“ ersetzt die Einweg-Folgetickets (Mechanik in `docs/ticket-reihenfolge.md`). Der Abschluss eines Status-Laufs schiebt es nach oben.
-- Wächter: [`test/harness/langfuse-erfassung.test.ts`](../../test/harness/langfuse-erfassung.test.ts) (Workflow-Bedingungen, Doku) und [`test/langfuse-takt.test.ts`](../../test/langfuse-takt.test.ts) (Entscheidungslogik).
+- Wächter: [`test/harness/langfuse-erfassung.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.1.0/test/harness/langfuse-erfassung.test.ts) (Workflow-Bedingungen, Doku) und [`test/langfuse-takt.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.1.0/test/langfuse-takt.test.ts) (Entscheidungslogik).
 
 ## Konsequenzen
 

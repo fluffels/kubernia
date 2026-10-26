@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 
-// Begründete Ausnahme wie in test/harness/agents-refs.test.ts: das .mjs hat kein Declaration-File.
+// Begründete Ausnahme wie bei den anderen .mjs-Importen in Tests: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const listTrackedFiles: (rootDir?: string) => string[] = checkBasis.listTrackedFiles;
 

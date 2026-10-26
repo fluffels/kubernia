@@ -1,5 +1,5 @@
-/* Scan-Kern der Wächter gegen Textreste entfernter Pfade (#1067, ADR 0028; #1906): die Regelmenge geben `entfernte-pfade.test.ts` (Kern)
- * und `entfernte-pfade-projekt.test.ts` (Projekthistorie) mit; hier stehen Scan, Schnappschuss-Blöcke und Meldung. */
+/* Scan-Kern der Wächter gegen Textreste entfernter Pfade (#1067, ADR 0028; #1906): die Regelmenge gibt `entfernte-pfade-projekt.test.ts` (Projekthistorie)
+ * mit (der Kern-Test dazu läuft im Factory-Repo); hier stehen Scan, Schnappschuss-Blöcke und Meldung. */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -21,8 +21,6 @@ export interface Ausnahme {
 /** Pfad-Präfixe, die die Namen bewusst tragen. Je Eintrag der Grund. */
 export const AUSNAHMEN: Ausnahme[] = [
   { praefix: "docs/adr/", grund: "ADRs sind historisch und werden nie umgeschrieben (AGENTS.md § Projekt-Brain pflegen)" },
-  { praefix: "test/harness/model-routing.test.ts", grund: "Absenz-Test: prüft, dass die entfernten Dateien nicht mehr existieren (ADR 0028)" },
-  { praefix: "test/harness/entfernte-pfade.test.ts", grund: "dieser Wächter trägt die Muster selbst" },
   { praefix: "docs/lens-gegenprobe-", grund: "datierte Schnappschüsse nennen die damaligen Dateinamen (Schnappschuss, nicht aktualisiert)" },
 ];
 

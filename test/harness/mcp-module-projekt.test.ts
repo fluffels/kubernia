@@ -2,7 +2,7 @@
  *
  * @harness-waechter – Projekt-Test (bleibt im Projekt, zieht nicht ins Factory-Repo): er prüft die echten Werte der Projekt-Config
  * (Block `berechtigungen` und `sandbox`) gegen `.claude/settings.json` und die Sandbox-Tabelle in `docs/agent-harness.md`. Die projektneutralen
- * Regeln stehen in `berechtigungen-kern.test.ts`, `settings-permissions.test.ts` und `sandbox-settings.test.ts`.
+ * Regeln stehen im Factory-Repo (`berechtigungen-kern.test.ts`, `settings-permissions.test.ts` und `sandbox-settings.test.ts`).
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
