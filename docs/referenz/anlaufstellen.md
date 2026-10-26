@@ -58,7 +58,6 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [README.md](../../README.md) | wenn du wissen willst, was das Spiel ist: Story, Steuerung, Lernpfad |
 | [arc42-architektur.md](../arc42-architektur.md) | für die Gesamtarchitektur (arc42 + C4/Mermaid-Diagramme §5) |
 | [arc42 › Hexagonale Sicht](../arc42-architektur.md#hexagonale-sicht-ports--adapters) | wenn du einen neuen Adapter oder eine neue Ein- oder Ausgabe baust (Speicher, Eingabeart, Export, Content-Quelle): welcher Port, welche Schicht, welche Tabellenzeile |
-| [architektur/spiel.c4](../architektur/spiel.c4) | für das LikeC4-Architekturmodell (Kontext, Container, Schichten, Hauptmodule, Hexagon; ansehen mit `npm run c4:serve`, Wächter `check:c4`) |
 | [architektur/harness.c4](../architektur/harness.c4) | für die Harness-Sichten desselben Modells (Übersicht, Bausteine, Gates und Leitplanken, Gate-Ketten `verify` und `verify:full`, CI und Board, der Ticket-Lauf als dynamische View; Elemente gegen `.claude/`, Hooks, Gates, CI und `.mcp.json` abgeglichen) |
 | [glossar.md](../glossar.md) | wenn dir ein Spielbegriff fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md); Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
@@ -72,6 +71,14 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [performance-budget.md](../performance-budget.md) | bevor die Welt wächst: FPS- und Sprite-Budget, Culling, Messen |
 | [stardew-referenz.md](../stardew-referenz.md) | vor jedem Optik-Ticket — so sieht das Vorbild wirklich aus |
 | [art-direction.md](../art-direction.md) | lebende Abweichungsliste der Optik gegen die Messlatte — vor Optik-Tickets |
+
+<!-- factory-projekt:start -->
+
+| Seite | Wann lesen |
+|---|---|
+| [architektur/spiel.c4](../architektur/spiel.c4) | für das LikeC4-Architekturmodell (Kontext, Container, Schichten, Hauptmodule, Hexagon; ansehen mit `npm run c4:serve`, Wächter `check:c4`) |
+
+<!-- factory-projekt:ende -->
 
 ### Arbeitsablauf und Nachschlagen
 
@@ -113,7 +120,14 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [assets/maps/README.md](../../assets/maps/README.md) | beim Arbeiten an Tiled-Maps (`.tmj`) |
 | [`fonts.css`](../../fonts.css) · [`assets/fonts/`](../../assets/fonts/) | bei der HUD-Pixelschrift `KQPixel`/Silkscreen (Quelle + Lizenz, #189) |
 | [`test/`](../../test/) | wenn du Tests schreibst: Querschnitts-Umgebung in [`test/support/`](../../test/support/), Factories in [`test/factories/`](../../test/factories/) (`freshSim`); Harness-Wächter (Kopf-Marker `@harness-waechter`, geschützt) in [`test/harness/`](../../test/harness/); Kategorien und Fitness-Functions erklärt [agent-harness.md](../agent-harness.md) |
+
+<!-- factory-projekt:start -->
+
+| Seite | Wann lesen |
+|---|---|
 | [`e2e/`](../../e2e/) | bei Boot-, Interaktions-, FPS-, a11y- und Lern-Loop-Smokes (Playwright, `npm run smoke`); Details in [agent-harness.md › Test-Harness und e2e-Smokes](../agent-harness.md#test-harness-und-e2e-smokes), den Datei-Köpfen und [`playwright.config.ts`](../../playwright.config.ts) |
+
+<!-- factory-projekt:ende -->
 
 ## 📸 Schnappschüsse — datiert, werden nicht aktualisiert
 

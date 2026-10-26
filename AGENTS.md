@@ -92,7 +92,7 @@ Alle schnellen Gates laufen gebündelt in **`npm run verify`**; `npm run verify:
 - **Schichtung, Zyklen, verwaiste Module** erzwingt **`npm run check:arch`** (dependency-cruiser): Domäne und Anwendung importieren nur die Domäne (kein `phaser`, keine `scenes`/`ui`/`sfx`, kein Einstieg), keine Import-Zyklen (geteilten Zustand nach `runtime.ts`/`sim/state.ts` ziehen), kein toter Code.
 - **Größen:** `npm run check:size` (`src`-Module ≤ 800 LOC), `npm run check:contextsize` (Zeichen-Budget je AGENTS.md).
 - **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base); bewusst breit nur mit `KQ-Diffsize-Override: #<nr> warum`.
-- **Abdeckung und Bundle:** `npm run test:coverage` und `npm run check:diffcoverage` (pro Schicht), `npm run check:bundle` (Byte-Budget, in `verify:full`).
+- **Abdeckung und Bundle:** `npm run test:coverage` und `npm run check:diffcoverage` (pro Schicht), `npm run check:bundle` (Byte-Budget, in `verify:full`). Fügt der Diff ausgelieferten Code oder Assets hinzu (`src/**` ohne reine Tests, auch Content-JSON unter `src/content/data/`, `assets/**`, Dependencies), vor dem PR einmal `npm run verify:bundle` (das Budget steckt nicht in `verify`).
 - **Abhängigkeiten:** Dependabot-PRs nach der Policy in [CONTRIBUTING.md](CONTRIBUTING.md#pull-requests--abhängigkeits-updates-policy) behandeln; nach Hand-Änderung an `package.json` `npm install` und den Lockfile mitcommitten (`npm run check:lockfile`; Ausnahme: Dependabot oder `KQ-Lockfile-Override: #<nr> warum`, Rest: [agent-harness](docs/agent-harness.md)).
 
 ### Tests, Verifikation, Sprache, Doku

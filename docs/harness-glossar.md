@@ -43,7 +43,6 @@
 | Sandbox | Eine Laufumgebung, die den Sandbox-Vertrag erfüllt. Varianten: WSL2 mit der Claude-Code-Sandbox (Kubernias Weg), Docker Sandboxes (`sbx`), eigene Container-Sandbox, Cloud-Sitzung. Die Claude-Code-Sandbox gibt es unter nativem Windows nicht. Welche Variante Standard- und Rückfallweg ist, steht im ADR 0025. | [Agenten-Sandbox](agent-harness.md#agenten-sandbox-wsl2), [ADR 0021](adr/0021-agenten-sandbox-wsl2.md), [Sandbox anbinden](sandbox-anbinden.md) |
 | Sandbox-Vertrag | Die Zeilen V0 bis V7, die eine Laufumgebung erfüllen muss (Workspace, Egress-Allowlist, keine Klartext-Zugangsdaten, Werkzeuge, Langfuse, Merkmal `AGENT_SANDBOX`, Ladeorte). Verletzt sie eine Zeile, ist sie „nicht gesandboxt“. | [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) |
 | Cloud-Sitzung | Eine Claude-Code-Sitzung im Web: eine vom Anbieter verwaltete VM je Sitzung, das Repo kommt über GitHub als frischer Klon. Eine Variante des Sandbox-Vertrags. | [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md), [Sandbox anbinden](sandbox-anbinden.md) |
-| SBOM | Stückliste der npm-Abhängigkeiten im Format CycloneDX, je CI-Build als Artefakt (`npm run sbom`). Die SBOM des Release-Images ist SPDX. | [Befehle](referenz/befehle.md) |
 | MCP-Ausfall | Ein MCP-Server startet nicht, fällt mitten in der Session weg oder läuft nur über den Ersatzweg `npx`. Das ist ein Harness-Befund und wird als Zeile im Sammelticket festgehalten. | [Ausfälle melden](agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd) |
 | Leitplanke | Eine Grenze für Agenten, entweder als Bitte (Text, den ein Agent ignorieren könnte) oder als Mauer (Prüfung, die technisch erzwingt). Eine Pfadliste kennzeichnet Dateien, deren Änderung ein Audit-Kommentar begleitet. | [Bitte und Mauer](agent-harness.md#leitplanken-schichten-bitte-und-mauer), [.github/protected-paths.json](../.github/protected-paths.json), [ADR 0014](adr/0014-leitplanken-ohne-label-riegel.md) |
 | Schutzliste | Name der Pfadliste `.github/protected-paths.json` (die Leitplanken-Pfade) samt ihrem Spiegel `.github/CODEOWNERS`. Im Factory-Export sind beide Vorlagen; `pruefeSchutzliste` prüft sie gegen die Quelle, Muster ohne Treffer sind nur die geschlossene Liste `SCHUTZ_OHNE_TREFFER` erlaubt. | [Fortschreibung #1929](adr/fortschreibungen/0022-1929-daten-dateien.md), [.github/protected-paths.json](../.github/protected-paths.json) |
@@ -80,6 +79,14 @@
 | Handleser | Ein Skript, das seine Flags per Hand liest (`argv[++i]`, `argv[i + 1]`, `argv.includes("--…")`, `indexOf`) statt über `flagsLesen`; als Flag-Leser verboten, bekannte Muster prüft `test/harness/flag-parser.test.ts`, andere Formen erkennt der Wächter nicht. | [Skript-Konvention](agent-harness.md#gates-guards-und-durchsetzung) |
 | Schnappschuss-Block | Datierter Text einer lebenden Seite (Messung, Entscheidung von damals), der die damaligen Dateinamen bewusst trägt; steht zwischen `<!-- schnappschuss:start -->` und `<!-- schnappschuss:ende -->`, je allein auf der Zeile. Der Wächter `test/harness/entfernte-pfade.test.ts` überspringt den Block; ein Block ohne ISO-Datum (`JJJJ-MM-TT` zwischen Start und Ende), ein Start ohne Ende, ein Ende ohne Start oder ein verschachtelter Start ist ein Fund. | [Wächter](../test/harness/entfernte-pfade.test.ts) |
 | Link-Hülle | Die Grenze des Kerns für Markdown-Links: ein Link `](ziel.md)` in einer verteilten Kern-Einheit darf nur auf einen verteilten Manifest-Pfad zeigen. Alle anderen (Quelle, Ziel)-Paare stehen in der sinkenden Baseline `test/harness/kern-links-baseline.json`; Backtick-Pfade, Schema-Links, Code und Nicht-Markdown-Ziele prüft der Wächter bewusst nicht. | [Wächter](../test/harness/kern-links.test.ts) |
+
+<!-- factory-projekt:start -->
+
+| Begriff | Bedeutung | Mehr dazu |
+|---|---|---|
+| SBOM | Stückliste der npm-Abhängigkeiten im Format CycloneDX, je CI-Build als Artefakt (`npm run sbom`). Die SBOM des Release-Images ist SPDX. | [Befehle](referenz/befehle.md) |
+
+<!-- factory-projekt:ende -->
 
 ## Ablauf
 
