@@ -189,7 +189,7 @@ describe("naechstes-ticket: Harness- und Forum-Label aus der Config", () => {
   test("imBereich ordnet agentic nach dem Fixture-Label zu", () => {
     const item = { title: "T", labels: ["bereich:fabrik"] };
     expect(N.imBereich(item, "agentic", FAB)).toBe(true);
-    expect(N.imBereich(item, "spiel", FAB)).toBe(false);
+    expect(N.imBereich(item, "produkt", FAB)).toBe(false);
     expect(N.imBereich({ title: "T", labels: [ECHT.harness] }, "agentic", FAB)).toBe(false);
   });
   test("imBereich und waehleNaechstes ohne Config oder ohne labels.harness werfen (kein stiller Standardwert)", () => {

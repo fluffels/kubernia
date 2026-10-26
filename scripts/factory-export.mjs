@@ -7,6 +7,7 @@
 // AGENTS.md und .claude/settings.json (Kern-Anteile plus Vorlage) und .factory/projekt.json (Überschreibung der obersten Schlüssel), berechnet die
 // Projektwert-Blöcke, `package-lock.json` (Auszug) und die Daten-Dateien der Kern-Wächter (Kern-Anteil per Filter).
 // In den Factory-Seiten (Art `factory-seite`) wird der Commit-Zeilen-Präfix der Quelle auf den der Factory-Config umgeschrieben (`schreibePraefixUm`, #1932). Danach entlinkt `entlinke` dort jeden Link auf ein Ziel außerhalb des Exports (der Text bleibt) und streicht tote Anker (#1935); der Bericht nennt Zahl und Ziele.
+// Der Ticket-Skill (Rolle ticketSkill) kommt ohne Vorlage: der Export rendert die Quelle mit den Projektwerten der Factory-Config und berechnet den Zeiger daraus (#1943).
 // Bekannte Muster der Prüfungen (Grenzen): siehe Kopf von `factory-export-lib.mjs`.
 import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
@@ -44,8 +45,10 @@ const SCHUTZ_QUELLE = ".github/protected-paths.json";
 const CODEOWNERS = ".github/CODEOWNERS";
 const USAGE = "Aufruf: node scripts/factory-export.mjs --ziel <leerer Ordner> [--commit <rev>] [--quelle <repo>]";
 
-/** Dateien, die der Export aus einer Vorlage nicht braucht: er filtert sie aus dem Quellstand (Lint- und Any-Suppressionen) oder berechnet sie (Zeiger des Ticket-Skills aus seiner Vorlage). */
+/** Dateien, die der Export aus einer Vorlage nicht braucht: er filtert sie aus dem Quellstand (Lint- und Any-Suppressionen) oder berechnet sie (Zeiger des Ticket-Skills aus der gerenderten Quelle). */
 const BERECHNET = ["eslint-suppressions.json", "any-suppressions.json", TICKET_SKILL_ZEIGER];
+/** Art `infrastruktur-anteil` ohne Vorlage (#1943): der Export rendert die Quelle selbst (Projektwert-Stellen aus der Factory-Config), eine Handkopie gibt es nicht. */
+const AUS_QUELLE = [ROLLEN_PFADE.ticketSkill];
 
 const json = (wert) => `${JSON.stringify(wert, null, 2)}\n`;
 const nurSchluessel = (text, erlaubt) => json(Object.fromEntries(Object.entries(JSON.parse(text)).filter(([k]) => erlaubt(k))));
@@ -111,7 +114,7 @@ function vorpruefung(leser, befunde) {
   }
   if (!quellConfigGueltig(kubConfig, befunde)) return null;
   const teile = teileJePfad(manifest.eintraege);
-  const anteil = leser.pfade.filter((p) => artVon(liste, p) === "infrastruktur-anteil" && !BERECHNET.includes(p));
+  const anteil = leser.pfade.filter((p) => artVon(liste, p) === "infrastruktur-anteil" && !BERECHNET.includes(p) && !AUS_QUELLE.includes(p));
   const vorlagenZiele = [...new Set([...teile.keys(), PROJEKT_CONFIG, ...anteil])];
   const gebraucht = new Set([
     MANIFEST,
@@ -183,9 +186,20 @@ function schrittDateien(k) {
     lege(art === "produkt-wurzel" ? posix.basename(p) : p, lies(p), "extraktion", leser.ausfuehrbar(p));
   }
   for (const p of anteil) lege(p, vorlagen.get(p), "vorlage");
-  const ticketQuelle = vorlagen.get(ROLLEN_PFADE.ticketSkill);
-  if (ticketQuelle === undefined) k.befunde.push(`${ROLLEN_PFADE.ticketSkill}: Vorlage der Rolle ticketSkill fehlt im Export`);
-  else lege(TICKET_SKILL_ZEIGER, zeigerText(TICKET_SKILL_NAME, ticketQuelle), "berechnet");
+  return schrittTicketSkill(k);
+}
+
+/** Der Ticket-Skill (#1943): die Quelle der Rolle ticketSkill samt dem aus ihr berechneten Zeiger; `schrittProjektwerte` rendert beide mit den Projektwerten der Factory-Config. */
+function schrittTicketSkill(k) {
+  const pfad = ROLLEN_PFADE.ticketSkill;
+  const quelle = k.lies(pfad);
+  if (quelle === null) {
+    k.befunde.push(`${pfad}: Quelle der Rolle ticketSkill fehlt`);
+    return true;
+  }
+  const text = normalisiereEol(quelle);
+  k.lege(pfad, text, "extraktion");
+  k.lege(TICKET_SKILL_ZEIGER, zeigerText(TICKET_SKILL_NAME, text), "berechnet");
   return true;
 }
 
