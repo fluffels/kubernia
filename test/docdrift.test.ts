@@ -327,7 +327,7 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
 
   test("istGelesenesMarkdown (#1942): dasselbe Prädikat wie der Walker, abgeleitet aus IGNORED_DIRS und VERSIONED_CLAUDE_DIRS", () => {
     for (const ja of ["README.md", "docs/a.md", ".claude/skills/x.md", ".claude/agents/a/b.md", ".claude/workflows/w.md", "src/x/node_module.md"]) assert.equal(istGelesenesMarkdown(ja), true, ja);
-    for (const nein of [".claude/commands/x.md", ".claude/x.md", ".claude/worktrees/kq-1/README.md", "node_modules/p/README.md", "docs/node_modules/p/README.md", "dist/a.md", "dist-offline/a.md", "playwright-report/a.md", ".git/a.md", "docs/a.txt"]) assert.equal(istGelesenesMarkdown(nein), false, nein);
+    for (const nein of [".claude/commands/x.md", ".claude/x.md", ".claude/worktrees/w-1/README.md", "node_modules/p/README.md", "docs/node_modules/p/README.md", "dist/a.md", "dist-offline/a.md", "playwright-report/a.md", ".git/a.md", "docs/a.txt"]) assert.equal(istGelesenesMarkdown(nein), false, nein);
   });
 
   test("istGelesenesMarkdown (#1942): jeder vom Walker gefundene Pfad ist gelesen", () => {

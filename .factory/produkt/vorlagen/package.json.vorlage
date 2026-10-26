@@ -24,6 +24,7 @@
     "check:diffsize": "node scripts/check-diffsize.mjs",
     "check:diffcoverage": "node scripts/check-diffcoverage.mjs",
     "check:anysuppress": "node scripts/check-any-suppressions.mjs",
+    "check:docmap": "node scripts/check-docmap.mjs",
     "check:lockfile": "node scripts/check-lockfile.mjs",
     "check:doctickets": "node scripts/check-doc-tickets.mjs",
     "lint": "eslint . --max-warnings 0",

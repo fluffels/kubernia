@@ -32,6 +32,10 @@ const ENTFAELLT: Record<string, string> = {
   "check:arch": "dependency-cruiser prüft die Schichtung von src/, das Factory-Repo hat kein src/",
   "check:c4": "prüft das C4-Modell des Spiels (LikeC4), das Factory-Repo hat keines",
 };
+// Gates, die als Skript im Factory-Repo bleiben (Dokumentation nennt sie), aber nicht in `verify` laufen (Name → Grund).
+const NUR_SKRIPT: Record<string, string> = {
+  "check:docmap": "Tiefendocs je .ts-Modul der Quellwurzel; das Factory-Repo hat unter scripts/ keine .ts-Module, das Gate prüfte nichts und ist dort rot (#1942)",
+};
 const ENTFAELLT_VERIFY_FULL: Record<string, string> = {
   build: "kein ausgeliefertes Bundle",
   "build:offline": "kein Offline-Build",
@@ -59,13 +63,13 @@ const ohne = (liste: string[], raus: Record<string, string>) => liste.filter((s)
 
 describe("Gate-Satz: package.json-Vorlage gegen die Kette von kubernia", () => {
   it("`verify` der Vorlage ist `verify` der Quelle ohne die entfallenden Gates, in gleicher Reihenfolge", () => {
-    expect(kettenSchritte(vorlage, KETTEN, "verify")).toEqual(ohne(kettenSchritte(quelle, KETTEN, "verify"), ENTFAELLT));
+    expect(kettenSchritte(vorlage, KETTEN, "verify")).toEqual(ohne(kettenSchritte(quelle, KETTEN, "verify"), { ...ENTFAELLT, ...NUR_SKRIPT }));
     expect(kettenSchritte(vorlage, KETTEN, "verify")[0], "die Kette beginnt mit dem Typecheck").toBe("typecheck");
   });
 
   it("`verify:full` der Vorlage ist `verify:full` der Quelle ohne Builds, Bundle-Budget und Smoke (die Schritte von `verify` stehen für sich)", () => {
     const schritte = (s: Record<string, string>) => kettenSchritte(s, KETTEN, "verify:full");
-    expect(schritte(vorlage)).toEqual(ohne(schritte(quelle), { ...ENTFAELLT, ...ENTFAELLT_VERIFY_FULL }));
+    expect(schritte(vorlage)).toEqual(ohne(schritte(quelle), { ...ENTFAELLT, ...NUR_SKRIPT, ...ENTFAELLT_VERIFY_FULL }));
     expect(schritte(vorlage), "die Coverage steht in verify:full").toContain("test:coverage");
   });
 
@@ -82,6 +86,15 @@ describe("Gate-Satz: package.json-Vorlage gegen die Kette von kubernia", () => {
         expect(name in quelle, `„${name}“ ist kein Skript der Quelle mehr (Eintrag streichen)`).toBe(true);
         expect(name in vorlage, `„${name}“ steht in der Vorlage, gehört nicht in die Liste der entfallenden`).toBe(false);
       }
+    }
+  });
+
+  it("NUR_SKRIPT ist nicht veraltet: jeder Name ist ein Quell-Gate in `verify`, in der Vorlage ein Skript ohne Platz in der Kette", () => {
+    for (const [name, grund] of Object.entries(NUR_SKRIPT)) {
+      expect(grund.length, `${name}: Grund fehlt`).toBeGreaterThan(0);
+      expect(kettenSchritte(quelle, KETTEN, "verify"), `„${name}“ steht nicht mehr in verify der Quelle (Eintrag streichen)`).toContain(name);
+      expect(name in vorlage, `„${name}“ fehlt als Skript der Vorlage (die Doku nennt es)`).toBe(true);
+      expect(kettenSchritte(vorlage, KETTEN, "verify:full"), `„${name}“ steht in der Kette der Vorlage, gehört nicht in NUR_SKRIPT`).not.toContain(name);
     }
   });
 });
