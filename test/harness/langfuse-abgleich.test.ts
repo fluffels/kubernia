@@ -857,7 +857,7 @@ describe("pruefen (Ablauf)", () => {
     };
     const r = await A.pruefen(args({ ist: ["z.json"], json: true }), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: (p: string) => dateien[p], fetchImpl });
     expect(r.exitCode).toBe(0);
-    expect(JSON.parse(r.text).sessions[0]).toMatchObject({ fehlend: 1, fehlendeCalls: null });
+    expect((JSON.parse(r.text) as { sessions: Bewertung[] }).sessions[0]).toMatchObject({ fehlend: 1, fehlendeCalls: null });
     expect(aufrufe).toBe(0);
   });
 

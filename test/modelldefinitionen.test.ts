@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 
-import { PRICES } from "../scripts/preise.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as preiseRaw from "../scripts/preise.mjs";
+
+const PRICES = (preiseRaw as unknown as { PRICES: Record<string, unknown> }).PRICES;
 
 /** Fitness: die Tabelle „Stand der Definitionen“ in docs/langfuse-hook-patch.md deckt jedes Modell und jede Preisperiode von `PRICES` ab (#1942). */
 
