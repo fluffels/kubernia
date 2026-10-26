@@ -10,6 +10,7 @@
  * sein Ablauf, die Ticket-Skill-Quelle), nicht die Kern-Agenten und nicht den Rest des Kerns (Befund im Sammelticket). Dieser Test importiert nichts aus einer anderen `*.test.ts`. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { projektConfig } from "../support/fremd-config";
@@ -67,6 +68,18 @@ describe("Projekt-Block der AGENTS.md (#1709, #1903)", () => {
       assert.ok(z.length >= 1, `Muster ${re} trifft zu selten`);
       assert.deepEqual(z.filter((n) => n !== quote), [], `Muster ${re}: ${z.join(", ")} statt ${quote}`);
     }
+  });
+});
+
+describe("Bereichs-Alias der Projekt-Config (#1943)", () => {
+  test("die Config führt den Alias spiel auf produkt", () => {
+    const bereichAliaseAus = (projektLib as unknown as { bereichAliaseAus: (c: unknown) => Record<string, string> }).bereichAliaseAus;
+    assert.deepEqual(bereichAliaseAus(JSON.parse(readFileSync(WURZEL + ".factory/projekt.json", "utf8"))), { spiel: "produkt" });
+  });
+  test("der Direktaufruf von naechstes-ticket löst den Alias der Repo-Config auf (--bereich spiel zusammen mit --ticket ist der Ausschluss-Fehler, nicht der Wertfehler)", () => {
+    const r = spawnSync(process.execPath, ["scripts/naechstes-ticket.mjs", "--bereich", "spiel", "--ticket", "1"], { cwd: WURZEL, encoding: "utf8" });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--ticket und --bereich schließen sich aus/);
   });
 });
 
