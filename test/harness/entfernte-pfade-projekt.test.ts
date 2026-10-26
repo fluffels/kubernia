@@ -90,7 +90,10 @@ describe("Textreste mit Projektnamen (#1906)", () => {
 // kubernia bezieht den Kern per Sync; Export-Werkzeug, Extraktionsliste, Produkt-Entwürfe und die Fremd-Config-Probe gibt es hier nicht mehr.
 // Die Musterquellen nutzen Zeichenklassen bzw. zerlegte Literale, damit diese Datei sich nicht selbst trifft. Besitz-Dateien sind ausgenommen
 // (sie pflegt upstream und der Drift-Wächter hält sie byte-gleich zum Tag).
-const BESITZ = (JSON.parse(readFileSync(".factory/besitz.json", "utf8")) as { eintraege: { pfad: string }[] }).eintraege.map((e) => e.pfad);
+// Nur ganze Dateien sind ausgenommen; Block- und Schlüssel-Einheiten (AGENTS.md#kern, .claude/settings.json#hooks) sind nur zum Teil Besitz, der Rest gehört dem Projekt.
+const BESITZ = (JSON.parse(readFileSync(".factory/besitz.json", "utf8")) as { eintraege: { pfad: string; block?: string; schluessel?: string }[] }).eintraege
+  .filter((e) => e.block === undefined && e.schluessel === undefined)
+  .map((e) => e.pfad);
 const AUSNAHMEN_K9 = [...AUSNAHMEN, ...BESITZ.map((pfad) => ({ praefix: pfad, grund: "Besitz: pflegt upstream (Drift-Wächter)" }))];
 const WEG_K9 = "den Ist-Zustand beschreiben: der Kern kommt per Sync vom Tag des Factory-Repos, das Werkzeug lebt dort";
 const RESTE_K9: Rest[] = [
@@ -165,6 +168,23 @@ describe("Jeder in Markdown genannte Testpfad existiert (#1882)", () => {
 
   test("Negativfall: ein genannter, nicht vorhandener Testpfad wird gefunden", () => {
     assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/x.md", inhalt: "a\nsiehe `test/harness/gibt-es-nicht.test.ts`." }], existiert), ["docs/x.md:2: test/harness/gibt-es-nicht.test.ts"]);
+  });
+
+  test("Negativfall: Endungen mjs und json, Diagramm-Dateien (mmd) und der Rest nach einem Schnappschuss-Block werden geprüft", () => {
+    assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/x.md", inhalt: "test/fehlt.mjs und test/fixtures/fehlt.json" }], existiert), ["docs/x.md:1: test/fehlt.mjs", "docs/x.md:1: test/fixtures/fehlt.json"]);
+    assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/diagramme/x.mmd", inhalt: "test/fehlt.test.ts" }], existiert), ["docs/diagramme/x.mmd:1: test/fehlt.test.ts"]);
+    const nachBlock = `${SCHNAPPSCHUSS_START}\ntest/im-block.test.ts\n${SCHNAPPSCHUSS_ENDE}\ntest/danach.test.ts`;
+    assert.deepEqual(fehlendeTestpfade([{ pfad: "docs/x.md", inhalt: nachBlock }], existiert), ["docs/x.md:4: test/danach.test.ts"]);
+  });
+
+  test("Leerlauf-Schutz: der Scan sieht echte Fundstellen (nicht-leere Dateiliste, Markdown im Scope)", () => {
+    const treffer = getrackteTextdateien().filter((d) => istScope(d.pfad) && new RegExp(TESTPFAD.source).test(d.inhalt));
+    assert.ok(treffer.length > 0, "der Scan sieht keine einzige Testpfad-Nennung: Dateiliste leer oder Pfadformat verändert");
+  });
+
+  test("Block-Einheiten sind nicht als ganze Datei ausgenommen: AGENTS.md liegt im Scope", () => {
+    assert.ok(istScope("AGENTS.md"), "AGENTS.md hat einen Projekt-Block und gehört in den Scan");
+    assert.ok(!BESITZ.includes("AGENTS.md") && !BESITZ.includes(".claude/settings.json"));
   });
 
   test("harmlose Nachbarn: vorhandener Pfad, URL, Platzhalter, ADR, Schnappschuss-Block, datierte Datei, Nicht-Markdown", () => {

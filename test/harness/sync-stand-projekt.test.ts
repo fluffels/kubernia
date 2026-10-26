@@ -14,13 +14,37 @@ type DriftErgebnis = { entfaellt: boolean; fehler: string[] };
 const pruefeDrift = pruefeDriftRoh as (lies: (pfad: string) => string | null) => DriftErgebnis;
 const SYNC_WEG = "npm run factory:sync -- --quelle <klon> --tag <name>";
 
+/** Befunde zu einem gelesenen Sync-Stand (null = Datei fehlt); leer heißt sauber. */
+function syncStandBefunde(json: unknown): string[] {
+  if (json === null) return ["kein Sync-Stand: der Kern kommt per Sync vom Tag"];
+  const quelle = (json as { quelle?: { tag?: unknown; commit?: unknown; sauber?: unknown } } | undefined)?.quelle;
+  const out: string[] = [];
+  if (typeof quelle?.tag !== "string" || quelle.tag === "") out.push("quelle.tag fehlt oder ist leer");
+  if (quelle?.sauber !== true) out.push("quelle.sauber ist nicht true (Entwurfs-Sync)");
+  if (!/^[0-9a-f]{40}$/.test(String(quelle?.commit))) out.push("quelle.commit ist kein 40-stelliger Hash");
+  return out;
+}
+
+const HASH = "e800f2747d24041a38fde208fb0fd3fbe90d90c2";
+const GUT = { quelle: { tag: "v0.1.0", commit: HASH, sauber: true } };
+
 describe("Sync-Stand von einem Tag", () => {
   test("`.factory/sync-stand.json` nennt Tag, Commit und `sauber: true`", () => {
     assert.ok(existsSync(".factory/sync-stand.json"), `kein Sync-Stand: der Kern kommt per Sync vom Tag (${SYNC_WEG})`);
-    const quelle = (JSON.parse(readFileSync(".factory/sync-stand.json", "utf8")) as { quelle?: { tag?: unknown; commit?: unknown; sauber?: unknown } }).quelle;
-    assert.ok(typeof quelle?.tag === "string" && quelle.tag !== "", `quelle.tag fehlt oder ist leer: ${SYNC_WEG}`);
-    assert.equal(quelle.sauber, true, `quelle.sauber ist nicht true (Entwurfs-Sync): ${SYNC_WEG}`);
-    assert.match(String(quelle.commit), /^[0-9a-f]{40}$/, `quelle.commit ist kein 40-stelliger Hash: ${SYNC_WEG}`);
+    assert.deepEqual(syncStandBefunde(JSON.parse(readFileSync(".factory/sync-stand.json", "utf8"))), [], SYNC_WEG);
+  });
+
+  test("Red-Green: ein guter Stand ist sauber, jeder kaputte Zustand wird einzeln gemeldet", () => {
+    assert.deepEqual(syncStandBefunde(GUT), []);
+    assert.match(syncStandBefunde(null).join(), /kein Sync-Stand/);
+    assert.match(syncStandBefunde({}).join(), /quelle.tag/);
+    assert.deepEqual(syncStandBefunde({ quelle: { ...GUT.quelle, tag: "" } }), ["quelle.tag fehlt oder ist leer"]);
+    assert.deepEqual(syncStandBefunde({ quelle: { ...GUT.quelle, tag: 1 } }), ["quelle.tag fehlt oder ist leer"]);
+    assert.deepEqual(syncStandBefunde({ quelle: { ...GUT.quelle, sauber: false } }), ["quelle.sauber ist nicht true (Entwurfs-Sync)"]);
+    assert.deepEqual(syncStandBefunde({ quelle: { tag: "v0.1.0", commit: HASH } }), ["quelle.sauber ist nicht true (Entwurfs-Sync)"]);
+    for (const commit of [HASH.slice(0, 7), HASH.toUpperCase(), HASH + "0", undefined]) {
+      assert.deepEqual(syncStandBefunde({ quelle: { ...GUT.quelle, commit } }), ["quelle.commit ist kein 40-stelliger Hash"], String(commit));
+    }
   });
 
   test("eine von Hand geänderte Kern-Datei macht das Drift-Gate rot und nennt den Weg", () => {
