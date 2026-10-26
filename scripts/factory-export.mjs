@@ -27,6 +27,7 @@ import {
   schreibeRollenUm,
   streicheProjektBloecke,
   pruefeLiterale,
+  pruefeKommandos,
   pruefeLokalePfade,
   pruefePaketImporte,
   pruefeRelativeImporte,
@@ -394,7 +395,7 @@ function pruefeZusammenbau(k, seiten, { praefixUmgeschrieben, entlinkt, gestrich
   const pak = pruefePaketImporte(texte, k.kubPkg, k.pkgVorlage);
   const pfade = pruefeLokalePfade(texte, [repoName(factoryConfig), repoName(kubConfig)]);
   const lit = pruefeLiterale(texte, kuberniaBegriffe(kubConfig, factoryConfig), (p) => (p === LOCK ? "frei" : p === PROJEKT_CONFIG || seiten.has(p) ? "zaehlen" : null));
-  k.befunde.push(...rel.befunde, ...pak.befunde, ...pruefeSkriptBezuege(texte).befunde, ...pfade.befunde, ...lit.befunde);
+  k.befunde.push(...rel.befunde, ...pak.befunde, ...pruefeKommandos(texte, new Set(Object.keys(k.pkgVorlage.scripts ?? {}))).befunde, ...pruefeSkriptBezuege(texte).befunde, ...pfade.befunde, ...lit.befunde);
   Object.assign(bericht, {
     anzahl: dateien.size,
     durchgelassen: pfade.durchgelassen,

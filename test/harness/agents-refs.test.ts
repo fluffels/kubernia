@@ -141,6 +141,18 @@ function kernDocsVon(agentsText: string, vorlageText: string): Record<Ziel, stri
   return { "AGENTS.md": `${einheitText({ pfad: "AGENTS.md", block: "kern" }, agentsText) ?? ""}\n${vorlageText}`, "CLAUDE.md": "" };
 }
 
+/**
+ * Text der „AGENTS-Vorlage des Zielprojekts“: die Vorlage selbst, wo sie liegt (dieses Repo); im Factory-Repo gibt es sie nicht, dort ist der Projekt-Block der
+ * eigenen AGENTS.md das, was die Vorlage hier verteilt (`null`: kein Vorlagen-Text). Ohne beides („kein Projekt-Block“) bleibt der Text leer: dann trifft kein
+ * Verweis auf einen Titel außerhalb des Kern-Blocks (streng). Pur.
+ */
+function vorlageOderProjektBlock(vorlageText: string | null, agentsText: string): string {
+  if (vorlageText !== null) return vorlageText;
+  const von = agentsText.indexOf("<!-- factory-projekt:start -->");
+  const bis = agentsText.indexOf("<!-- factory-projekt:ende -->");
+  return von >= 0 && bis > von ? agentsText.slice(von, bis) : "";
+}
+
 const nurBegriffe = (vs: Verweis[]) => vs.map(({ ziel, begriff }) => ({ ziel, begriff }));
 
 // CLAUDE.md ist seit #1087 gelöscht: fehlt sie, gilt sie als leer – ein noch
@@ -172,7 +184,7 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     const kernVerweise = ECHTE_VERWEISE.filter((v) => kern.has(v.datei));
     assert.ok(kernVerweise.length > 0, "keine Verweise aus Kern-Dateien extrahiert");
     assert.deepEqual(
-      pruefe(kernVerweise, kernDocsVon(DOCS["AGENTS.md"], read(VORLAGE))).map((v) => `${v.datei}: ${v.ziel} ${v.form} ${v.begriff}`),
+      pruefe(kernVerweise, kernDocsVon(DOCS["AGENTS.md"], vorlageOderProjektBlock(existsSync(ROOT + VORLAGE) ? read(VORLAGE) : null, DOCS["AGENTS.md"]))).map((v) => `${v.datei}: ${v.ziel} ${v.form} ${v.begriff}`),
       [],
       "Kern-Dateien werden in jedes Projekt verteilt: der Verweis muss im Kern-Block oder in der AGENTS-Vorlage stehen, " +
         "sonst den Titel in den Kern-Block heben oder in die Vorlage aufnehmen.",
@@ -189,6 +201,20 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     assert.equal(gegen("AGENTS.md § Nur im Projekt"), 1);
     assert.equal(gegen("AGENTS.md § Nur im Projekt", "- **Nur im Projekt.**"), 0);
     assert.equal(pruefe(extrahiereVerweise("AGENTS.md § Nur im Projekt"), { "AGENTS.md": agents, "CLAUDE.md": "" }).length, 0);
+  });
+
+  test("Vorlage fehlt (Factory-Repo): Rückfall auf den Projekt-Block der eigenen AGENTS.md, ohne Block leer (streng)", () => {
+    const agents = ["<!-- factory-besitz:start kern -->\n- **Kern-Titel.**\n<!-- factory-besitz:ende kern -->", "<!-- factory-projekt:start -->\n- **Im Projekt-Block.**\n<!-- factory-projekt:ende -->", "- **Dahinter.**"].join("\n");
+    assert.equal(vorlageOderProjektBlock("- **Vorlagen-Titel.**", agents), "- **Vorlagen-Titel.**");
+    const rueckfall = vorlageOderProjektBlock(null, agents);
+    assert.match(rueckfall, /Im Projekt-Block/);
+    assert.doesNotMatch(rueckfall, /Dahinter|Kern-Titel/);
+    assert.equal(vorlageOderProjektBlock(null, "- **Kern-Titel.**"), "");
+    assert.equal(vorlageOderProjektBlock(null, "<!-- factory-projekt:ende -->\n<!-- factory-projekt:start -->\nx"), "");
+    const gegen = (text: string, vorlage: string | null) => pruefe(extrahiereVerweise(text), kernDocsVon(agents, vorlageOderProjektBlock(vorlage, agents))).length;
+    assert.equal(gegen("AGENTS.md § Im Projekt-Block", null), 0);
+    assert.equal(gegen("AGENTS.md § Im Projekt-Block", "- **Anderes.**"), 1);
+    assert.equal(gegen("AGENTS.md § Gibt es nicht", null), 1);
   });
 
   test("Kern-Dateien: nur verteilte ganze Dateien, weder Blöcke, Schlüssel, die AGENTS.md noch Factory-Oberfläche", () => {

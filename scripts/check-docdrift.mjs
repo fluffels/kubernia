@@ -34,12 +34,12 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { collectHeadingSlugs, linkStellen, linkZiel } from "./docs-gen/markdown.mjs";
+import { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions } from "./docs-gen/markdown.mjs";
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 
 // Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
-export { collectHeadingSlugs, linkStellen, linkZiel, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
+export { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -59,15 +59,7 @@ export const DOC_EXEMPT_SCRIPTS = new Set([
 
 // ── Kommandos ───────────────────────────────────────────────────────────────────
 
-/** Alle in `md` referenzierten npm-Skriptnamen: `npm run <x>` sowie `npm test`
- *  (Alias für das Skript `test`). Kommandos werden bewusst INKL. Codeblöcken
- *  erfasst — dort (in ```bash-Beispielen) leben sie ja meist. */
-export function parseNpmRunMentions(md) {
-  const found = new Set();
-  for (const m of md.matchAll(/\bnpm\s+run\s+([a-zA-Z0-9:_-]+)/g)) found.add(m[1]);
-  if (/\bnpm\s+test\b/.test(md)) found.add("test");
-  return found;
-}
+// `parseNpmRunMentions` (Kommando-Erkennung) wohnt in docs-gen/markdown.mjs, weil auch das Export-Werkzeug sie nutzt; hier weitergereicht.
 
 // ── Links & Anker ────────────────────────────────────────────────────────────────
 

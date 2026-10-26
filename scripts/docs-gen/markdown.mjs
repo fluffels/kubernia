@@ -13,6 +13,17 @@ export function cell(value) {
   return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
+/**
+ * Alle in `md` referenzierten npm-Skriptnamen: `npm run <x>` sowie `npm test` (Alias für das Skript `test`). Kommandos werden bewusst INKL. Codeblöcken
+ * erfasst, dort (in ```bash-Beispielen) leben sie ja meist. Gemeinsame Quelle des Doku-Drift-Wächters und des Export-Werkzeugs.
+ */
+export function parseNpmRunMentions(md) {
+  const found = new Set();
+  for (const m of md.matchAll(/\bnpm\s+run\s+([a-zA-Z0-9:_-]+)/g)) found.add(m[1]);
+  if (/\bnpm\s+test\b/.test(md)) found.add("test");
+  return found;
+}
+
 /** Rendert eine GFM-Tabelle (Kopfzeile + Zeilen; Zeilen sind Arrays aus Strings). */
 export function renderTable(header, rows) {
   const line = (cols) => `| ${cols.map(cell).join(" | ")} |`;

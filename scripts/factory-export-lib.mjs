@@ -13,7 +13,7 @@ import { posix } from "node:path";
 import { begriffeAus, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { importeAus, relativeImporte, schutzlistenMuster, trifftLeitplanke, zielDatei } from "./besitz-extraktion.mjs";
 import { isCheckable } from "./check-basis.mjs";
-import { collectHeadingSlugs, linkStellen, linkZiel } from "./docs-gen/markdown.mjs";
+import { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions } from "./docs-gen/markdown.mjs";
 import { pfadBefunde } from "./internalrefs-lib.mjs";
 
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
@@ -48,6 +48,24 @@ export function schreibePraefixUm(text, von, nach) {
     return nach;
   });
   return { text: neu, anzahl };
+}
+
+/** Wird die Markdown-Datei vom Doku-Drift-Wächter gelesen? Nicht unter `node_modules`, unter `.claude/` nur `agents`, `skills`, `workflows` (die versionierten Ordner). */
+const KOMMANDO_GELESEN = (pfad) => pfad.endsWith(".md") && !pfad.split("/").includes("node_modules") && (!pfad.startsWith(".claude/") || /^\.claude\/(?:agents|skills|workflows)\//.test(pfad));
+
+/**
+ * Kommando-Prüfung (Teil 7b-8, #1936): jede Nennung `npm run <x>` und `npm test` in den Markdown-Dateien des Exports muss ein Skript der Vorlage-package.json
+ * (`skripte`, Menge der Namen) sein, sonst ist sie ein Befund (die Quelle trägt Projekt-Kommandos, die im Factory-Repo nicht existieren). Rückgabe `{ befunde }`.
+ */
+export function pruefeKommandos(texte, skripte) {
+  const befunde = [];
+  for (const [pfad, text] of texte) {
+    if (!KOMMANDO_GELESEN(pfad)) continue;
+    for (const name of [...parseNpmRunMentions(text)].sort()) {
+      if (!skripte.has(name)) befunde.push(`${pfad}: Kommando \`npm run ${name}\` steht nicht in der package.json des Exports`);
+    }
+  }
+  return { befunde };
 }
 
 /**
