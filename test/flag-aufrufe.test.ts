@@ -264,7 +264,6 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["kontext-treiber", ["--delta", "vielleicht"], 2, "--delta erwartet ja|nein, nicht vielleicht"],
     ["naechstes-ticket", [], 2, "✖ naechstes-ticket: Aufruf ohne Auswahl: --bereich agentic|produkt (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)"],
     ["naechstes-ticket", ["--ticket", "1", "--bereich", "produkt"], 2, "✖ naechstes-ticket: --ticket und --bereich schließen sich aus"],
-    ["naechstes-ticket", ["--bereich", "spiel", "--ticket", "1"], 2, "✖ naechstes-ticket: --ticket und --bereich schließen sich aus"], // Alias der Repo-Config im Direktaufruf (#1943)
     ["naechstes-ticket", ["--config", "test/fixtures/projekt-fremd.json", "--bereich", "spiel"], 2, "✖ naechstes-ticket: --bereich erwartet agentic oder produkt (bekommen: „spiel“)"], // Config ohne Alias (#1943)
     ["ticket-lock", ["claim", "999999", "--nonce", "x"], 2, "✖ ticket-lock: Unbekanntes Argument: --nonce"],
     ["ticket-lock", ["freigeben", "999999"], 2, "✖ ticket-lock: --nonce fehlt"],

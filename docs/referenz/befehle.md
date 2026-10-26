@@ -8,13 +8,20 @@
 
 ```bash
 npm run setup   # einmalig: Node-Check, Skill-Zeiger, npm install, Git-Hooks, alle Checks (Minimalweg: npm install)
-npm run dev     # Dev-Server – angezeigte Adresse im Browser öffnen
 npm run verify  # alle schnellen Gates auf einmal (wann sie grün sein müssen: AGENTS.md)
 ```
 
-Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](../../AGENTS.md#das-wichtigste-zuerst-harte-regeln) und [AGENTS.md › Wo die TODOs leben](../../AGENTS.md#wo-die-todos-leben), nicht hier.
+<!-- factory-projekt:start -->
+
+```bash
+npm run dev     # Dev-Server – angezeigte Adresse im Browser öffnen
+```
 
 ⚠️ **Die rohe `index.html` im Root ist die Dev-Version** und braucht den Vite-Server; per Doppelklick geöffnet bleibt die Seite leer. Zum Offline-Spielen `npm run build:offline`, dann `dist-offline/index.html` doppelklicken. (Dass eine JS/TS-Änderung im Dev-Server **keinen** Auto-Reload auslöst, steht in [AGENTS.md › Im Browser verifizieren](../../AGENTS.md#das-wichtigste-zuerst-harte-regeln).)
+
+<!-- factory-projekt:ende -->
+
+Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](../../AGENTS.md#das-wichtigste-zuerst-harte-regeln) und [AGENTS.md › Wo die TODOs leben](../../AGENTS.md#wo-die-todos-leben), nicht hier.
 
 ## Alle Befehle
 
@@ -23,7 +30,6 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | One-Command-Setup (Node-Check + Skill-Zeiger + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
 | Skill-Zeiger unter `.claude/skills/` aus den Skill-Quellen `.agents/skills/` erzeugen oder prüfen (#1848): `--check` schreibt nie, `--prune` entfernt den Zeiger-Ordner eines gelöschten Quell-Skills (nie Volltext oder fremde Dateien, es meldet sie nur; `--check` ist bei Volltext und losen Dateien rot), `--tool claude` ist Default | `npm run skills:sync` |
 | **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (die Kette steht in `package.json` › `scripts.verify`, nicht hier kopiert; ohne `check:bundle`, das braucht die Builds) |
-| Bundle-Budget vorab prüfen (#1331): nötig, wenn der Diff ausgelieferten Code, Assets oder Dependencies hinzufügt (`src/**` ohne reine Tests, auch Content-JSON unter `src/content/data/`, `assets/**`, `package.json`); `verify` deckt es nicht ab, erst `verify:full`/CI | `npm run verify:bundle` (= `build` + `build:offline` + `check:bundle`) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + `check:diffcoverage` + Builds + `check:bundle` + `test:smoke`) |
 | Volle Gate-Kette kompakt (#1120): dieselbe Kette wie `verify`, jeder Schritt einzeln, alle Gates ohne Abbruch, bei Grün eine Zeile, bei Rot nur die roten Blöcke; der Abschluss-Lauf der Agenten | `npm run verify:kompakt` |
 | Gezielt iterieren (#1120): Lint und Tests nur für den Slice samt Tests, die eine geänderte Datei lesen, alle anderen Gates voll; kein Gate, ersetzt nie den vollen Lauf | `npm run verify:changed` |
@@ -34,30 +40,21 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | MCP-Ausfälle belegen (#1634, berichtend, Exit 0): wertet die Claude-Code-Logs der Server aus `.mcp.json` aus (Reconnect, npx-Ersatzweg, Abbruch, Server-stderr); `--seit <ISO\|Nh>` (Standard 24 h), `--json` Rohzeilen; der SessionStart-Hook ruft es mit `--sessionstart` | `node scripts/mcp-ausfall.mjs` |
 | Langfuse-Vorbedingung prüfen (#1663): `GET <LANGFUSE_BASE_URL>/api/public/health` mit 3 s Frist, Exit 0 erreichbar, 1 aus (der Ticket-Skill stoppt dann); mit `--sessionstart` immer Exit 0 und Warnung auf stdout (SessionStart-Hook); mit `--json` stdout `{"erreichbar":bool,"grund":string|null}` bei gleichen Exit-Codes (Cockpit, nicht mit `--sessionstart` kombinierbar) | `node scripts/langfuse-vorbedingung.mjs [--sessionstart | --json]` |
 | Erstinstallation | `npm install` |
-| Dev-Server | `npm run dev` |
-| Host-/Prod-Build (Multi-File nach `dist/`) | `npm run build` |
-| Offline-Build (self-contained `dist-offline/index.html`) | `npm run build:offline` |
-| Dev-Panel-Build (#331, Panel MIT, passwortgated, `dist-devpanel/`) | `npm run build:devpanel` |
 | Tests (lokal auf 25 % der Kerne begrenzt, #1331: parallele Läufe von Lenses/Playwright/anderen Worktrees ließen sonst die store-Tests ins Timeout laufen; die CI nutzt den Standard) | `npm test` (Vitest); mehr Worker: `npm test -- --maxWorkers=<n>` |
 | Coverage-Gate (v8, Schwellen PRO Schicht statt Repo-Mittel, #495) | `npm run test:coverage` |
-| Boot-Smoke-Test (headless, gegen Offline- und Host-Build, #391/#1408) | `npm run smoke` (baut Host + Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, beide Builds müssen da sein); meldet Playwright `Executable doesn't exist ... chromium_headless_shell-<build>`: `npm ci`, dann `npx playwright install chromium` |
 | Typen prüfen (voll strict) | `npm run typecheck` |
 | Linter (ESLint, #389; Komplexitäts-Gates complexity/max-lines-per-function/max-depth #502) | `npm run lint` |
 | Stale Suppressions prunen / Baseline neu aufbauen (Komplexität #502 + Typsicherheit #868) | `npm run lint:prune` / `npm run lint:suppress` |
-| Quiz-Korrektheits-Golden nach bewusstem Review aktualisieren (#597) | `npm run quiz:golden` |
-| Sprite-Sheets aus Quell-PNGs neu packen (nach Asset-Änderung, #339) | `npm run pack:sprites` |
-| Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` |
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
 | Kontextdatei-Wächter (Zeichen-Budget für jede AGENTS.md, Wurzel + modul-lokal, #719/#1064/#1088) | `npm run check:contextsize` |
-| Tiefendoc-Abdeckungs-Wächter (jede `src/`-Datei in einem `docs/module/`-Tiefendoc, #482/#907) | `npm run check:docmap` |
+| Tiefendoc-Abdeckungs-Wächter (jede Quell-Datei in einem `docs/module/`-Tiefendoc, #482/#907) | `npm run check:docmap` |
 | Factory-Besitz in ein Projekt übertragen (nur Besitz laut `.factory/besitz.json`, kein Merge, idempotent; Ausnahme `permissions`: Kern-Anteil der Quelle plus die Ergänzung des Ziels aus `.factory/projekt.json`, #1874; Trockenlauf mit `--trocken`, #1613; liest aus einem Tag der Quelle, ohne `--tag` bricht der Sync ab, nur `--entwurf` liest den Arbeitsbaum, #1871) | `npm run factory:sync -- --quelle <pfad> (--tag <name> \| --entwurf) [--ziel <pfad>] [--trocken]` |
 | Drift-Wächter (Besitz laut Sync-Stand unverändert, entfällt ohne `.factory/sync-stand.json`, #1613; rot auch ohne `tag` oder bei `sauber: false` im Stand, #1871) | `npm run check:factorydrift` |
 | Fremd-Config-Probe: die Kern-Tests gegen die Fremd-Config fahren (Temp-Config aus `test/fixtures/projekt-probe.json` plus den fehlenden Blöcken der echten Config, per `FACTORY_PROJEKT_CONFIG` und `FACTORY_PROJEKT_WURZEL` nur im Kindlauf, #1906; rot sind übersehene Literale (Exit 1), Dateien mit Marker `@probe-echte-dateien` dürfen rot sein, [Fremd-Config](../agent-harness.md#extraktionsliste-und-kern-tests-testharnessextraktiontestts-1875)) | `npm run probe:fremdconfig` |
 | Projektwert-Stellen aus der Config prüfen oder erzeugen (Markdown-Block und Frontmatter-Zeile, #1746; `check:factorydrift` prüft sie immer gegen `.factory/projekt.json`, auch ohne Sync-Stand) | `node scripts/projektwerte.mjs --check` bzw. `--write` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
 | Lebende-Doku-Wächter (generierte Abschnitte `<!-- GEN:<name> START/END -->` in README/docs gegen das Repo, #1355, [ADR 0017](../adr/0017-lebende-doku-generierte-abschnitte.md)) | `npm run check:docgen` |
-| Architekturmodell-Wächter (LikeC4-Modell `docs/architektur/` validiert, formatiert und gegen `scripts/layers.cjs`, `src/`, die hexagonale Sicht in arc42 und die Harness-Quellen (`.claude/`, Hooks, Gates, CI, `.mcp.json`) abgeglichen, Pflicht-Views, #1420, [ADR 0020](../adr/0020-architekturmodell-likec4.md)) | `npm run check:c4` (Format reparieren: `npm run c4:format`; im Browser ansehen: `npm run c4:serve`) |
-| Generierte Doku-Abschnitte neu schreiben (nach Änderung an `package.json`-Ketten, `.claude/`, `.mcp.json`, `scripts/layers.cjs`, der Config `scripts/docs-gen/config.json`, nach der ersten oder letzten Importkante zwischen zwei Schichten, einem neuen ADR oder `docs/meilensteine.json`, den Vorlagen `docs/diagramme/*.mmd`, den Konstanten-Dateien der Agenten-Diagramme, den CI-Job-Namen, den Quest-Daten (`src/content/data/quests/*.json`, `quest-order.json`, `quest-topics.json`, `entities.json`, `npcs.json`) oder `src/store/save-versionen.json` und `CURRENT_SAVE_VERSION`, #1355, #1367, #1369, #1370) | `npm run docs:gen` |
+| Generierte Doku-Abschnitte neu schreiben (nach Änderung an `package.json`-Ketten, `.claude/`, `.mcp.json`, `scripts/layers.cjs`, der Config `scripts/docs-gen/config.json`, nach der ersten oder letzten Importkante zwischen zwei Schichten, einem neuen ADR oder `docs/meilensteine.json`, den Vorlagen `docs/diagramme/*.mmd`, den Konstanten-Dateien der Agenten-Diagramme, den CI-Job-Namen oder den Daten der Generatoren des Projekts, #1355, #1367, #1369, #1370) | `npm run docs:gen` |
 | Steuerbyte-Wächter (jede getrackte Textdatei auf NUL und andere C0-Steuerbytes außer Tab/LF/CR, #1428, #1460) | `npm run check:steuerbytes` |
 | Interne-Referenzen-Wächter (Arbeitgeber-/Kundenbezüge aus dem öffentlichen Repo halten, #990) | `npm run check:internalrefs` (prüft getrackte Dateien und die Commit-Messages des Branches, dazu die Pfadregel gegen Benutzerordner, Fremd-Wurzeln und den Repo-Namen in Laufwerkspfaden, Erlaubnislisten `PLATZHALTER_NUTZER` und `FIXTURE_WURZELN` im Skript; Herkunftsbegriff ergänzen: `node scripts/check-internalrefs.mjs --add "<begriff>"`, Namensbezug als Wortstamm: `--add-name "<begriff>"`; PR-Titel/-Body (manuell, nicht in CI): `… \| node scripts/check-internalrefs.mjs --text`) |
 | Sammelticket anlegen und Position prüfen, idempotent (#1390) | `node scripts/sammelticket-anlegen.mjs harness [--vorgaenger <nr>]` / `langfuse [--top]` (`--dry-run` zeigt nur an) |
@@ -80,7 +77,6 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Fällige Wiedervorlagen als Ticket ganz oben anlegen (Trockenlauf mit `--dry-run`; läuft täglich als Workflow, Exit 1 bei fälligem Eintrag ohne Ticket, #1628) | `node scripts/wiedervorlage.mjs [--dry-run]` |
 | Mehrere Tickets einsortieren, eine Listenabfrage (#1217) | `node scripts/board-place.mjs --top <nr>…` / `--after <ankernr> <nr>…` (klemmt hinter das ungeclaimte Sammelticket; ganz oben nur `--notfall <art> --top`); `--umzug [--dry-run]` zieht Items vom falschen aufs richtige Board (Trennregel, #1730); alle Board-Skripte laden die Projekt-Config beim Import (`ladeProjektOderAbbruch` in `board-lib.mjs`): fehlt sie oder ist sie ungültig, folgt eine `✖`-Zeile samt Fix und Exit 2 (wie ein Aufruf-Fehler) |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets und die Ausnahmelisten `ausnahmen.*` der Config gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
-| TS-7-Freigabe-Wächter (npm-Registry: erlaubt typescript-eslint schon TS 7? non-blocking, braucht Netz, #847) | `npm run check:tseslint-ts7` |
 | Diff-Größenbudget-Wächter (max. 20 Dateien / 800 geänderte Zeilen gegen main, #533) | `npm run check:diffsize` |
 | Ergebnis je Ticket-Lauf aus git und GitHub (#1123; Doku: model-routing › Ergebnis je Ticket-Lauf), `--start-agent <typ>` wählt die PRs über den ersten Lauf je Ticket (#1646) | `node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--start-agent <typ>] [--json]` |
 | Langfuse-Abgleich je Call, nur lesend: welche Calls des Transkripts fehlen in Langfuse oder stehen doppelt (#1562; Doku: model-routing › Checkliste Punkt 1) | `node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]` (ohne Secret-Key `--ist` mit einem `queryMetrics`-Export) |
@@ -92,10 +88,30 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Diff-Coverage-Wächter (geänderte Zeilen pro Slice getestet; **hart** für Domäne/Anwendung, Präsentation/Einstieg nur berichtend; läuft **NACH `test:coverage`**, #1021) | `npm run check:diffcoverage` |
 | `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, #604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, #593) | `npm run check:lockfile` |
+| Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
+
+<!-- factory-projekt:start -->
+
+Projekt-Befehle (Spiel, Build, Architektur):
+
+| Zweck | Befehl |
+|---|---|
+| Bundle-Budget vorab prüfen (#1331): nötig, wenn der Diff ausgelieferten Code, Assets oder Dependencies hinzufügt (`src/**` ohne reine Tests, auch Content-JSON unter `src/content/data/`, `assets/**`, `package.json`); `verify` deckt es nicht ab, erst `verify:full`/CI | `npm run verify:bundle` (= `build` + `build:offline` + `check:bundle`) |
+| Dev-Server | `npm run dev` |
+| Host-/Prod-Build (Multi-File nach `dist/`) | `npm run build` |
+| Offline-Build (self-contained `dist-offline/index.html`) | `npm run build:offline` |
+| Dev-Panel-Build (#331, Panel MIT, passwortgated, `dist-devpanel/`) | `npm run build:devpanel` |
+| Boot-Smoke-Test (headless, gegen Offline- und Host-Build, #391/#1408) | `npm run smoke` (baut Host + Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, beide Builds müssen da sein); meldet Playwright `Executable doesn't exist ... chromium_headless_shell-<build>`: `npm ci`, dann `npx playwright install chromium` |
+| Quiz-Korrektheits-Golden nach bewusstem Review aktualisieren (#597) | `npm run quiz:golden` |
+| Sprite-Sheets aus Quell-PNGs neu packen (nach Asset-Änderung, #339) | `npm run pack:sprites` |
+| Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` |
+| Architekturmodell-Wächter (LikeC4-Modell `docs/architektur/` validiert, formatiert und gegen `scripts/layers.cjs`, `src/`, die hexagonale Sicht in arc42 und die Harness-Quellen (`.claude/`, Hooks, Gates, CI, `.mcp.json`) abgeglichen, Pflicht-Views, #1420, [ADR 0020](../adr/0020-architekturmodell-likec4.md)) | `npm run check:c4` (Format reparieren: `npm run c4:format`; im Browser ansehen: `npm run c4:serve`) |
+| TS-7-Freigabe-Wächter (npm-Registry: erlaubt typescript-eslint schon TS 7? non-blocking, braucht Netz, #847) | `npm run check:tseslint-ts7` |
 | Bundle-Byte-Budget-Wächter (je Chunk-Art: Offline-HTML ohne Content, Spielcode, Content-Chunks, Phaser-vendor, NACH den Builds, #503/#595/#1408) | `npm run check:bundle` |
 | CycloneDX-SBOM aus dem Lockfile erzeugen und prüfen (CI-Artefakt `kubernia-sbom-cyclonedx`, #1617) | `npm run sbom` |
 | Duplikations-Report (jscpd, **weich/nicht-blockierend** — kein Gate, nur CI-Artefakt, #612) | `npm run check:duplication` |
-| Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
+
+<!-- factory-projekt:ende -->
 
 > Aus IntelliJ/WebStorm gibt es dieselben Befehle als Ein-Klick-Run-Configs: [CONTRIBUTING.md › Aus IntelliJ starten](../../CONTRIBUTING.md#aus-intellij-starten-ein-klick).
 

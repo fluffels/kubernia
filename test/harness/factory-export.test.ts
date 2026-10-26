@@ -42,7 +42,7 @@ interface Leser {
 interface Ergebnis {
   dateien: Map<string, { text: string; ausfuehrbar: boolean }>;
   befunde: string[];
-  bericht: { sha: string; anzahl: number; durchgelassen: number; durchgelassenJeMuster: number[]; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][]; praefixUmgeschrieben: number; entlinkt: { links: number; anker: number; ziele: [string, number][] } };
+  bericht: { sha: string; anzahl: number; durchgelassen: number; durchgelassenJeMuster: number[]; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][]; praefixUmgeschrieben: number; gestrichen: { bloecke: number; seiten: number }; rollenUmgeschrieben: number; generiert: number; entlinkt: { links: number; anker: number; ziele: [string, number][] } };
 }
 interface Lock {
   name?: string;
@@ -65,17 +65,27 @@ const lib = rawLib as unknown as {
   pruefeLokalePfade(d: Map<string, string>, repos: string[]): { befunde: string[]; durchgelassen: number; jeMuster: number[] };
   pruefeLiterale(d: Map<string, string>, b: Record<string, RegExp>, aus: (p: string) => string | null): { befunde: string[]; rest: Map<string, number> };
   schreibePraefixUm(text: string, von: string, nach: string): { text: string; anzahl: number };
+  streicheProjektBloecke(text: string): { text: string; bloecke: number; befunde: string[] };
+  schreibeRollenUm(text: string, paare: [string, string][]): { text: string; anzahl: number };
+  pruefeKommandos(texte: Map<string, string>, skripte: Set<string>): { befunde: string[] };
   entlinke(text: string, seite: string, h: { gibt(p: string): boolean; ueberschriften(p: string): Set<string> | null }): { text: string; links: number; anker: number; ziele: Map<string, number> };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
   pruefeSchutzliste(e: { vorlage: string; codeowners: string; quelle: string; pfade: string[] }): string[];
   SCHUTZ_OHNE_TREFFER: string[];
 };
-const docdrift = rawDocdrift as unknown as { auditDocDrift(wurzel: string): { deadLinks: { file: string; target: string; resolved: string }[]; deadAnchors: { file: string; target: string }[] } };
+const docdrift = rawDocdrift as unknown as { auditDocDrift(wurzel: string): { deadCommands: { file: string; script: string }[]; deadLinks: { file: string; target: string; resolved: string }[]; deadAnchors: { file: string; target: string }[] } };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
-const { projektwertLauf, rendereProjektwerte } = rawBesitz as unknown as {
+const {
+  projektwertLauf,
+  rendereProjektwerte,
+  PROJEKT_BLOCK_START: PB_START,
+  PROJEKT_BLOCK_ENDE: PB_ENDE,
+} = rawBesitz as unknown as {
   projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] };
   rendereProjektwerte: (text: string, config: unknown, pfad?: string) => string;
+  PROJEKT_BLOCK_START: string;
+  PROJEKT_BLOCK_ENDE: string;
 };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -271,6 +281,72 @@ describe("entlinke (#1935)", () => {
     assert.equal(r.text, "a mitte b und c");
     assert.equal(r.ziele.get("docs/t.md"), 2);
     assert.equal(r.ziele.size, 2);
+  });
+});
+
+describe("streicheProjektBloecke (#1936)", () => {
+  const s = (text: string) => lib.streicheProjektBloecke(text);
+  test("ohne Block bleibt der Text byte-gleich", () => {
+    const text = "A\n\nB\n";
+    assert.deepEqual(s(text), { text, bloecke: 0, befunde: [] });
+  });
+  test("ein Block samt Markern entfällt, die doppelte Leerzeile schrumpft auf eine", () => {
+    const r = s(["Davor", "", PB_START, "| Projekt | x |", PB_ENDE, "", "Danach"].join("\n"));
+    assert.equal(r.text, "Davor\n\nDanach");
+    assert.equal(r.bloecke, 1);
+    assert.deepEqual(r.befunde, []);
+  });
+  test("zwei Blöcke, eine einzelne Leerzeile und Zeilen ohne Leerzeile bleiben erhalten", () => {
+    const r = s(["A", PB_START, "x", PB_ENDE, "B", "", PB_START, "y", PB_ENDE, "", "C"].join("\n"));
+    assert.equal(r.text, "A\nB\n\nC");
+    assert.equal(r.bloecke, 2);
+  });
+  test("nach dem Block bleiben spätere Leerzeilen alle stehen (die Unterdrückung gilt nur für die erste)", () => {
+    assert.equal(s(["A", "", PB_START, "x", PB_ENDE, "", "B", "", "C"].join("\n")).text, "A\n\nB\n\nC");
+  });
+  test("steht vor dem Block keine Leerzeile, bleibt die Leerzeile danach stehen", () => {
+    assert.equal(s(["A", PB_START, "x", PB_ENDE, "", "B"].join("\n")).text, "A\n\nB");
+  });
+  test("CRLF-Zeilen mit Marker werden erkannt", () => {
+    assert.equal(s(["A", `${PB_START}\r`, "x", `${PB_ENDE}\r`, "B"].join("\n")).bloecke, 1);
+  });
+  test("Befunde: Start ohne Ende, Ende ohne Start, verschachtelt, Marker in Textzeile", () => {
+    assert.match(s(`A\n${PB_START}\nx`).befunde.join("|"), /Zeile 2 ohne Ende/);
+    assert.match(s(`A\n${PB_ENDE}`).befunde.join("|"), /Zeile 2 ohne Start/);
+    assert.match(s(`${PB_START}\n${PB_START}\n${PB_ENDE}`).befunde.join("|"), /Zeile 2 beginnt vor dem Ende/);
+    assert.match(s(`Text ${PB_START} mehr`).befunde.join("|"), /Zeile 1 steht nicht allein/);
+    assert.match(s(`Text ${PB_ENDE}`).befunde.join("|"), /Zeile 1 steht nicht allein/);
+  });
+});
+
+describe("schreibeRollenUm (#1936)", () => {
+  const paare: [string, string][] = [
+    ["alt-planer", "neu-planer"],
+    ["alt-lens", "neu-lens"],
+  ];
+  test("schreibt ganze Wörter um und zählt jede Stelle", () => {
+    const r = lib.schreibeRollenUm("Der alt-planer und `alt-lens`, alt-lens.", paare);
+    assert.equal(r.text, "Der neu-planer und `neu-lens`, neu-lens.");
+    assert.equal(r.anzahl, 3);
+  });
+  test("Teilwörter bleiben: Bindestrich, Buchstabe, Unterstrich und Ziffer davor oder dahinter", () => {
+    const text = "x-alt-lens alt-lens-x alt-lensx _alt-lens alt-lens_ 2alt-lens alt-lens2";
+    const r = lib.schreibeRollenUm(text, paare);
+    assert.equal(r.text, text);
+    assert.equal(r.anzahl, 0);
+  });
+  test("gleiche Werte und leere Quelle entfallen, ein neuer Name trifft nicht ein zweites Mal", () => {
+    assert.equal(lib.schreibeRollenUm("alt-lens", [["alt-lens", "alt-lens"]]).anzahl, 0);
+    assert.equal(lib.schreibeRollenUm("a  b", [["", "x"]]).text, "a  b");
+    assert.equal(lib.schreibeRollenUm("a b", [["a", "b"], ["b", "a"]]).text, "b a");
+  });
+  test("ein Name, der Vorsilbe eines anderen ist, trifft nur ganz", () => {
+    const r = lib.schreibeRollenUm("a-b-c und a-b", [["a-b", "X"], ["a-b-c", "Y"]]);
+    assert.equal(r.text, "Y und X");
+    assert.equal(r.anzahl, 2);
+  });
+  test("ein Name mit Regex-Zeichen wird wörtlich genommen", () => {
+    assert.equal(lib.schreibeRollenUm("a.b und axb", [["a.b", "neu"]]).text, "neu und axb");
   });
 });
 
@@ -517,7 +593,7 @@ describe("pruefeSchutzliste (pur)", () => {
     assert.deepEqual(pruefe({ codeowners: `# @owner nur ein Kommentar\n${owners(alle)}` }), []);
   });
 });
-describe("Export aus HEAD", () => {
+describe("Export aus HEAD", { timeout: 60_000 }, () => {
   let leser: Leser;
   let echt: Ergebnis;
   beforeAll(() => {
@@ -598,10 +674,12 @@ describe("Export aus HEAD", () => {
     }, 60_000);
     afterAll(() => rmSync(ordner, { recursive: true, force: true }));
 
-    test("tote Links und tote Anker gibt es im Export nicht", () => {
+    test("tote Links, tote Anker und tote Kommandos gibt es im Export nicht, die generierten Abschnitte sind aktuell (#1936)", () => {
       const r = docdrift.auditDocDrift(ordner);
       assert.deepEqual(r.deadLinks, []);
       assert.deepEqual(r.deadAnchors, []);
+      assert.deepEqual(r.deadCommands, []);
+      execFileSync(process.execPath, ["scripts/docs-gen.mjs"], { cwd: ordner, encoding: "utf8" });
     });
     test.each(ZIEL_ADR)("Negativfall: fehlt die mitgegebene Seite %s im Export, ist Docdrift dort rot", (seite) => {
       assert.ok(existsSync(join(ordner, seite)), "die Seite liegt im Export");
@@ -611,6 +689,113 @@ describe("Export aus HEAD", () => {
       rmSync(join(kopie, seite));
       const r = docdrift.auditDocDrift(kopie);
       assert.ok(r.deadLinks.some((l) => l.resolved === seite), "ein Link auf die Seite ist tot");
+    });
+  });
+
+  describe("#1936: Projekt-Blöcke, Rollen-Namen, generierte Abschnitte und Kommandos in baueExport", () => {
+    const SEITE = "docs/agent-harness.md";
+    const ROUTING = "docs/model-routing.md";
+    const text = (r: Ergebnis, pfad: string): string => r.dateien.get(pfad)?.text ?? "";
+    const factoryAgenten = (): Record<string, string> => (JSON.parse(text(echt, ".factory/projekt.json")) as { agenten: Record<string, string> }).agenten;
+    const kubAgenten = (): Record<string, string> => (JSON.parse(leser.lies(".factory/projekt.json") ?? "{}") as { agenten: Record<string, string> }).agenten;
+    const zusatz = (pfad: string, zeile: string): string => `${leser.lies(pfad) ?? ""}\n${zeile}\n`;
+    const blockUm = (zeile: string): string => `${PB_START}\n\n${zeile}\n\n${PB_ENDE}`;
+
+    test("Spiel-Passagen der Quelle stehen in Block-Markern und fehlen im Export (Projekt-Phase-Tabelle, Sandbox-Zeile)", () => {
+      assert.match(leser.lies(ROUTING) ?? "", /\| Projekt-Phase \|/);
+      assert.match(leser.lies(SEITE) ?? "", /pixellab\.ai/);
+      assert.doesNotMatch(text(echt, ROUTING), /\| Projekt-Phase \|/);
+      assert.doesNotMatch(text(echt, SEITE), /pixellab/);
+      const jeSeite = leser.pfade.filter((q) => q.endsWith(".md") && q !== "AGENTS.md").map((q) => (leser.lies(q) ?? "").split("\n").filter((z) => z.trim() === PB_START).length);
+      assert.equal(echt.bericht.gestrichen.bloecke, jeSeite.reduce((s, n) => s + n, 0));
+      assert.equal(echt.bericht.gestrichen.seiten, jeSeite.filter((n) => n > 0).length);
+      assert.ok(echt.bericht.gestrichen.seiten >= 6);
+    });
+    test("keine Block-Marker mehr in den Markdown-Dateien des Exports (nur die AGENTS.md trägt ihren Projekt-Block)", () => {
+      const mitMarker = [...echt.dateien].filter(([p, d]) => p.endsWith(".md") && p !== "AGENTS.md" && (d.text.includes(PB_START) || d.text.includes(PB_ENDE))).map(([p]) => p);
+      assert.deepEqual(mitMarker, []);
+    });
+    test("Rollen-Namen der Factory-Seiten stammen aus der Factory-Config, der Rest des Kern-Namens bleibt", () => {
+      const [kub, fac] = [kubAgenten(), factoryAgenten()];
+      assert.notEqual(kub.planer, fac.planer, "die Probe braucht verschiedene Namen");
+      assert.ok(echt.bericht.rollenUmgeschrieben > 0);
+      const ganzesWort = (name: string): RegExp => new RegExp(`(?<![\\w-])${name}(?![\\w-])`);
+      for (const rolle of ["planer", "umsetzer", "lens", "gruppe"]) {
+        assert.doesNotMatch(text(echt, SEITE), ganzesWort(kub[rolle]), `${rolle}: Quell-Name steht nicht mehr`);
+      }
+      assert.match(text(echt, SEITE), ganzesWort(fac.lens));
+    });
+    test("generierte Abschnitte beschreiben das Factory-Repo: die Gate-Tabelle kennt docdrift, kein Projekt-Gate", () => {
+      assert.ok(echt.bericht.generiert > 0);
+      assert.match(text(echt, SEITE), /npm run check:docdrift/);
+      assert.doesNotMatch(text(echt, SEITE), /npm run check:arch/);
+    });
+    test("die package.json des Exports trägt die Kern-Skripte, die Kern-Doku nennt", () => {
+      const skripte = (JSON.parse(text(echt, "package.json")) as { scripts: Record<string, string> }).scripts;
+      for (const s of ["setup", "cockpit", "probe:fremdconfig", "lint:suppress", "check:size", "check:docmap"]) assert.ok(skripte[s], `Skript ${s}`);
+    });
+    test("Negativfall: eine Factory-Seite mit unbekanntem Kommando ist ein Befund, im Projekt-Block nicht", () => {
+      const roh = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, "Ruf `npm run gibt-es-nicht-1936` auf.") }) });
+      assert.match(roh.befunde.join("|"), /docs\/agent-harness\.md: Kommando `npm run gibt-es-nicht-1936`/);
+      assert.equal(roh.dateien.size, 0);
+      const imBlock = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, blockUm("Ruf `npm run gibt-es-nicht-1936` auf.")) }) });
+      assert.deepEqual(imBlock.befunde, []);
+      assert.doesNotMatch(text(imBlock, SEITE), /gibt-es-nicht-1936/);
+    });
+    test("pruefeKommandos: npm test zählt, Dateien außerhalb der gelesenen Ordner nicht", () => {
+      const skripte = new Set(["verify"]);
+      const t = (m: Record<string, string>) => lib.pruefeKommandos(new Map(Object.entries(m)), skripte).befunde;
+      assert.match(t({ "a.md": "npm test" }).join(), /a\.md: Kommando `npm run test`/);
+      assert.deepEqual(t({ "a.md": "npm run verify" }), []);
+      assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", "docs/node_modules/x.md": "npm run nein", ".claude/settings/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
+      assert.equal(t({ ".claude/agents/x.md": "npm run nein", "docs/b.md": "npm run nein2" }).length, 2);
+      assert.equal(t({ ".claude/skills/s.md": "npm run nein", ".claude/workflows/w.md": "npm run nein" }).length, 2);
+    });
+    test("Negativfall: ein unpaariger Marker in einer Factory-Seite ist ein Befund", () => {
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, PB_START) }) });
+      assert.match(r.befunde.join("|"), /docs\/agent-harness\.md: Projekt-Block ab Zeile \d+ ohne Ende/);
+      assert.equal(r.dateien.size, 0);
+    });
+    test("Negativfall: eine Besitz-Markdown-Datei mit Block-Marker ist ein Befund (ihr Block bliebe im Export)", () => {
+      const md = ".agents/skills/review-lenses/SKILL.md";
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [md]: zusatz(md, blockUm("Spiel-Passage")) }) });
+      assert.match(r.befunde.join("|"), /SKILL\.md: Besitz-Datei trägt Projekt-Block-Marker/);
+    });
+    test("Negativfall: auch ein einzelner Marker in einer Besitz-Markdown-Datei ist ein Befund, ein Marker mitten im Text nicht", () => {
+      const md = ".agents/skills/review-lenses/SKILL.md";
+      for (const marke of [PB_START, PB_ENDE]) {
+        const r = ex.baueExport({ leser: mitAenderung(leser, { [md]: zusatz(md, marke) }) });
+        assert.match(r.befunde.join("|"), /SKILL\.md: Besitz-Datei trägt Projekt-Block-Marker/);
+      }
+      const inText = ex.baueExport({ leser: mitAenderung(leser, { [md]: zusatz(md, `Der Marker ${PB_START} steht im Text.`) }) });
+      assert.deepEqual(inText.befunde, []);
+    });
+    test("Negativfall: scheitert docs-gen im Export, ist das ein Befund mit der ersten Fehlerzeile", () => {
+      const r = ex.baueExport({ leser: mitAenderung(leser, { ".factory/produkt/vorlagen/scripts/docs-gen/config.json.vorlage": "{ kaputt" }) });
+      assert.match(r.befunde.join("|"), /docs-gen im Export scheitert: ✖ Config nicht lesbar: .*kein gültiges JSON/);
+      assert.equal(r.dateien.size, 0);
+    });
+    test("der Staging-Ordner der Doku-Generierung wird im Erfolgs- und im Fehlerpfad gelöscht", () => {
+      const privat = leerOrdner();
+      const alt = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
+      Object.assign(process.env, { TEMP: privat, TMP: privat, TMPDIR: privat });
+      try {
+        assert.deepEqual(ex.baueExport({ leser }).befunde, []);
+        assert.deepEqual(readdirSync(privat), [], "Erfolgspfad");
+        ex.baueExport({ leser: mitAenderung(leser, { ".factory/produkt/vorlagen/scripts/docs-gen/config.json.vorlage": "{ kaputt" }) });
+        assert.deepEqual(readdirSync(privat), [], "Fehlerpfad");
+      } finally {
+        for (const [k, v] of Object.entries(alt)) {
+          if (v === undefined) delete process.env[k];
+          else process.env[k] = v;
+        }
+      }
+    });
+    test("der Lauf nennt die neuen Zähler im Bericht", () => {
+      const out = lauf(["--ziel", leerOrdner()], leser).out;
+      assert.match(out, new RegExp(`Projekt-Blöcke in Factory-Seiten gestrichen: ${echt.bericht.gestrichen.bloecke} in ${echt.bericht.gestrichen.seiten} Seiten`));
+      assert.match(out, new RegExp(`Rollen-Namen in Factory-Seiten umgeschrieben: ${echt.bericht.rollenUmgeschrieben}`));
+      assert.match(out, new RegExp(`Generierte Abschnitte neu erzeugt: ${echt.bericht.generiert} Dateien`));
     });
   });
 

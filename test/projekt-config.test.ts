@@ -238,10 +238,6 @@ describe("Bereichs-Aliase (#1943)", () => {
     for (const kaputt of [null, [], "x", 5]) assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: kaputt } }), {}, JSON.stringify(kaputt));
     assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: { spiel: "produkt" } } }), { spiel: "produkt" });
   });
-
-  test("die echte Config führt den Alias spiel auf produkt", () => {
-    assert.deepEqual(pc.bereichAliaseAus(JSON.parse(readFileSync(WURZEL + ".factory/projekt.json", "utf8"))), { spiel: "produkt" });
-  });
 });
 
 describe("boardPfad", () => {

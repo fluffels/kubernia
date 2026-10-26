@@ -10,10 +10,10 @@
 import { builtinModules } from "node:module";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { posix } from "node:path";
-import { begriffeAus } from "./besitz-lib.mjs";
+import { begriffeAus, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { importeAus, relativeImporte, schutzlistenMuster, trifftLeitplanke, zielDatei } from "./besitz-extraktion.mjs";
 import { isCheckable } from "./check-basis.mjs";
-import { collectHeadingSlugs, linkStellen, linkZiel } from "./docs-gen/markdown.mjs";
+import { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions } from "./docs-gen/markdown.mjs";
 import { pfadBefunde } from "./internalrefs-lib.mjs";
 
 const CODE_DATEI = /\.(?:mjs|cjs|js|ts)$/;
@@ -48,6 +48,78 @@ export function schreibePraefixUm(text, von, nach) {
     return nach;
   });
   return { text: neu, anzahl };
+}
+
+/** Wird die Markdown-Datei vom Doku-Drift-Wächter gelesen? Nicht unter `node_modules`, unter `.claude/` nur `agents`, `skills`, `workflows` (die versionierten Ordner). */
+const KOMMANDO_GELESEN = (pfad) => pfad.endsWith(".md") && !pfad.split("/").includes("node_modules") && (!pfad.startsWith(".claude/") || /^\.claude\/(?:agents|skills|workflows)\//.test(pfad));
+
+/**
+ * Kommando-Prüfung (Teil 7b-8, #1936): jede Nennung `npm run <x>` und `npm test` in den Markdown-Dateien des Exports muss ein Skript der Vorlage-package.json
+ * (`skripte`, Menge der Namen) sein, sonst ist sie ein Befund (die Quelle trägt Projekt-Kommandos, die im Factory-Repo nicht existieren). Rückgabe `{ befunde }`.
+ */
+export function pruefeKommandos(texte, skripte) {
+  const befunde = [];
+  for (const [pfad, text] of texte) {
+    if (!KOMMANDO_GELESEN(pfad)) continue;
+    for (const name of [...parseNpmRunMentions(text)].sort()) {
+      if (!skripte.has(name)) befunde.push(`${pfad}: Kommando \`npm run ${name}\` steht nicht in der package.json des Exports`);
+    }
+  }
+  return { befunde };
+}
+
+/**
+ * Schreibt Agenten-Namen in `text` um (Teil 7b-8, #1936): `paare` sind `[von, nach]`, ein Paar mit gleichen Werten entfällt. Nur ganze Wörter
+ * (davor und dahinter weder Buchstabe, Ziffer, `_` noch `-`, so bleiben `x-<von>` und `<von>-x` stehen), in einem Durchgang, damit ein neuer Name nie
+ * ein zweites Mal trifft (ein Name, der Vorsilbe eines anderen ist, trifft dank der Wortgrenze nur ganz). Rückgabe `{ text, anzahl }`. Grenze: der Rollenname des Ticket-Skills ist kein Paar (er ist zugleich der Spielname).
+ */
+export function schreibeRollenUm(text, paare) {
+  const aktiv = new Map(paare.filter(([von, nach]) => von !== nach && von !== ""));
+  if (aktiv.size === 0) return { text, anzahl: 0 };
+  const re = new RegExp(`(?<![\\w-])(?:${[...aktiv.keys()].map(escapeRegex).join("|")})(?![\\w-])`, "g");
+  let anzahl = 0;
+  const neuerText = text.replace(re, (treffer) => {
+    anzahl++;
+    return aktiv.get(treffer);
+  });
+  return { text: neuerText, anzahl };
+}
+
+/**
+ * Streicht die Projekt-Blöcke einer Factory-Seite (Teil 7b-8, #1936): jede Zeile von der Marker-Zeile `PROJEKT_BLOCK_START` bis `PROJEKT_BLOCK_ENDE` (beide eingeschlossen,
+ * beide allein auf ihrer Zeile) entfällt, mehrere Blöcke sind erlaubt. Bleibt dort eine doppelte Leerzeile, entfällt eine. Rückgabe `{ text, bloecke, befunde }`:
+ * Zahl der gestrichenen Blöcke; Befunde bei Start ohne Ende, Ende ohne Start, verschachteltem Start und einem Marker, der nicht allein auf seiner Zeile steht
+ * (der Text bleibt dann unverändert nutzbar, der Aufrufer bricht den Export ab).
+ */
+export function streicheProjektBloecke(text) {
+  const befunde = [];
+  const zeilen = text.split("\n");
+  const aus = [];
+  let offen = -1;
+  let bloecke = 0;
+  let nachBlock = false;
+  zeilen.forEach((zeile, i) => {
+    const marke = zeile.trim();
+    if (marke === PROJEKT_BLOCK_START) {
+      if (offen >= 0) befunde.push(`Projekt-Block in Zeile ${i + 1} beginnt vor dem Ende des Blocks aus Zeile ${offen + 1}`);
+      else offen = i;
+    } else if (marke === PROJEKT_BLOCK_ENDE) {
+      if (offen < 0) befunde.push(`Projekt-Block-Ende in Zeile ${i + 1} ohne Start`);
+      else {
+        offen = -1;
+        bloecke++;
+        nachBlock = aus.length > 0 && aus[aus.length - 1].trim() === "";
+      }
+    } else if (zeile.includes(PROJEKT_BLOCK_START) || zeile.includes(PROJEKT_BLOCK_ENDE)) {
+      befunde.push(`Projekt-Block-Marker in Zeile ${i + 1} steht nicht allein auf seiner Zeile`);
+    } else if (offen < 0) {
+      if (nachBlock && marke === "") return;
+      nachBlock = false;
+      aus.push(zeile);
+    }
+  });
+  if (offen >= 0) befunde.push(`Projekt-Block ab Zeile ${offen + 1} ohne Ende`);
+  return { text: aus.join("\n"), bloecke, befunde };
 }
 
 /**

@@ -23,11 +23,15 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | PR + Merge, Festgefahren, Cleanup | `sonnet` | `medium` | im Umsetzer |
 | Explore / Recherche | `haiku` | `low` | Agent `Explore` (Projekt-Override des eingebauten Explore, Frontmatter); `low` wirkt, weil `haiku` auf der Anthropic-API auf Haiku 5.5 auflöst und Haiku 5.5 Effort unterstützt (Effort-Tabelle der Claude-Code-Modell-Doku, 2026-10-08); auf Cloud-Providern mit Haiku 4.5 wirkt es nicht (§2) |
 
-Platzhalter in spitzen Klammern: die Namen aus `.factory/projekt.json` (Tabelle im Kern-Block der AGENTS.md). Rollen eines Projekts, die nicht zum Kern gehören, stehen in einer eigenen Tabelle „Projekt-Phase“ (die letzte Zelle nennt `Subagent <name>`, Alias und Effort prüft der Kern-Test generisch gegen `.claude/agents/<name>.md`; ohne Zeilen gibt es nichts zu prüfen):
+Platzhalter in spitzen Klammern: die Namen aus `.factory/projekt.json` (Tabelle im Kern-Block der AGENTS.md). Rollen eines Projekts, die nicht zum Kern gehören, stehen in einer eigenen Tabelle „Projekt-Phase“ (die letzte Zelle nennt `Subagent <name>`, Alias und Effort prüft der Kern-Test generisch gegen `.claude/agents/<name>.md`; ohne Zeilen gibt es nichts zu prüfen).
+
+<!-- factory-projekt:start -->
 
 | Projekt-Phase | Alias | Effort Skill-Pfad | Skill-Pfad |
 |---|---|---|---|
 | Forum-Triage (Quarantäne) | `sonnet` | `medium` | Subagent `forum-leser`, vom `forum`-Skill gespawnt (Frontmatter; nur `Read` auf die Quarantäne-Datei) |
+
+<!-- factory-projekt:ende -->
 
 **Warum so:** Fehler in Planung und Review sind teuer (schlechte Architektur kostet viele Sessions), dort lohnt das stärkste Modell mit hohem Reasoning (#741, #745). Auch der Schnitt eines Epics in Kindertickets ist Planung (#1207): ein schlechter Schnitt kostet viele Sessions, das Anlegen per `gh` ist dagegen Tipparbeit. Tippen nach fertigem Plan ist Sonnet-Arbeit: `medium` lässt genug Reasoning für die CI-Fix-Schleife, der Umsetzer fährt es (`low` ist gemessen und verworfen: #1591, Abbruchregel (3)). Explore liest und sucht nur, Haiku genügt. Die Holdout-Agenten (#1754) laufen auf `opus` mit `medium`: der Maßstab der Abnahme darf nicht schwächer sein als der des Reviews, aber sie lesen keinen Code und brauchen kein hohes Reasoning; der Szenario-Agent und die Abnahme spawnt der Hauptchat, nie der Umsetzer.
 
