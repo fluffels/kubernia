@@ -86,16 +86,34 @@ describe("Gate-Satz: package.json-Vorlage gegen die Kette von kubernia", () => {
   });
 });
 
-/** Gate-Nennungen in den Nicht-Kommentar-Zeilen eines Workflows (Muster geschlossen: `npm run <x>`, `node scripts/<x>.mjs`, `npm audit`). */
+/** Die Zeilen eines Workflows, die Befehle tragen können: ohne Kommentar- und `name:`-Zeilen (ein Job- oder Schrittname ist kein Aufruf). */
+const befehlsZeilen = (text: string): string[] => text.split("\n").filter((z) => !/^\s*(#|(-\s+)?name:)/.test(z));
+
+/** Gate-Nennungen in den Befehlszeilen eines Workflows (Muster geschlossen: `npm run <x>`, `node scripts/<x>.mjs`, `npm audit`). */
 const ciGates = (text: string): Set<string> => {
   const out = new Set<string>();
-  for (const zeile of text.split("\n").filter((z) => !z.trim().startsWith("#"))) {
+  for (const zeile of befehlsZeilen(text)) {
     for (const m of zeile.matchAll(/\bnpm run ([\w:.-]+)/g)) out.add(m[1]);
     for (const m of zeile.matchAll(/\bnode scripts\/([\w.-]+)\.mjs\b/g)) out.add(m[1]);
     if (/\bnpm audit\b/.test(zeile)) out.add("npm audit");
   }
   return out;
 };
+
+describe("Gate-Satz: Erkennung der Gate-Nennungen (ciGates)", () => {
+  it("zählt Aufrufe in `run:`-Zeilen, nicht Kommentare und nicht Job- oder Schrittnamen", () => {
+    const yml = [
+      "      - name: Security-Audit (npm audit)",
+      "    name: Gate (npm run bundle-name)",
+      "      # npm run kommentar",
+      "        run: echo kein-audit",
+      "        run: npm run a:b && node scripts/check-x.mjs",
+      "        run: npm audit --audit-level=high",
+    ].join("\n");
+    expect([...ciGates(yml)].sort()).toEqual(["a:b", "check-x", "npm audit"]);
+    expect([...ciGates(yml.replace("npm audit --audit-level=high", "echo nix"))].sort(), "ohne run-Aufruf kein Audit-Gate").toEqual(["a:b", "check-x"]);
+  });
+});
 
 describe("Gate-Satz: ci.yml-Vorlage gegen die CI von kubernia", () => {
   const quellGates = ciGates(readRepo(".github/workflows/ci.yml"));
@@ -115,7 +133,7 @@ describe("Gate-Satz: ci.yml-Vorlage gegen die CI von kubernia", () => {
   });
 
   it("jedes `npm run <x>` der Vorlage ist ein Skript der Vorlage (kein totes Kommando)", () => {
-    const text = readRepo(`${VORLAGEN}/.github/workflows/ci.yml.vorlage`).split("\n").filter((z) => !z.trim().startsWith("#")).join("\n");
+    const text = befehlsZeilen(readRepo(`${VORLAGEN}/.github/workflows/ci.yml.vorlage`)).join("\n");
     const namen = [...text.matchAll(/\bnpm run ([\w:.-]+)/g)].map((m) => m[1]);
     expect(namen.length, "die Vorlage ruft Skripte auf").toBeGreaterThan(0);
     for (const n of namen) expect(n in vorlage, `ci.yml.vorlage ruft „${n}“ auf, das Skript fehlt in package.json.vorlage`).toBe(true);
@@ -145,7 +163,11 @@ describe("Gate-Satz: eslint-Vorlage trägt die eingefrorenen Regeln und Deckel",
       zeilen: /max:\s*(\d+)/.exec(t)?.[1],
     });
     const echt = deckel(readRepo("eslint.config.js"));
-    expect(echt.complexity, "Anker in eslint.config.js gefunden").toBeDefined();
+    for (const [name, wert] of Object.entries(echt)) expect(wert, `Anker „${name}“ in eslint.config.js gefunden`).toBeDefined();
     expect(deckel(eslintVorlage)).toEqual(echt);
+  });
+
+  it("die Regeln gelten für scripts/** (ein Block mit diesem files-Muster trägt sie), sonst meldet der Export wieder veraltete Einträge", () => {
+    expect(eslintVorlage).toMatch(/files:\s*\["scripts\/\*\*\/\*\.\{js,mjs,cjs\}"\],\s*rules:\s*\{\s*complexity:/);
   });
 });

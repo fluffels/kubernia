@@ -847,7 +847,10 @@ describe("Gates außerhalb von verify als Projektwert (#1925)", () => {
 
   test("gatesAus: ohne Block leer, sonst die Einträge", () => {
     assert.deepEqual(pc.gatesAus({}), { nichtInVerify: [] });
+    assert.deepEqual(pc.gatesAus(undefined), { nichtInVerify: [] });
+    assert.deepEqual(pc.gatesAus(null), { nichtInVerify: [] });
     assert.deepEqual(pc.gatesAus({ gates: {} }), { nichtInVerify: [] });
+    assert.deepEqual(mit({ nichtInVerify: [{ gate: "check:a.b-c_d", grund: "x" }] }), []);
     assert.deepEqual(pc.gatesAus({ gates: { nichtInVerify: [ok] } }), { nichtInVerify: [ok] });
   });
   test("gatesAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
