@@ -15,5 +15,6 @@ describe("projektBlock", () => {
     assert.equal(projektBlock(`${START}\nNur Start`), null);
     assert.equal(projektBlock(`${ENDE}\n${START}\nx`), null);
     assert.equal(projektBlock(`${ENDE}\nx`), null);
+    assert.equal(projektBlock(`${"x".repeat(40)}${ENDE}`), null, "Ende ohne Start");
   });
 });
