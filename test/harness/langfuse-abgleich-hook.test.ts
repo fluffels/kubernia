@@ -56,6 +56,7 @@ const N = { ...rawNachEinstieg, ...rawLock } as unknown as {
   hookLauf: (a: Args, o: { stateDir: string; lauf: Lauf; schlafen: (ms: number) => Promise<void>; uhr: () => number; pid: number }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
   kurzerStand: (wurzel: string) => string | null;
   raeumePluginLocks: (stateDir: string, now?: number) => number;
+  leseStartMarke: (stateDir: string, session: string) => number | null;
   PLUGIN_LOCK_ALTER_MS: number;
   gesperrterLauf: (a: Args, o: { stateDir: string; lauf: Lauf; ausloeser: string; pid: number; stand?: string | null }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
 };
@@ -453,7 +454,9 @@ describe("Log: Ende verworfen (#1579)", () => {
   test("eine Session mit verworfenem Ende steht im Log, auch wenn sonst nichts zu melden ist; ohne das Feld bleibt sie draußen", () => {
     const sess = (endeVerworfen: boolean) => ({ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, befund: null, endeVerworfen });
     const mit = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(true)], fehler: [] } });
-    expect(mit.sessions).toEqual([{ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, endeVerworfen: true }]);
+    expect(mit.sessions).toEqual([{ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, endeVerworfen: true, fortgesetzt: false }]);
+    const fort = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [{ ...sess(true), fortgesetzt: true }], fehler: [] } });
+    expect(fort.sessions).toMatchObject([{ session: "s1", endeVerworfen: true, fortgesetzt: true }]);
     const ohne = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(false)], fehler: [] } });
     expect(ohne.sessions).toEqual([]);
   });
@@ -494,6 +497,20 @@ describe("hookLauf", () => {
     expect(a.ereignisse).toEqual([`schlafen ${N.WARTE_SESSIONEND}`, `lauf now=${N.WARTE_SESSIONEND} session=s1 beendet=s1 aktuell=null`]);
     expect(a.logZeilen()).toMatchObject([{ ausloeser: "sessionend", session: "s1", lock: "frei", zugang: true, exitCode: 0, gesendet: 1 }]);
     expect(existsSync(a.lock)).toBe(false);
+  });
+
+  test("SessionStart schreibt die Startmarke mit der Uhr, auch bei belegtem Lock; SessionEnd schreibt keine (#1953)", async () => {
+    const a = aufbau();
+    belegen(a.lock, T0 + 5 * MIN);
+    await N.hookLauf(argsVon(START_ARGS), { stateDir: a.stateDir, lauf: a.lauf, schlafen: a.schlafen, uhr: a.uhr, pid: 7 });
+    expect(N.leseStartMarke(a.stateDir, "s1")).toBe(T0);
+    const b = aufbau();
+    await N.hookLauf(argsVon(ENDE), { stateDir: b.stateDir, lauf: b.lauf, schlafen: b.schlafen, uhr: b.uhr, pid: 7 });
+    expect(N.leseStartMarke(b.stateDir, "s1")).toBeNull();
+    // ein manueller Lauf mit --aktuell ohne Auslöser geht nicht über hookLauf; ohne --aktuell gibt es keine Marke
+    const c = aufbau();
+    await N.hookLauf(argsVon(["--ausloeser", "sessionstart"]), { stateDir: c.stateDir, lauf: c.lauf, schlafen: c.schlafen, uhr: c.uhr, pid: 7 });
+    expect(existsSync(join(c.stateDir, "langfuse-start"))).toBe(false);
   });
 
   test("SessionStart: kein Schlafen, lauf sofort mit --aktuell", async () => {
@@ -602,6 +619,10 @@ describe("hookLauf", () => {
 
   test("Invariante: die Wartezeit nach SessionEnd ist länger als die Ruhefrist bei bekanntem Ende (sonst gälte die Session beim Lauf noch als laufend)", () => {
     expect(N.WARTE_SESSIONEND).toBeGreaterThan(N.RUHEFRIST_BEENDET_MS);
+  });
+
+  test("Untergrenze: die Wartezeit nach SessionEnd beträgt mindestens 10 min (beobachtete Fortsetzungen lagen 1 bis 3,5 min nach dem Ende, #1953)", () => {
+    expect(N.WARTE_SESSIONEND).toBeGreaterThanOrEqual(10 * MIN);
   });
 });
 

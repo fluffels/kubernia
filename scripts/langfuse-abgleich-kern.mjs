@@ -24,7 +24,7 @@ export const ROW_LIMIT = 1000;
 export const STICHTAG = "2026-10-07T00:00:00Z";
 /** Ohne bekanntes Ende gilt eine Session erst nach dieser Ruhe als beendet (eine untätig offene Parallelsession bleibt unberührt). */
 export const RUHEFRIST_OHNE_ENDE_H = 24;
-/** Ruhe bei bekanntem Ende (SessionEnd): kürzer als die Wartezeit des Hooks (WARTE_SESSIONEND in langfuse-abgleich-hook), damit der Lauf nach dem Warten sendet. */
+/** Ruhe bei bekanntem Ende (SessionEnd): kürzer als die Wartezeit des Hooks (WARTE_SESSIONEND in langfuse-nachliefern), damit der Lauf nach dem Warten sendet. */
 export const RUHEFRIST_BEENDET_MS = 150_000;
 export const LEDGER_NAME = "langfuse-abgleich.json";
 
@@ -32,6 +32,20 @@ export const LEDGER_NAME = "langfuse-abgleich.json";
 export function vorStichtag(soll) {
   const zeiten = soll.map((e) => Date.parse(e.ts)).filter(Number.isFinite);
   return zeiten.length > 0 && Math.min(...zeiten) < Date.parse(STICHTAG);
+}
+
+/** Zeitversatz zwischen dem Ende-Zeitpunkt des Hooks und der letzten Transkript-Änderung. */
+export const ENDE_SCHLUPF_MS = 5_000;
+
+/**
+ * Gilt das vom SessionEnd-Kind gemeldete Ende noch? Nein, wenn das Transkript danach wuchs oder die Session nach dem Ende neu
+ * gestartet wurde (`fortgesetztAm`: Zeit der jüngsten Startmarke, null ohne): dann läuft sie wieder, und der Plugin-Hook sendet
+ * ihre weiteren Turns selbst (eine Nachlieferung ergäbe Dubletten, #1953). Ohne `ende` (kein SessionEnd-Lauf) gilt es immer.
+ */
+export function endeGilt({ ende, mtime, fortgesetztAm = null }) {
+  if (ende == null) return true;
+  if (mtime > ende + ENDE_SCHLUPF_MS) return false;
+  return !(fortgesetztAm != null && fortgesetztAm > ende);
 }
 
 /** Wartet der Nachlieferer noch auf diese Session (Ruhefrist nicht um)? 150 s bei bekanntem Ende, sonst 24 h seit der letzten Transkript-Änderung. */
