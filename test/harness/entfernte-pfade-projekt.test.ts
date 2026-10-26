@@ -94,7 +94,11 @@ describe("Textreste mit Projektnamen (#1906)", () => {
 const BESITZ = (JSON.parse(readFileSync(".factory/besitz.json", "utf8")) as { eintraege: { pfad: string; block?: string; schluessel?: string }[] }).eintraege
   .filter((e) => e.block === undefined && e.schluessel === undefined)
   .map((e) => e.pfad);
-const AUSNAHMEN_K9 = [...AUSNAHMEN, ...BESITZ.map((pfad) => ({ praefix: pfad, grund: "Besitz: pflegt upstream (Drift-Wächter)" }))];
+const AUSNAHMEN_K9 = [
+  ...AUSNAHMEN,
+  ...BESITZ.map((pfad) => ({ praefix: pfad, grund: "Besitz: pflegt upstream (Drift-Wächter)" })),
+  { praefix: "test/harness/entfernte-pfade-liste.json", grund: "die Liste der entfernten Pfade nennt sie ausdrücklich (Wächter unten)" },
+];
 const WEG_K9 = "den Ist-Zustand beschreiben: der Kern kommt per Sync vom Tag des Factory-Repos, das Werkzeug lebt dort";
 const RESTE_K9: Rest[] = [
   { name: "Export-Werkzeug", muster: /factory-export(?:-lib)?\.mjs/, fix: WEG_K9 },
@@ -200,5 +204,38 @@ describe("Jeder in Markdown genannte Testpfad existiert (#1882)", () => {
     for (const pfad of ["docs/adr/0001-x.md", "docs/analyse-2026-07-03-x.md", "docs/x.txt", besitzMarkdown]) {
       assert.deepEqual(fehlendeTestpfade([{ pfad, inhalt: weg }], existiert), [], pfad);
     }
+  });
+});
+
+// ---- Entfernte Dateien kommen nicht zurück (#1882) ----
+// Die Textregeln oben fangen nur Erwähnungen. Diese Regel prüft die Pfade selbst: keine getrackte Datei steht in der Liste der entfernten Dateien,
+// und unter den entfernten Ordnern liegt nichts. Die Liste (`entfernte-pfade-liste.json`) enthält Export-Werkzeug, Extraktionsliste und die gelöschten
+// Test-Dateien; ein Pfad, den es nur im Factory-Repo geben soll, wird so auch durch ein bloßes Wiederanlegen rot.
+type EntfernteListe = { dateien: string[]; praefixe: string[] };
+const ENTFERNT = JSON.parse(readFileSync("test/harness/entfernte-pfade-liste.json", "utf8")) as EntfernteListe;
+
+/** Pur: welche der getrackten Pfade stehen in der Liste der entfernten Dateien oder unter einem entfernten Ordner? */
+function wiederangelegt(getrackt: string[], liste: EntfernteListe): string[] {
+  const dateien = new Set(liste.dateien);
+  return getrackt.filter((p) => dateien.has(p) || liste.praefixe.some((pre) => p.startsWith(pre)));
+}
+
+describe("Entfernte Dateien kommen nicht zurück (#1882)", () => {
+  test("keine getrackte Datei steht in der Liste der entfernten Dateien", () => {
+    const getrackt = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean);
+    assert.deepEqual(wiederangelegt(getrackt, ENTFERNT), [], "Diese Dateien leben im Factory-Repo (Kern per Sync vom Tag): nicht wieder anlegen");
+  });
+
+  test("die Liste enthält die drei Pfade aus dem Ticket und den Ordner der Produkt-Entwürfe", () => {
+    for (const p of [`.factory/${"extraktion"}.json`, `scripts/${"factory-export"}.mjs`, `scripts/${"factory-export"}-lib.mjs`, `test/harness/${"factory-export"}.test.ts`, "test/harness/kern-abdeckung.json"]) {
+      assert.ok(ENTFERNT.dateien.includes(p), p);
+    }
+    assert.ok(ENTFERNT.praefixe.includes(`.factory/${"produkt"}/`));
+  });
+
+  test("Negativfall: ein wieder angelegter Pfad (Datei oder unter dem Ordner) wird gefunden, Nachbarn nicht", () => {
+    const liste: EntfernteListe = { dateien: ["a/x.mjs"], praefixe: ["b/dir/"] };
+    assert.deepEqual(wiederangelegt(["a/x.mjs", "b/dir/y.md", "b/dir/tief/z"], liste), ["a/x.mjs", "b/dir/y.md", "b/dir/tief/z"]);
+    assert.deepEqual(wiederangelegt(["a/x.mjs.bak", "a/y.mjs", "b/dirx/y", "b/dir"], liste), []);
   });
 });
