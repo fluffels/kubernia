@@ -18,11 +18,12 @@ import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as projektLib from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START, einheitText } from "../../scripts/besitz-lib.mjs";
+import { PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START, einheitText as einheitTextRoh } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { PRODUKT_QUOTE } from "../../scripts/produktquote-lib.mjs";
 
 const ROLLEN_PFADE = (projektLib as unknown as { ROLLEN_PFADE: Record<string, string> }).ROLLEN_PFADE;
+const einheitText = einheitTextRoh as (e: unknown, text: string) => string | null;
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const agents = readFileSync(WURZEL + "AGENTS.md", "utf8").replace(/\r\n/g, "\n");
 const projektBlock = agents.slice(agents.indexOf(PROJEKT_BLOCK_START as string), agents.indexOf(PROJEKT_BLOCK_ENDE as string));
@@ -96,7 +97,7 @@ describe("Kern und Vorlagen ohne Spielwort (#1943, #1942)", () => {
     const out: [string, string][] = [];
     for (const e of ladeBesitzManifest<{ pfad: string; ring: string; block?: string; schluessel?: string }>().eintraege) {
       const text = lies(e.pfad);
-      const einheit = text === null ? null : (einheitText(e, text) as string | null);
+      const einheit = text === null ? null : einheitText(e, text);
       if (einheit !== null) out.push([e.block || e.schluessel ? `${e.pfad} (${e.block ?? e.schluessel})` : e.pfad, einheit]);
     }
     for (const pfad of [".agents/skills/factory/SKILL.md", ".agents/skills/factory/ablauf.md", ROLLEN_PFADE.ticketSkill, ...vorlagen(".factory/produkt/vorlagen")]) {
