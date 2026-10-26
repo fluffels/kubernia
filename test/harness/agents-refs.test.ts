@@ -211,6 +211,7 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     assert.doesNotMatch(rueckfall, /Dahinter|Kern-Titel/);
     assert.equal(vorlageOderProjektBlock(null, "- **Kern-Titel.**"), "");
     assert.equal(vorlageOderProjektBlock(null, "<!-- factory-projekt:ende -->\n<!-- factory-projekt:start -->\nx"), "");
+    assert.equal(vorlageOderProjektBlock(null, "<!-- factory-projekt:start -->\n- **Nur Start.**\nRest"), "");
     const gegen = (text: string, vorlage: string | null) => pruefe(extrahiereVerweise(text), kernDocsVon(agents, vorlageOderProjektBlock(vorlage, agents))).length;
     assert.equal(gegen("AGENTS.md § Im Projekt-Block", null), 0);
     assert.equal(gegen("AGENTS.md § Im Projekt-Block", "- **Anderes.**"), 1);

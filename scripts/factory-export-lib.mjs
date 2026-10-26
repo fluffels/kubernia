@@ -71,12 +71,12 @@ export function pruefeKommandos(texte, skripte) {
 /**
  * Schreibt Agenten-Namen in `text` um (Teil 7b-8, #1936): `paare` sind `[von, nach]`, ein Paar mit gleichen Werten entfällt. Nur ganze Wörter
  * (davor und dahinter weder Buchstabe, Ziffer, `_` noch `-`, so bleiben `x-<von>` und `<von>-x` stehen), in einem Durchgang, damit ein neuer Name nie
- * ein zweites Mal trifft. Rückgabe `{ text, anzahl }`. Grenze: der Rollenname des Ticket-Skills ist kein Paar (er ist zugleich der Spielname).
+ * ein zweites Mal trifft (ein Name, der Vorsilbe eines anderen ist, trifft dank der Wortgrenze nur ganz). Rückgabe `{ text, anzahl }`. Grenze: der Rollenname des Ticket-Skills ist kein Paar (er ist zugleich der Spielname).
  */
 export function schreibeRollenUm(text, paare) {
   const aktiv = new Map(paare.filter(([von, nach]) => von !== nach && von !== ""));
   if (aktiv.size === 0) return { text, anzahl: 0 };
-  const re = new RegExp(`(?<![\\w-])(?:${[...aktiv.keys()].sort((a, b) => b.length - a.length).map(escapeRegex).join("|")})(?![\\w-])`, "g");
+  const re = new RegExp(`(?<![\\w-])(?:${[...aktiv.keys()].map(escapeRegex).join("|")})(?![\\w-])`, "g");
   let anzahl = 0;
   const neuerText = text.replace(re, (treffer) => {
     anzahl++;

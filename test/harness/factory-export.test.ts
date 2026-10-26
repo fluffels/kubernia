@@ -291,6 +291,9 @@ describe("streicheProjektBloecke (#1936)", () => {
     assert.equal(r.text, "A\nB\n\nC");
     assert.equal(r.bloecke, 2);
   });
+  test("steht vor dem Block keine Leerzeile, bleibt die Leerzeile danach stehen", () => {
+    assert.equal(s(["A", PB_START, "x", PB_ENDE, "", "B"].join("\n")).text, "A\n\nB");
+  });
   test("CRLF-Zeilen mit Marker werden erkannt", () => {
     assert.equal(s(["A", `${PB_START}\r`, "x", `${PB_ENDE}\r`, "B"].join("\n")).bloecke, 1);
   });
@@ -321,8 +324,13 @@ describe("schreibeRollenUm (#1936)", () => {
   });
   test("gleiche Werte und leere Quelle entfallen, ein neuer Name trifft nicht ein zweites Mal", () => {
     assert.equal(lib.schreibeRollenUm("alt-lens", [["alt-lens", "alt-lens"]]).anzahl, 0);
-    assert.equal(lib.schreibeRollenUm("alt-lens", [["", "x"]]).text, "alt-lens");
+    assert.equal(lib.schreibeRollenUm("a  b", [["", "x"]]).text, "a  b");
     assert.equal(lib.schreibeRollenUm("a b", [["a", "b"], ["b", "a"]]).text, "b a");
+  });
+  test("ein Name, der Vorsilbe eines anderen ist, trifft nur ganz", () => {
+    const r = lib.schreibeRollenUm("a-b-c und a-b", [["a-b", "X"], ["a-b-c", "Y"]]);
+    assert.equal(r.text, "Y und X");
+    assert.equal(r.anzahl, 2);
   });
   test("ein Name mit Regex-Zeichen wird wörtlich genommen", () => {
     assert.equal(lib.schreibeRollenUm("a.b und axb", [["a.b", "neu"]]).text, "neu und axb");
@@ -726,6 +734,7 @@ describe("Export aus HEAD", () => {
       assert.deepEqual(t({ "a.md": "npm run verify" }), []);
       assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", ".claude/settings/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
       assert.equal(t({ ".claude/agents/x.md": "npm run nein", "docs/b.md": "npm run nein2" }).length, 2);
+      assert.equal(t({ ".claude/skills/s.md": "npm run nein", ".claude/workflows/w.md": "npm run nein" }).length, 2);
     });
     test("Negativfall: ein unpaariger Marker in einer Factory-Seite ist ein Befund", () => {
       const r = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, PB_START) }) });
