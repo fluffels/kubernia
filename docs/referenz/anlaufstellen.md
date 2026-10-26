@@ -73,7 +73,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [arc42-architektur.md](../arc42-architektur.md) | für die Gesamtarchitektur (arc42 + C4/Mermaid-Diagramme §5) |
 | [arc42 › Hexagonale Sicht](../arc42-architektur.md#hexagonale-sicht-ports--adapters) | wenn du einen neuen Adapter oder eine neue Ein- oder Ausgabe baust (Speicher, Eingabeart, Export, Content-Quelle): welcher Port, welche Schicht, welche Tabellenzeile |
 | [architektur/harness.c4](../architektur/harness.c4) | für die Harness-Sichten desselben Modells (Übersicht, Bausteine, Gates und Leitplanken, Gate-Ketten `verify` und `verify:full`, CI und Board, der Ticket-Lauf als dynamische View; Elemente gegen `.claude/`, Hooks, Gates, CI und `.mcp.json` abgeglichen) |
-| [glossar.md](../glossar.md) | wenn dir ein Spielbegriff fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md); Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
+| [glossar.md](../glossar.md) | wenn dir ein Begriff des Projekts fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md)) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
 
 <!-- factory-projekt:start -->
@@ -108,7 +108,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [CONTRIBUTING.md](../../CONTRIBUTING.md) | als menschliche Mitentwicklerin: Einstieg, One-Command-Setup `npm run setup`, IntelliJ-Run-Configs, Dependabot-Policy, [Im Container entwickeln](../../CONTRIBUTING.md#im-container-entwickeln-optional-ohne-lokales-node) (devcontainer / `docker compose up`, #388) |
 | [ticket-reihenfolge.md](../ticket-reihenfolge.md) | wenn du das nächste Ticket auswählst oder ein neues Issue im Board einsortierst |
 | [befehle.md](befehle.md) | wenn du wissen willst, welches `npm run`-Kommando was tut und welche Umgebungsvariable ein Werkzeug liest |
-| [schichtregeln.md](schichtregeln.md) | bevor du in `src/` einen neuen Import setzt oder ein Modul verschiebst (`check:arch`) |
+| [schichtregeln.md](schichtregeln.md) | bevor du einen neuen Import setzt oder ein Modul verschiebst (Architektur-Wächter) |
 | [doku-vorlagen.md](doku-vorlagen.md) | wenn du eine Wiki-Seite anlegst: Kopfzeilen „fachlich geprüft am" bzw. Schnappschuss-Hinweis |
 
 ### Harness
