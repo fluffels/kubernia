@@ -12,14 +12,18 @@ const zaehleBefundZeilen = (
   }
 ).zaehleBefundZeilen;
 
-type Alert = { nummer: number; tool: string; regel: string; stufe: string | null; schwere: string; state: string; pfad?: string; ghsa?: string[] };
+type Alert = { nummer: number; tool: string; regel: string; stufe: string | null; schwere: string; state: string; pfad?: string; ghsa?: string[]; meldung?: string; ort?: { von: number; bis: number } | null; commit?: string; geschlossenVon?: unknown; grund?: string };
 type Bekannt = { nummern: Set<number>; regeln: Set<string>; alerts?: Set<number>; ghsa?: Set<string> };
-type Gruppe = { tool: string; regel: string; stufe: string | null; schwere: string; nummern: number[] };
-type Plan = { issue: { art: string; body?: string; neue?: number[] }; zeilen: Gruppe[] };
+type Gruppe = { tool: string; regel: string; stufe: string | null; schwere: string; nummern: number[]; vorgaenger?: number[]; grund?: string };
+type Plan = { issue: { art: string; nummer?: number; body?: string; neue?: number[]; nachfolger?: number[] }; zeilen: Gruppe[]; nachfolger: { nummer: number; vorgaenger: number[] }[] };
+type Folger = Map<number, { vorgaenger: number[]; grund: string }>;
 type Io = Record<string, (...a: never[]) => unknown>;
 const C = raw as unknown as {
   ZIEL_TITEL: string;
   alertsAus: (l: unknown) => Alert[];
+  vorgaengerAus: (l: unknown, owner: string) => Alert[];
+  codeAusschnitt: (t: unknown, ort: unknown) => string;
+  nachfolgerJeAlert: (a: { alerts: Alert[]; vorgaenger: Alert[]; lies: (p: string, c: string) => string | null }) => Folger;
   klasse: (a: Partial<Alert>) => string;
   slug: (r: string) => string;
   nummernIn: (t: string) => number[];
@@ -35,7 +39,7 @@ const C = raw as unknown as {
   deckendesIssue: (a: Partial<Alert>, issues: { number: number; titel: string; body: string }[]) => { number: number; grund: string } | null;
   zeilenText: (g: Gruppe) => string;
   issueBody: (g: Gruppe[], repo?: string) => string;
-  plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null; repo?: string }) => Plan;
+  plane: (a: { alerts: Alert[]; bekannt: Bekannt; offenesIssue: { number: number; body: string } | null; repo?: string; nachfolger?: Folger }) => Plan;
   fuehreAus: (a: Record<string, unknown>) => number;
   lauf: (a: Record<string, unknown>) => number;
 };
@@ -74,7 +78,33 @@ describe("klasse", () => {
 describe("alertsAus", () => {
   test("normalisiert und behält nur offene", () => {
     const l = C.alertsAus([roh({ number: 3 }), roh({ number: 4, state: "fixed" }), roh({ number: 5, state: "dismissed" })]);
-    expect(l).toEqual([{ nummer: 3, tool: "CodeQL", regel: "js/path-injection", stufe: "high", schwere: "error", state: "open", pfad: "", ghsa: [] }]);
+    expect(l).toEqual([
+      { nummer: 3, tool: "CodeQL", regel: "js/path-injection", stufe: "high", schwere: "error", state: "open", pfad: "", ghsa: [], meldung: "", ort: null, commit: "", geschlossenVon: null, grund: "" },
+    ]);
+  });
+  test("Meldung, Ort und Commit aus der jüngsten Instanz; ein Ort ohne Ende gilt als eine Zeile", () => {
+    const inst = (loc: Record<string, unknown>) => ({ most_recent_instance: { commit_sha: "abc", message: { text: "m" }, location: { path: "a.mjs", ...loc } } });
+    const [a, b, c, d] = C.alertsAus([
+      roh({ number: 1, ...inst({ start_line: 13, end_line: 15 }) }),
+      roh({ number: 2, ...inst({ start_line: 13 }) }),
+      roh({ number: 3, ...inst({ start_line: 0, end_line: 2 }) }),
+      roh({ number: 4, ...inst({ start_line: 5, end_line: 4 }) }),
+    ]);
+    expect([a.meldung, a.commit, a.ort]).toEqual(["m", "abc", { von: 13, bis: 15 }]);
+    expect(b.ort).toEqual({ von: 13, bis: 13 });
+    expect(c.ort).toBeNull();
+    expect(d.ort).toBeNull();
+  });
+  test("Ort nur mit ganzzahligen Zeilen, sonst null", () => {
+    const ortFuer = (loc: Record<string, unknown>) =>
+      C.alertsAus([roh({ number: 1, most_recent_instance: { location: loc } })]) as unknown as { ort: unknown }[];
+    expect(ortFuer({ start_line: "13" })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 1.5 })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: "13", end_line: 14 })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 1.5, end_line: 3 })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 13, end_line: "14" })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 13, end_line: 14.5 })[0].ort).toBeNull();
+    expect(ortFuer({ start_line: 13, end_line: 14 })[0].ort).toEqual({ von: 13, bis: 14 });
   });
   test("kein Array oder fehlende Nummer wirft", () => {
     expect(() => C.alertsAus({})).toThrow();
@@ -325,7 +355,7 @@ describe("plane", () => {
   const rest = (n: number, o: Partial<Alert> = {}) => alert({ nummer: n, tool: "Scorecard", regel: "PinnedDependenciesID", stufe: "high", ...o });
 
   test("keine Funde ohne Issue: nichts", () => {
-    expect(C.plane({ alerts: [], bekannt: keine, offenesIssue: null })).toEqual({ issue: { art: "nichts" }, zeilen: [], abgedeckt: [] });
+    expect(C.plane({ alerts: [], bekannt: keine, offenesIssue: null })).toEqual({ issue: { art: "nichts" }, zeilen: [], abgedeckt: [], nachfolger: [] });
   });
   test("keine Funde mit offenem Issue: schliessen", () => {
     expect(C.plane({ alerts: [], bekannt: keine, offenesIssue: { number: 9, body: "x" } }).issue.art).toBe("schliessen");
@@ -441,7 +471,7 @@ describe("Texte", () => {
 });
 
 describe("fuehreAus", () => {
-  const plan =(o: Partial<Plan> = {}): Plan => ({ issue: { art: "nichts" }, zeilen: [], ...o });
+  const plan =(o: Partial<Plan> = {}): Plan => ({ issue: { art: "nichts" }, zeilen: [], nachfolger: [], ...o });
   const GRUPPE: Gruppe = { tool: "Scorecard", regel: "X", stufe: "high", schwere: "error", nummern: [1] };
   function io(o: Record<string, unknown> = {}) {
     const calls: string[] = [];
@@ -664,11 +694,328 @@ describe("main: --dry-run über Deps (#1837)", () => {
     expect(log.join("\n")).toContain("Code-Scanning-Inbox: Projekt-Config nicht lesbar");
     expect(gepostet).toEqual([]);
   });
+  test("Nachfolger über die Deps (#1952): Vorgänger-Liste per Pfad, Dateien je (Commit, Pfad) nur einmal geladen", async () => {
+    const { gepostet, deps } = aufbau();
+    const inst = (commit: string, start: number) => ({
+      commit_sha: commit,
+      message: { text: "m" },
+      location: { path: "scripts/a mjs.mjs", start_line: start, end_line: start },
+    });
+    const regel = { id: "js/incomplete-sanitization", severity: "error", security_severity_level: "high" };
+    const pfade: string[] = [];
+    const geladen: string[] = [];
+    const seiten = (pfad: string) => {
+      pfade.push(pfad);
+      return pfad.includes("state=dismissed")
+        ? [{ number: 75, state: "dismissed", rule: regel, tool: { name: "CodeQL" }, dismissed_by: { login: OWNER, type: "User" }, dismissed_reason: "won't fix", most_recent_instance: inst("c0", 1) }]
+        : [109, 110].map((number) => ({ number, state: "open", rule: regel, tool: { name: "CodeQL" }, most_recent_instance: inst("c1", 2) }));
+    };
+    const ladeDatei = (pfad: string, commit: string) => {
+      geladen.push(`${commit}:${pfad}`);
+      return commit === "c0" ? "gleich\nrest" : "neu\ngleich";
+    };
+    expect(await main([], { ...deps, ladeSeiten: seiten, ladeDatei })).toBe(0);
+    expect(pfade.some((p) => p === "repos/o/r/code-scanning/alerts?state=dismissed&per_page=100")).toBe(true);
+    expect(geladen.sort()).toEqual(["c0:scripts/a mjs.mjs", "c1:scripts/a mjs.mjs"]);
+    expect(gepostet[0][1]).toContain("Vorgänger Nr. 75");
+  });
   test("ohne Flag: Zeile ins Sammelticket gepostet, kein [dry-run]", async () => {
     const { gepostet, log, deps } = aufbau();
     expect(await main([], deps)).toBe(0);
     expect(gepostet).toHaveLength(1);
     expect(gepostet[0][0]).toBe(5);
     expect(log.join("\n")).not.toContain("[dry-run]");
+  });
+});
+
+describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
+  const owner = { login: OWNER, type: "User" };
+  const fremd = { login: "fremder", type: "User" };
+  const instanz = (o: Record<string, unknown> = {}) => ({
+    commit_sha: "c1",
+    message: { text: "This does not escape backslash characters in the input." },
+    location: { path: "scripts/a.mjs", start_line: 13, end_line: 13 },
+    ...o,
+  });
+  const rohAlert = (nummer: number, o: Record<string, unknown> = {}) =>
+    roh({ number: nummer, rule: { id: "js/incomplete-sanitization", severity: "error", security_severity_level: "high" }, most_recent_instance: instanz(), ...o });
+  const dismissed = (nummer: number, o: Record<string, unknown> = {}) =>
+    rohAlert(nummer, { state: "dismissed", dismissed_by: owner, dismissed_reason: "won't fix", most_recent_instance: instanz({ commit_sha: "c0" }), ...o });
+  const datei = (zeile13: string, davor = "", danach = "") => `${davor}l1\n${"x\n".repeat(11)}${zeile13}\n${danach}`;
+
+  describe("vorgaengerAus", () => {
+    test("nur dismissed von vertrauten Accounts (Owner, github-actions[bot])", () => {
+      const l = C.vorgaengerAus(
+        [
+          dismissed(1),
+          dismissed(2, { dismissed_by: { login: "github-actions[bot]", type: "Bot" } }),
+          dismissed(3, { dismissed_by: fremd }),
+          dismissed(4, { dismissed_by: null }),
+          rohAlert(5, { dismissed_by: owner }),
+          rohAlert(6, { state: "fixed", dismissed_by: owner }),
+        ],
+        OWNER,
+      );
+      expect(l.map((a) => a.nummer)).toEqual([1, 2]);
+      expect(l[0].grund).toBe("won't fix");
+    });
+    test("keine Liste wirft", () => {
+      expect(() => C.vorgaengerAus({}, OWNER)).toThrow();
+    });
+  });
+
+  describe("codeAusschnitt", () => {
+    test("CRLF, 1-basiert, getrimmt, mehrzeilig", () => {
+      expect(C.codeAusschnitt("a\r\n  b  \r\nc\r\nd", { von: 2, bis: 3 })).toBe("b\nc");
+    });
+    test("außerhalb des Bereichs, ohne Ort oder ohne Text: leer", () => {
+      expect(C.codeAusschnitt("a\nb", { von: 3, bis: 3 })).toBe("");
+      expect(C.codeAusschnitt("a\nb", null)).toBe("");
+      expect(C.codeAusschnitt(null, { von: 1, bis: 1 })).toBe("");
+    });
+    test("nur Leerraum in der markierten Zeile: leer", () => {
+      expect(C.codeAusschnitt("a\n   \nb", { von: 2, bis: 2 })).toBe("");
+    });
+    test("mehrzeiliger Bereich nur aus Leerraum: leer (kein Umbruch übrig)", () => {
+      expect(C.codeAusschnitt("a\n \n \nb", { von: 2, bis: 3 })).toBe("");
+    });
+  });
+
+  describe("nachfolgerJeAlert", () => {
+    const ort14 = { most_recent_instance: instanz({ location: { path: "scripts/a.mjs", start_line: 14, end_line: 14 } }) };
+    const eins = (o: Record<string, unknown> = {}) => C.alertsAus([rohAlert(109, { ...ort14, ...o })]);
+    const vor = (o: Record<string, unknown> = {}) => C.vorgaengerAus([dismissed(75, o)], OWNER);
+    const alt = datei("  const x = a.replace(/\\|/g, '\\\\|');");
+    const neu = datei("const x = a.replace(/\\|/g, '\\\\|');", "NEU\n", "mehr\n");
+    const liesNach = (alle: Record<string, string | null>) => (p: string, c: string) => alle[`${c}:${p}`] ?? null;
+    const dateien = { "c0:scripts/a.mjs": alt, "c1:scripts/a.mjs": neu };
+
+    test("Fall 75→109: gleiche Codezeile bei verschobener Zeilennummer ist ein Nachfolger", () => {
+      const a = eins({ most_recent_instance: instanz({ location: { path: "scripts/a.mjs", start_line: 14, end_line: 14 } }) });
+      const karte = C.nachfolgerJeAlert({ alerts: a, vorgaenger: vor(), lies: liesNach(dateien) });
+      expect(karte.get(109)).toEqual({ vorgaenger: [75], grund: "won't fix" });
+    });
+    test.each([
+      ["andere Regel", { rule: { id: "js/andere", severity: "error", security_severity_level: "high" } }, {}],
+      ["anderer Pfad", { most_recent_instance: instanz({ location: { path: "scripts/b.mjs", start_line: 14, end_line: 14 } }) }, {}],
+      ["andere Meldung", { most_recent_instance: instanz({ message: { text: "anders" }, location: { path: "scripts/a.mjs", start_line: 14, end_line: 14 } }) }, {}],
+    ])("%s: kein Nachfolger", (_n, spitzeRoh, _v) => {
+      const a = eins(spitzeRoh);
+      const lies = liesNach({ ...dateien, "c1:scripts/b.mjs": neu });
+      expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: vor(), lies }).size).toBe(0);
+    });
+    test("Vorgänger eines anderen Tools (sonst identisch): kein Nachfolger", () => {
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor({ tool: { name: "Semgrep" } }), lies: liesNach(dateien) }).size).toBe(0);
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies: liesNach(dateien) }).size).toBe(1);
+    });
+    test("geänderte Codezeile bleibt Spitze", () => {
+      const lies = liesNach({ ...dateien, "c1:scripts/a.mjs": datei("const y = a.replace(/\\|/g, 'x');", "NEU\n") });
+      const a = eins();
+      expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: vor(), lies }).size).toBe(0);
+    });
+    test("Datei nicht lesbar (null): kein Nachfolger, auch nicht für den Vorgänger", () => {
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies: liesNach({ "c0:scripts/a.mjs": alt }) }).size).toBe(0);
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies: liesNach({ "c1:scripts/a.mjs": neu }) }).size).toBe(0);
+    });
+    test("leerer Ausschnitt in beiden Dateien ist kein Treffer", () => {
+      const lies = liesNach({ "c0:scripts/a.mjs": datei("   "), "c1:scripts/a.mjs": datei("   ", "NEU\n") });
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies }).size).toBe(0);
+    });
+    describe("Guards am Alert und am Vorgänger (Datei liefert für jeden Commit dieselben, gleichen Zeilen)", () => {
+      const gleich = datei("same;", "", "same;\n");
+      const lies = () => gleich;
+      const ort = { path: "scripts/a.mjs", start_line: 14, end_line: 14 };
+      const ortV = { path: "scripts/a.mjs", start_line: 13, end_line: 13 };
+      const regelFalsch = { id: "bad id!", severity: "error", security_severity_level: "high" };
+      test("Kontrolle: ohne Guard-Verletzung ist es ein Nachfolger", () => {
+        expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: vor(), lies }).size).toBe(1);
+      });
+      test("Alert ohne Commit: kein Nachfolger", () => {
+        const a = eins({ most_recent_instance: instanz({ commit_sha: "", location: ort }) });
+        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: vor(), lies }).size).toBe(0);
+      });
+      test("Vorgänger ohne Commit: kein Nachfolger (die Contents-API läse sonst den Standard-Branch)", () => {
+        const v = vor({ most_recent_instance: instanz({ commit_sha: "", location: ortV }) });
+        expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: v, lies }).size).toBe(0);
+      });
+      test("Alert und Vorgänger ohne Meldung: kein Nachfolger", () => {
+        const a = eins({ most_recent_instance: instanz({ message: { text: "" }, location: ort }) });
+        const v = vor({ most_recent_instance: instanz({ commit_sha: "c0", message: { text: "" }, location: ortV }) });
+        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: v, lies }).size).toBe(0);
+      });
+      test("Alert ohne Ort: kein Nachfolger", () => {
+        const a = eins({ most_recent_instance: instanz({ location: { path: "scripts/a.mjs" } }) });
+        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: vor(), lies }).size).toBe(0);
+      });
+      test("unlesbare Regel-ID (beide unbekannt): kein Nachfolger", () => {
+        const a = eins({ rule: regelFalsch });
+        const v = vor({ rule: regelFalsch });
+        expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: v, lies }).size).toBe(0);
+      });
+    });
+    test("zwei passende Vorgänger: aufsteigend, der Grund des kleinsten gewinnt", () => {
+      const v = C.vorgaengerAus([dismissed(80, { dismissed_reason: "false positive" }), dismissed(75)], OWNER);
+      expect(C.nachfolgerJeAlert({ alerts: eins(), vorgaenger: v, lies: liesNach(dateien) }).get(109)).toEqual({ vorgaenger: [75, 80], grund: "won't fix" });
+    });
+    test("Zeilen-Klasse und test/-Pfade werden nicht befragt (kein lies-Aufruf)", () => {
+      let aufrufe = 0;
+      const lies = () => {
+        aufrufe += 1;
+        return neu;
+      };
+      const imTest = eins({ most_recent_instance: instanz({ location: { path: "test/a.test.ts", start_line: 13, end_line: 13 } }) });
+      const mittel = eins({ rule: { id: "js/incomplete-sanitization", severity: "warning", security_severity_level: "medium" } });
+      const v = C.vorgaengerAus([dismissed(75, { most_recent_instance: instanz({ location: { path: "test/a.test.ts", start_line: 13, end_line: 13 } }) })], OWNER);
+      C.nachfolgerJeAlert({ alerts: [...imTest, ...mittel], vorgaenger: [...v, ...vor()], lies });
+      expect(aufrufe).toBe(0);
+    });
+    test("der Alert ist nie sein eigener Vorgänger", () => {
+      const a = eins();
+      const selbst = C.vorgaengerAus([dismissed(109)], OWNER);
+      expect(C.nachfolgerJeAlert({ alerts: a, vorgaenger: selbst, lies: liesNach(dateien) }).size).toBe(0);
+    });
+  });
+
+  describe("plane und Texte", () => {
+    const a109 = alert({ nummer: 109, regel: "js/incomplete-sanitization" });
+    const folger: Folger = new Map([[109, { vorgaenger: [75], grund: "won't fix" }]]);
+    test("Nachfolger wird eine Zeile mit Vorgänger, keine Spitze", () => {
+      const p = C.plane({ alerts: [a109], bekannt: keine, offenesIssue: null, nachfolger: folger });
+      expect(p.issue.art).toBe("nichts");
+      expect(p.zeilen).toHaveLength(1);
+      const text = C.zeilenText(p.zeilen[0]);
+      expect(text).toContain("Alerts 109");
+      expect(text).toContain("Vorgänger Nr. 75");
+      expect(text).toContain("won't fix");
+      expect(C.nummernIn(text)).toEqual([109]);
+      expect(p.nachfolger).toEqual([{ nummer: 109, vorgaenger: [75] }]);
+    });
+    test("offenes Spitzen-Ticket wird mit Nachfolger-Kommentar geschlossen", () => {
+      const p = C.plane({ alerts: [a109], bekannt: keine, offenesIssue: { number: 1952, body: "x" }, nachfolger: folger });
+      expect(p.issue).toEqual({ art: "schliessen", nummer: 1952, nachfolger: [109] });
+      const kommentare: string[] = [];
+      C.fuehreAus({ plan: p, io: { schliesse: (_n: number, k: string) => kommentare.push(k), zielSammelticket: () => 5, postZeilen: () => undefined, log: () => undefined } });
+      expect(kommentare[0]).toContain("Alert 109");
+      expect(kommentare[0]).toContain("Nachfolger");
+    });
+    test("gemischt: ein echter Spitzen-Alert bleibt Ticket, der Nachfolger wird Zeile", () => {
+      const p = C.plane({ alerts: [a109, alert({ nummer: 110 })], bekannt: keine, offenesIssue: null, nachfolger: folger });
+      expect(p.issue.art).toBe("anlegen");
+      expect(p.issue.body).toContain("Alerts 110");
+      expect(p.issue.body).not.toContain("109");
+      expect(p.zeilen.map((g) => g.nummern)).toEqual([[109]]);
+    });
+    test("Nummer schon in offener Zeile: keine neue Zeile (kein wöchentliches Neu-Posten)", () => {
+      const bekannt = { ...keine, nummern: new Set([109]) };
+      const p = C.plane({ alerts: [a109], bekannt, offenesIssue: null, nachfolger: folger });
+      expect(p.zeilen).toEqual([]);
+      expect(p.issue.art).toBe("nichts");
+    });
+    test("Nummer schon in offener Zeile: auch das Log nennt den Nachfolger nicht erneut", () => {
+      const bekannt = { ...keine, nummern: new Set([109]) };
+      expect(C.plane({ alerts: [a109], bekannt, offenesIssue: null, nachfolger: folger }).nachfolger).toEqual([]);
+    });
+    test("regelweite Wiedervorlage hält einen Nachfolger nicht still, das Feld alerts schon", () => {
+      const regelWv = { ...keine, regeln: new Set(["js-incomplete-sanitization"]) };
+      expect(C.plane({ alerts: [a109], bekannt: regelWv, offenesIssue: null, nachfolger: folger }).zeilen.map((g) => g.nummern)).toEqual([[109]]);
+      const alertWv = { ...keine, alerts: new Set([109]) };
+      expect(C.plane({ alerts: [a109], bekannt: alertWv, offenesIssue: null, nachfolger: folger }).zeilen).toEqual([]);
+    });
+    test("Kommentar beim Schließen nennt deckendes Issue und Nachfolger zusammen", () => {
+      const bekannt = { ...keine, issues: [{ number: 42, titel: "x", body: "Code-Scanning-Alert 110" }] };
+      const p = C.plane({ alerts: [a109, alert({ nummer: 110 })], bekannt, offenesIssue: { number: 1952, body: "x" }, nachfolger: folger });
+      expect(p.issue).toEqual({ art: "schliessen", nummer: 1952, abgedecktDurch: [42], nachfolger: [109] });
+      const kommentare: string[] = [];
+      C.fuehreAus({ plan: p, io: { schliesse: (_n: number, k: string) => kommentare.push(k), zielSammelticket: () => 5, postZeilen: () => undefined, log: () => undefined } });
+      expect(kommentare[0]).toContain("#42");
+      expect(kommentare[0]).toContain("Alert 109");
+    });
+    test("zwei Nachfolger desselben Vorgängers: Vorgänger und Grund je einmal, Vorgänger aufsteigend", () => {
+      const f: Folger = new Map([
+        [109, { vorgaenger: [80, 75], grund: "won't fix" }],
+        [111, { vorgaenger: [75], grund: "won't fix" }],
+      ]);
+      const p = C.plane({ alerts: [a109, alert({ nummer: 111, regel: "js/incomplete-sanitization" })], bekannt: keine, offenesIssue: null, nachfolger: f });
+      const text = C.zeilenText(p.zeilen[0]);
+      expect(text).toContain("Vorgänger Nr. 75, 80 (");
+      expect(text).toContain("geschlossen als won't fix)");
+    });
+    test("Vorgänger ohne Grund: geschlossen als unbekannt", () => {
+      const p = C.plane({ alerts: [a109], bekannt: keine, offenesIssue: null, nachfolger: new Map([[109, { vorgaenger: [75], grund: "" }]]) });
+      expect(C.zeilenText(p.zeilen[0])).toContain("geschlossen als unbekannt)");
+    });
+    test("ohne Nachfolger-Map verhält sich der Plan wie bisher (Spitze)", () => {
+      expect(C.plane({ alerts: [a109], bekannt: keine, offenesIssue: null }).issue.art).toBe("anlegen");
+    });
+    test("mehrere Vorgänger und Gründe stehen in der Zeile", () => {
+      const f: Folger = new Map([
+        [109, { vorgaenger: [75, 80], grund: "won't fix" }],
+        [111, { vorgaenger: [90], grund: "false positive" }],
+      ]);
+      const p = C.plane({ alerts: [a109, alert({ nummer: 111, regel: "js/incomplete-sanitization" })], bekannt: keine, offenesIssue: null, nachfolger: f });
+      const text = C.zeilenText(p.zeilen[0]);
+      expect(text).toContain("Nr. 75, 80, 90");
+      expect(text).toContain("won't fix / false positive");
+    });
+  });
+
+  describe("lauf", () => {
+    const kontext = { offenesIssue: null, kommentare: [], owner: OWNER, wiedervorlagen: [], sammelTitel: [] };
+    const lauf = (io: Record<string, unknown>, logs: string[] = []) => {
+      const gepostet: string[] = [];
+      const code = C.lauf({
+        io: { ladeKontext: () => kontext, zielSammelticket: () => 5, postZeilen: (_n: number, t: string) => gepostet.push(t), log: (m: string) => logs.push(m), ...io },
+        trocken: false,
+      });
+      return { code, gepostet, logs };
+    };
+    const alerts = () => [rohAlert(109, { most_recent_instance: instanz({ location: { path: "scripts/a.mjs", start_line: 14, end_line: 14 } }) })];
+    const dateien: Record<string, string> = { "c0:scripts/a.mjs": datei("zeile"), "c1:scripts/a.mjs": datei("zeile", "NEU\n") };
+    const lies = (p: string, c: string) => dateien[`${c}:${p}`] ?? null;
+    test("Nachfolger: Zeile gepostet, Exit 0, Log nennt den Vorgänger", () => {
+      const r = lauf({ ladeAlerts: alerts, ladeVorgaenger: () => [dismissed(75)], ladeDatei: lies });
+      expect(r.code).toBe(0);
+      expect(r.gepostet).toHaveLength(1);
+      expect(r.gepostet[0]).toContain("Vorgänger Nr. 75");
+      expect(r.logs.join("\n")).toContain("Alert 109 ist Nachfolger von Nr. 75");
+    });
+    test("Vorgänger nicht ladbar: Warnung, Alert bleibt Spitze, Exit 0", () => {
+      const angelegt: string[] = [];
+      const r = lauf({
+        ladeAlerts: alerts,
+        ladeVorgaenger: () => {
+          throw new Error("403");
+        },
+        ladeDatei: lies,
+        legeIssueAn: (_t: string, b: string) => angelegt.push(b) && 7,
+        projectToken: undefined,
+      });
+      expect(r.code).toBe(0);
+      expect(r.logs.some((l) => l.startsWith("::warning::Vorgänger-Alerts nicht lesbar"))).toBe(true);
+      expect(angelegt).toHaveLength(1);
+      expect(r.gepostet).toEqual([]);
+    });
+    test("ohne ladeVorgaenger in io (Alt-Fakes): unverändert Spitze", () => {
+      const angelegt: string[] = [];
+      const r = lauf({ ladeAlerts: alerts, legeIssueAn: (_t: string, b: string) => angelegt.push(b) && 7, projectToken: undefined });
+      expect(r.code).toBe(0);
+      expect(angelegt).toHaveLength(1);
+    });
+    test("ohne Spitzen-Alert wird die Vorgänger-Liste nicht geladen", () => {
+      let geladen = 0;
+      lauf({
+        ladeAlerts: () => [roh({ tool: { name: "Semgrep" } })],
+        ladeVorgaenger: () => {
+          geladen += 1;
+          return [];
+        },
+      });
+      expect(geladen).toBe(0);
+    });
+    test("ohne ladeDatei in io: kein Nachfolger (Alert bleibt Spitze)", () => {
+      const angelegt: string[] = [];
+      lauf({ ladeAlerts: alerts, ladeVorgaenger: () => [dismissed(75)], legeIssueAn: (_t: string, b: string) => angelegt.push(b) && 7, projectToken: undefined });
+      expect(angelegt).toHaveLength(1);
+    });
   });
 });

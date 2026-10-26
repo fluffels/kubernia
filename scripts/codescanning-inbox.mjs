@@ -13,6 +13,9 @@
  * (nicht Spitzen-Ticket, nicht Sammeltickets), wenn sein Body `Code-Scanning-Alert N` (bzw. `Code-Scanning-Alerts N, M`; ein
  * bloßes `Alert N` anderer Werkzeuge zählt nicht) nennt oder die Regel-ID (Wortgrenze) samt Verzeichnis des Alert-Pfads;
  * der Lauf loggt die Abdeckung, nach dem Schließen taucht der Alert wieder auf.
+ * Nachfolger: ein Spitzen-Alert, der einem vertraut geschlossenen (dismissed) Alert entspricht (gleiches Tool, gleiche Regel, gleicher Pfad,
+ * gleicher Meldungstext, wortgleiche markierte Codezeilen im jeweiligen Commit), wird nur eine Zeile mit Vorschlag statt Spitzen-Ticket: CodeQL
+ * vergibt nach einer Änderung der Folgezeilen einen neuen Fingerprint. Unlesbare Vorgänger oder Datei: der Alert bleibt Spitze.
  * Bekannte Grenze: Regel+Verzeichnis hält auch einen NEUEN Alert derselben Regel im selben Verzeichnis still, solange das deckende Issue offen ist.
  *
  * Aufruf: node scripts/codescanning-inbox.mjs [--dry-run]   (Workflow: .github/workflows/codescanning-inbox.yml)
@@ -47,24 +50,80 @@ export const slug = (regel) =>
  * `[A-Za-z0-9/_.-]` geprüft, sonst `unbekannt` (sie landet in Ticket und Zeile). Pur.
  */
 export function alertsAus(liste) {
+  return alertListeAus(liste).filter((a) => a.state === "open");
+}
+
+/** Zeilenbereich `{ von, bis }` (1-basiert) der markierten Stelle oder null, wenn er fehlt oder unbrauchbar ist. Pur. */
+function ortAus(loc) {
+  const von = loc?.start_line;
+  const bis = loc?.end_line ?? von;
+  return Number.isInteger(von) && Number.isInteger(bis) && von >= 1 && bis >= von ? { von, bis } : null;
+}
+
+/** Felder der jüngsten Instanz eines Alerts (Pfad, GHSA-IDs, Meldung, Ort, Commit). Pur. */
+const instanzAus = (inst) => ({
+  pfad: String(inst?.location?.path ?? ""),
+  ghsa: ghsaIn(inst?.message?.text),
+  meldung: String(inst?.message?.text ?? ""),
+  ort: ortAus(inst?.location),
+  commit: String(inst?.commit_sha ?? ""),
+});
+
+/** Normalisiert die Roh-Liste (jeder Zustand); wirft bei Nicht-Liste oder Nummer ohne Ganzzahl. Pur. */
+function alertListeAus(liste) {
   if (!Array.isArray(liste)) throw new Error("Unerwartete Code-Scanning-Antwort (keine Liste).");
-  return liste
-    .map((a) => {
-      if (!Number.isInteger(a?.number)) throw new Error(`Unerwartete Form eines Alerts: ${JSON.stringify(a)?.slice(0, 120)}`);
-      const id = String(a?.rule?.id ?? "");
-      const stufe = a?.rule?.security_severity_level;
-      return {
-        nummer: a.number,
-        tool: String(a?.tool?.name ?? "unbekannt"),
-        regel: /^[A-Za-z0-9/_.-]+$/.test(id) ? id : "unbekannt",
-        stufe: typeof stufe === "string" && stufe !== "" ? stufe.toLowerCase() : null,
-        schwere: String(a?.rule?.severity ?? "").toLowerCase(),
-        state: String(a?.state ?? ""),
-        pfad: String(a?.most_recent_instance?.location?.path ?? ""),
-        ghsa: ghsaIn(a?.most_recent_instance?.message?.text),
-      };
-    })
-    .filter((a) => a.state === "open");
+  return liste.map((a) => {
+    if (!Number.isInteger(a?.number)) throw new Error(`Unerwartete Form eines Alerts: ${JSON.stringify(a)?.slice(0, 120)}`);
+    const id = String(a?.rule?.id ?? "");
+    const stufe = a?.rule?.security_severity_level;
+    return {
+      nummer: a.number,
+      tool: String(a?.tool?.name ?? "unbekannt"),
+      regel: /^[A-Za-z0-9/_.-]+$/.test(id) ? id : "unbekannt",
+      stufe: typeof stufe === "string" && stufe !== "" ? stufe.toLowerCase() : null,
+      schwere: String(a?.rule?.severity ?? "").toLowerCase(),
+      state: String(a?.state ?? ""),
+      ...instanzAus(a?.most_recent_instance),
+      geschlossenVon: a?.dismissed_by ?? null,
+      grund: String(a?.dismissed_reason ?? ""),
+    };
+  });
+}
+
+/** Vorgänger-Kandidaten: nur dismissed Alerts, die ein VERTRAUTER Account (`istVertraut`) geschlossen hat. Pur. */
+export function vorgaengerAus(liste, owner) {
+  return alertListeAus(liste).filter((a) => a.state === "dismissed" && istVertraut(a.geschlossenVon, owner));
+}
+
+/** Die markierten Zeilen `ort` aus `text` (1-basiert; das Trimmen je Zeile entfernt auch ein `\r`), mit Zeilenumbruch verbunden; ohne Ort oder außerhalb des Textes "". Pur. */
+export function codeAusschnitt(text, ort) {
+  if (typeof text !== "string" || !ort) return "";
+  const zeilen = text.split("\n");
+  return zeilen.slice(ort.von - 1, ort.bis).map((z) => z.trim()).join("\n").trim();
+}
+
+/**
+ * Nachfolger-Erkennung: ein Spitzen-Alert, der einem vertraut geschlossenen Alert entspricht (gleiches Tool, gleiche Regel, gleicher Pfad,
+ * gleicher Meldungstext und wortgleiche markierte Codezeilen, jeweils im Stand des eigenen Commits). CodeQL vergibt nach einer Änderung der
+ * Folgezeilen einen neuen Fingerprint und damit einen neuen Alert. `lies(pfad, commit)` liefert den Dateitext oder null. Ergebnis:
+ * Map Nummer → { vorgaenger: number[], grund }. Unlesbare Datei, leerer Ausschnitt oder fehlender Ort: kein Treffer (der Alert bleibt Spitze). Pur.
+ */
+export function nachfolgerJeAlert({ alerts, vorgaenger, lies }) {
+  const karte = new Map();
+  const ausschnitt = (a) => codeAusschnitt(lies(a.pfad, a.commit), a.ort);
+  for (const a of alerts) {
+    if (klasse(a) !== "spitze" || !a.commit || !a.meldung || a.regel === "unbekannt") continue;
+    // Ohne Commit läse die Contents-API den Standard-Branch, also nie einen Vorgänger ohne Commit gelten lassen.
+    const kandidaten = vorgaenger
+      .filter((v) => v.nummer !== a.nummer && v.tool === a.tool && v.regel === a.regel && v.pfad === a.pfad && v.meldung === a.meldung && v.commit)
+      .sort((x, y) => x.nummer - y.nummer);
+    if (kandidaten.length === 0) continue;
+    const eigen = ausschnitt(a);
+    if (eigen === "") continue;
+    const treffer = kandidaten.filter((v) => ausschnitt(v) === eigen);
+    if (treffer.length > 0) karte.set(a.nummer, { vorgaenger: treffer.map((v) => v.nummer), grund: treffer[0].grund });
+  }
+  return karte;
 }
 
 /**
@@ -144,10 +203,17 @@ const KOMMENTAR_ABGEDECKT = (nummern) =>
   `Die offenen Code-Scanning-Befunde high/critical sind durch ${nummern.map((n) => `#${n}`).join(", ")} abgedeckt, automatisch geschlossen. Sie tauchen wieder auf, sobald das deckende Issue geschlossen ist und der Alert offen bleibt.`;
 
 const alertListe = (g) => `Alerts ${g.nummern.join(", ")}`;
+const KOMMENTAR_NACHFOLGER = (nummern) =>
+  `Die offenen Code-Scanning-Befunde high/critical sind Nachfolger vertraut geschlossener Alerts (${nummern.map((n) => `Alert ${n}`).join(", ")}) und stehen als Zeile im Sammelticket, automatisch geschlossen.`;
 
 /** Die Zeile für das Sammelticket. Pur. */
-export const zeilenText = (g) =>
-  `- [ ] Code-Scanning: ${g.tool} ${g.regel} (${g.stufe ?? g.schwere}), ${alertListe(g)}. Vorschlag: beheben, sonst mit Grund dismissen oder Wiedervorlage ${WV_PRAEFIX}${slug(g.regel)}`;
+export const zeilenText = (g) => {
+  const kopf = `- [ ] Code-Scanning: ${g.tool} ${g.regel} (${g.stufe ?? g.schwere}), ${alertListe(g)}.`;
+  // "Nr." statt "Alert": `nummernIn` soll die Nummer des Vorgängers nicht als bekannten Alert einlesen.
+  if (g.vorgaenger?.length > 0)
+    return `${kopf} Vorschlag: Nachfolger von Vorgänger Nr. ${g.vorgaenger.join(", ")} (gleiche Regel, Datei, Meldung und Codezeile; geschlossen als ${g.grund || "unbekannt"}), Schließung mit demselben Grund übernehmen`;
+  return `${kopf} Vorschlag: beheben, sonst mit Grund dismissen oder Wiedervorlage ${WV_PRAEFIX}${slug(g.regel)}`;
+};
 
 /** Body des Spitzen-Tickets: je Regel eine Zeile, Prüfauftrag, keine Pfade und keine Meldungstexte aus dem Alert. `repo` = `owner/name`. Pur. */
 export function issueBody(gruppen, repo = "<owner>/<repo>") {
@@ -162,12 +228,17 @@ export function issueBody(gruppen, repo = "<owner>/<repo>") {
 }
 
 /** Gruppiert Alerts nach (Tool, Regel), sortiert (Tool, Regel, Nummern). Pur. */
-function gruppiere(alerts) {
+function gruppiere(alerts, nachfolger = null) {
   const karte = new Map();
   for (const a of [...alerts].sort((x, y) => x.nummer - y.nummer)) {
     const key = `${a.tool}\u0000${a.regel}`;
     const g = karte.get(key) ?? { tool: a.tool, regel: a.regel, stufe: a.stufe, schwere: a.schwere, nummern: [] };
     g.nummern.push(a.nummer);
+    const n = nachfolger?.get(a.nummer);
+    if (n) {
+      g.vorgaenger = [...new Set([...(g.vorgaenger ?? []), ...n.vorgaenger])].sort((x, y) => x - y);
+      g.grund = [...new Set([...(g.grund ? g.grund.split(" / ") : []), n.grund])].join(" / ");
+    }
     karte.set(key, g);
   }
   return [...karte.values()].sort((x, y) => x.tool.localeCompare(y.tool) || x.regel.localeCompare(y.regel));
@@ -179,7 +250,7 @@ function gruppiere(alerts) {
  * sonst anlegen bzw. mit geändertem Body aktualisieren (`neue` = Nummern, die der alte Body noch nicht nannte). Zeilen = `zeile`-Alerts ohne
  * bekannte Nummer, ohne bekannte Regel und ohne vollständig bekannte GHSA-IDs, je (Tool, Regel) eine. Pur, deterministisch.
  */
-export function plane({ alerts, bekannt, offenesIssue, repo }) {
+export function plane({ alerts, bekannt, offenesIssue, repo, nachfolger = new Map() }) {
   const abgedeckt = [];
   const deckt = (a) => {
     const d = deckendesIssue(a, bekannt.issues);
@@ -188,19 +259,37 @@ export function plane({ alerts, bekannt, offenesIssue, repo }) {
   };
   const ghsaBekannt = (a) => a.ghsa?.length > 0 && a.ghsa.every((g) => bekannt.ghsa?.has(g));
   const stumm = (a) => bekannt.nummern.has(a.nummer) || bekannt.regeln.has(slug(a.regel)) || ghsaBekannt(a);
-  const spitze = gruppiere(alerts.filter((a) => klasse(a) === "spitze" && !bekannt.alerts?.has(a.nummer) && !deckt(a)));
-  const zeilen = gruppiere(alerts.filter((a) => klasse(a) === "zeile" && !stumm(a) && !bekannt.alerts?.has(a.nummer) && !deckt(a)));
+  const kandidaten = alerts.filter((a) => klasse(a) === "spitze" && !bekannt.alerts?.has(a.nummer) && !deckt(a));
+  const folger = kandidaten.filter((a) => nachfolger.has(a.nummer));
+  const spitze = gruppiere(kandidaten.filter((a) => !nachfolger.has(a.nummer)));
+  // Ein Nachfolger wird nur still, wenn seine Nummer schon in einer offenen Zeile steht; die regelweite Wiedervorlage deckt keine Spitze.
+  const folgerZeilen = gruppiere(folger.filter((a) => !bekannt.nummern.has(a.nummer)), nachfolger);
+  const zeilen = [...gruppiere(alerts.filter((a) => klasse(a) === "zeile" && !stumm(a) && !bekannt.alerts?.has(a.nummer) && !deckt(a))), ...folgerZeilen];
+  const nachfolgerLog = folger.filter((a) => !bekannt.nummern.has(a.nummer)).map((a) => ({ nummer: a.nummer, vorgaenger: nachfolger.get(a.nummer).vorgaenger }));
   if (spitze.length === 0) {
     const durch = [...new Set(abgedeckt.map((x) => x.issue))].sort((x, y) => x - y);
-    const schliessen = { art: "schliessen", nummer: offenesIssue?.number, ...(durch.length > 0 ? { abgedecktDurch: durch } : {}) };
-    return { issue: offenesIssue ? schliessen : { art: "nichts" }, zeilen, abgedeckt };
+    const schliessen = {
+      art: "schliessen",
+      nummer: offenesIssue?.number,
+      ...(durch.length > 0 ? { abgedecktDurch: durch } : {}),
+      ...(folger.length > 0 ? { nachfolger: folger.map((a) => a.nummer) } : {}),
+    };
+    return { issue: offenesIssue ? schliessen : { art: "nichts" }, zeilen, abgedeckt, nachfolger: nachfolgerLog };
   }
   const body = issueBody(spitze, repo);
-  if (!offenesIssue) return { issue: { art: "anlegen", body }, zeilen, abgedeckt };
-  if (body === String(offenesIssue.body ?? "").replace(/\r\n/g, "\n")) return { issue: { art: "nichts" }, zeilen, abgedeckt };
+  if (!offenesIssue) return { issue: { art: "anlegen", body }, zeilen, abgedeckt, nachfolger: nachfolgerLog };
+  if (body === String(offenesIssue.body ?? "").replace(/\r\n/g, "\n")) return { issue: { art: "nichts" }, zeilen, abgedeckt, nachfolger: nachfolgerLog };
   const alt = new Set(nummernIn(offenesIssue.body));
   const neue = spitze.flatMap((g) => g.nummern).filter((n) => !alt.has(n)).sort((a, b) => a - b);
-  return { issue: { art: "aktualisieren", nummer: offenesIssue.number, body, neue }, zeilen, abgedeckt };
+  return { issue: { art: "aktualisieren", nummer: offenesIssue.number, body, neue }, zeilen, abgedeckt, nachfolger: nachfolgerLog };
+}
+
+/** Kommentar beim Schließen: leer, durch deckende Issues, durch Nachfolger (oder beides). Pur. */
+function schliessKommentar(issue) {
+  const teile = [];
+  if (issue.abgedecktDurch) teile.push(KOMMENTAR_ABGEDECKT(issue.abgedecktDurch));
+  if (issue.nachfolger) teile.push(KOMMENTAR_NACHFOLGER(issue.nachfolger));
+  return teile.length > 0 ? teile.join(" ") : KOMMENTAR_LEER;
 }
 
 /**
@@ -232,7 +321,7 @@ export function fuehreAus({ plan, io, trocken = false }) {
       if (issue.neue.length > 0) io.kommentiere(issue.nummer, `Neu seit dem letzten Lauf: Alerts ${issue.neue.join(", ")}`);
       log(`Ticket #${issue.nummer} aktualisiert.`);
     } else if (issue.art === "schliessen") {
-      io.schliesse(issue.nummer, issue.abgedecktDurch ? KOMMENTAR_ABGEDECKT(issue.abgedecktDurch) : KOMMENTAR_LEER);
+      io.schliesse(issue.nummer, schliessKommentar(issue));
       log(`Ticket #${issue.nummer} geschlossen.`);
     }
   } catch (err) {
@@ -269,6 +358,20 @@ function abgedecktJeIssue(abgedeckt) {
   return karte;
 }
 
+/**
+ * Nachfolger-Map für die Spitzen-Kandidaten. Lädt die Vorgänger-Liste nur, wenn es einen Spitzen-Alert gibt und `io.ladeVorgaenger` existiert.
+ * Ein Fehler beim Laden ist KEIN Abbruch: Warnung und leere Map, die Alerts bleiben Spitze (laut statt still).
+ */
+function ladeNachfolger({ alerts, io, owner, log }) {
+  if (!io.ladeVorgaenger || !alerts.some((a) => klasse(a) === "spitze")) return new Map();
+  try {
+    return nachfolgerJeAlert({ alerts, vorgaenger: vorgaengerAus(io.ladeVorgaenger(), owner), lies: io.ladeDatei ?? (() => null) });
+  } catch (err) {
+    log(`::warning::Vorgänger-Alerts nicht lesbar, Alerts bleiben Spitze: ${fehlerText(err)}`);
+    return new Map();
+  }
+}
+
 /** Ein Lauf: lädt über `io.ladeAlerts()`/`io.ladeKontext()`, plant, führt aus. Nicht lesbare Alerts sind rot und schließen nie ein Ticket (fail-closed). */
 export function lauf({ io, trocken = false }) {
   const log = io.log ?? console.log;
@@ -276,7 +379,9 @@ export function lauf({ io, trocken = false }) {
   try {
     const alerts = alertsAus(io.ladeAlerts());
     const k = io.ladeKontext();
-    plan = plane({ alerts, bekannt: bekannteAlerts(k), offenesIssue: k.offenesIssue, repo: io.repo });
+    const nachfolger = ladeNachfolger({ alerts, io, owner: k.owner, log });
+    plan = plane({ alerts, bekannt: bekannteAlerts(k), offenesIssue: k.offenesIssue, repo: io.repo, nachfolger });
+    for (const n of plan.nachfolger) log(`Code-Scanning-Inbox: Alert ${n.nummer} ist Nachfolger von Nr. ${n.vorgaenger.join(", ")}`);
     for (const [issue, liste] of abgedecktJeIssue(plan.abgedeckt)) log(`Code-Scanning-Inbox: Alerts ${liste.nummern.join(", ")} abgedeckt durch #${issue} (${liste.gruende.join(", ")})`);
   } catch (err) {
     log(`::error::Code-Scanning-Alerts nicht lesbar: ${fehlerText(err)}`);
@@ -307,8 +412,28 @@ export function kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wieder
 
 const seiten = (pfad) => JSON.parse(ghText(["api", "--paginate", "--slurp", pfad])).flat();
 
-/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `ladeSeiten(pfad)`, `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig, ladeSeiten = seiten, log = console.log, err = console.error } = {}) {
+/** Dateitext `pfad` im Stand `commit` über die Contents-API (roh); jeder Fehler ergibt null (kein Treffer, der Alert bleibt Spitze). */
+function dateiAusGh(repo, pfad, commit) {
+  try {
+    const segmente = pfad.split("/").map(encodeURIComponent).join("/");
+    return ghText(["api", "-H", "Accept: application/vnd.github.raw+json", `repos/${repo}/contents/${segmente}?ref=${encodeURIComponent(commit)}`]);
+  } catch {
+    return null;
+  }
+}
+
+/** Merkt sich je (Pfad, Commit) den Dateitext, damit ein Lauf jede Datei höchstens einmal lädt. */
+function gemerkt(lade) {
+  const speicher = new Map();
+  return (pfad, commit) => {
+    const key = `${commit}:${pfad}`;
+    if (!speicher.has(key)) speicher.set(key, lade(pfad, commit));
+    return speicher.get(key);
+  };
+}
+
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `ladeSeiten(pfad)`, `ladeDatei(pfad, commit)`, `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig, ladeSeiten = seiten, ladeDatei, log = console.log, err = console.error } = {}) {
   const start = await inboxStart(argv, { skript: "codescanning-inbox", praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: ", ladeLibs, ladeConfig, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, config, libs } = start;
@@ -318,6 +443,8 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const io = {
     repo: REPO,
     ladeAlerts: () => ladeSeiten(`repos/${REPO}/code-scanning/alerts?state=open&per_page=100`),
+    ladeVorgaenger: () => ladeSeiten(`repos/${REPO}/code-scanning/alerts?state=dismissed&per_page=100`),
+    ladeDatei: gemerkt(ladeDatei ?? ((pfad, commit) => dateiAusGh(REPO, pfad, commit))),
     ladeKontext: () => {
       const kontext = ladeSammelKontext();
       const { rohe, kommentare } = kontext;
