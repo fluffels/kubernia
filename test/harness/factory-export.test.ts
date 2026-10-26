@@ -42,7 +42,7 @@ interface Leser {
 interface Ergebnis {
   dateien: Map<string, { text: string; ausfuehrbar: boolean }>;
   befunde: string[];
-  bericht: { sha: string; anzahl: number; durchgelassen: number; durchgelassenJeMuster: number[]; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][]; praefixUmgeschrieben: number; entlinkt: { links: number; anker: number; ziele: [string, number][] } };
+  bericht: { sha: string; anzahl: number; durchgelassen: number; durchgelassenJeMuster: number[]; relativUnaufloesbar: number; paketUnbekannt: string[]; literalRest: [string, number][]; praefixUmgeschrieben: number; gestrichen: { bloecke: number; seiten: number }; rollenUmgeschrieben: number; generiert: number; entlinkt: { links: number; anker: number; ziele: [string, number][] } };
 }
 interface Lock {
   name?: string;
@@ -67,13 +67,14 @@ const lib = rawLib as unknown as {
   schreibePraefixUm(text: string, von: string, nach: string): { text: string; anzahl: number };
   streicheProjektBloecke(text: string): { text: string; bloecke: number; befunde: string[] };
   schreibeRollenUm(text: string, paare: [string, string][]): { text: string; anzahl: number };
+  pruefeKommandos(texte: Map<string, string>, skripte: Set<string>): { befunde: string[] };
   entlinke(text: string, seite: string, h: { gibt(p: string): boolean; ueberschriften(p: string): Set<string> | null }): { text: string; links: number; anker: number; ziele: Map<string, number> };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
   pruefeSchutzliste(e: { vorlage: string; codeowners: string; quelle: string; pfade: string[] }): string[];
   SCHUTZ_OHNE_TREFFER: string[];
 };
-const docdrift = rawDocdrift as unknown as { auditDocDrift(wurzel: string): { deadLinks: { file: string; target: string; resolved: string }[]; deadAnchors: { file: string; target: string }[] } };
+const docdrift = rawDocdrift as unknown as { auditDocDrift(wurzel: string): { deadCommands: { file: string; script: string }[]; deadLinks: { file: string; target: string; resolved: string }[]; deadAnchors: { file: string; target: string }[] } };
 const leserVomCommit = (rawSync as unknown as { leserVomCommit: (quelle: string, rev: string) => Leser }).leserVomCommit;
 const { projektwertLauf, PROJEKT_BLOCK_START: PB_START, PROJEKT_BLOCK_ENDE: PB_ENDE } = rawBesitz as unknown as { projektwertLauf: (wurzel: string, config: () => unknown) => { dateien: number; fehler: string[]; abweichungen: string[] }; PROJEKT_BLOCK_START: string; PROJEKT_BLOCK_ENDE: string };
 
@@ -652,10 +653,12 @@ describe("Export aus HEAD", () => {
     }, 60_000);
     afterAll(() => rmSync(ordner, { recursive: true, force: true }));
 
-    test("tote Links und tote Anker gibt es im Export nicht", () => {
+    test("tote Links, tote Anker und tote Kommandos gibt es im Export nicht, die generierten Abschnitte sind aktuell (#1936)", () => {
       const r = docdrift.auditDocDrift(ordner);
       assert.deepEqual(r.deadLinks, []);
       assert.deepEqual(r.deadAnchors, []);
+      assert.deepEqual(r.deadCommands, []);
+      execFileSync(process.execPath, ["scripts/docs-gen.mjs"], { cwd: ordner, encoding: "utf8" });
     });
     test.each(ZIEL_ADR)("Negativfall: fehlt die mitgegebene Seite %s im Export, ist Docdrift dort rot", (seite) => {
       assert.ok(existsSync(join(ordner, seite)), "die Seite liegt im Export");
@@ -665,6 +668,85 @@ describe("Export aus HEAD", () => {
       rmSync(join(kopie, seite));
       const r = docdrift.auditDocDrift(kopie);
       assert.ok(r.deadLinks.some((l) => l.resolved === seite), "ein Link auf die Seite ist tot");
+    });
+  });
+
+  describe("#1936: Projekt-Blöcke, Rollen-Namen, generierte Abschnitte und Kommandos in baueExport", () => {
+    const SEITE = "docs/agent-harness.md";
+    const ROUTING = "docs/model-routing.md";
+    const text = (r: Ergebnis, pfad: string): string => r.dateien.get(pfad)?.text ?? "";
+    const factoryAgenten = (): Record<string, string> => (JSON.parse(text(echt, ".factory/projekt.json")) as { agenten: Record<string, string> }).agenten;
+    const kubAgenten = (): Record<string, string> => (JSON.parse(leser.lies(".factory/projekt.json") ?? "{}") as { agenten: Record<string, string> }).agenten;
+    const zusatz = (pfad: string, zeile: string): string => `${leser.lies(pfad) ?? ""}\n${zeile}\n`;
+    const blockUm = (zeile: string): string => `${PB_START}\n\n${zeile}\n\n${PB_ENDE}`;
+
+    test("Spiel-Passagen der Quelle stehen in Block-Markern und fehlen im Export (Projekt-Phase-Tabelle, Sandbox-Zeile)", () => {
+      assert.match(leser.lies(ROUTING) ?? "", /\| Projekt-Phase \|/);
+      assert.match(leser.lies(SEITE) ?? "", /pixellab\.ai/);
+      assert.doesNotMatch(text(echt, ROUTING), /\| Projekt-Phase \|/);
+      assert.doesNotMatch(text(echt, SEITE), /pixellab/);
+      assert.ok(echt.bericht.gestrichen.bloecke >= 2);
+      assert.ok(echt.bericht.gestrichen.seiten >= 2);
+    });
+    test("keine Block-Marker mehr in den Markdown-Dateien des Exports (nur die AGENTS.md trägt ihren Projekt-Block)", () => {
+      const mitMarker = [...echt.dateien].filter(([p, d]) => p.endsWith(".md") && p !== "AGENTS.md" && (d.text.includes(PB_START) || d.text.includes(PB_ENDE))).map(([p]) => p);
+      assert.deepEqual(mitMarker, []);
+    });
+    test("Rollen-Namen der Factory-Seiten stammen aus der Factory-Config, der Rest des Kern-Namens bleibt", () => {
+      const [kub, fac] = [kubAgenten(), factoryAgenten()];
+      assert.notEqual(kub.planer, fac.planer, "die Probe braucht verschiedene Namen");
+      assert.ok(echt.bericht.rollenUmgeschrieben > 0);
+      const ganzesWort = (name: string): RegExp => new RegExp(`(?<![\\w-])${name}(?![\\w-])`);
+      for (const rolle of ["planer", "umsetzer", "lens", "gruppe"]) {
+        assert.doesNotMatch(text(echt, SEITE), ganzesWort(kub[rolle]), `${rolle}: Quell-Name steht nicht mehr`);
+      }
+      assert.match(text(echt, SEITE), ganzesWort(fac.lens));
+    });
+    test("generierte Abschnitte beschreiben das Factory-Repo: die Gate-Tabelle kennt docdrift, kein Projekt-Gate", () => {
+      assert.ok(echt.bericht.generiert > 0);
+      assert.match(text(echt, SEITE), /npm run check:docdrift/);
+      assert.doesNotMatch(text(echt, SEITE), /npm run check:arch/);
+    });
+    test("die package.json des Exports trägt die Kern-Skripte, die Kern-Doku nennt", () => {
+      const skripte = (JSON.parse(text(echt, "package.json")) as { scripts: Record<string, string> }).scripts;
+      for (const s of ["setup", "cockpit", "probe:fremdconfig", "lint:suppress", "check:size", "check:docmap"]) assert.ok(skripte[s], `Skript ${s}`);
+    });
+    test("Negativfall: eine Factory-Seite mit unbekanntem Kommando ist ein Befund, im Projekt-Block nicht", () => {
+      const roh = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, "Ruf `npm run gibt-es-nicht-1936` auf.") }) });
+      assert.match(roh.befunde.join("|"), /docs\/agent-harness\.md: Kommando `npm run gibt-es-nicht-1936`/);
+      assert.equal(roh.dateien.size, 0);
+      const imBlock = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, blockUm("Ruf `npm run gibt-es-nicht-1936` auf.")) }) });
+      assert.deepEqual(imBlock.befunde, []);
+      assert.doesNotMatch(text(imBlock, SEITE), /gibt-es-nicht-1936/);
+    });
+    test("pruefeKommandos: npm test zählt, Dateien außerhalb der gelesenen Ordner nicht", () => {
+      const skripte = new Set(["verify"]);
+      const t = (m: Record<string, string>) => lib.pruefeKommandos(new Map(Object.entries(m)), skripte).befunde;
+      assert.match(t({ "a.md": "npm test" }).join(), /a\.md: Kommando `npm run test`/);
+      assert.deepEqual(t({ "a.md": "npm run verify" }), []);
+      assert.deepEqual(t({ "node_modules/x/README.md": "npm run nein", ".claude/settings/x.md": "npm run nein", "a.txt": "npm run nein" }), []);
+      assert.equal(t({ ".claude/agents/x.md": "npm run nein", "docs/b.md": "npm run nein2" }).length, 2);
+    });
+    test("Negativfall: ein unpaariger Marker in einer Factory-Seite ist ein Befund", () => {
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [SEITE]: zusatz(SEITE, PB_START) }) });
+      assert.match(r.befunde.join("|"), /docs\/agent-harness\.md: Projekt-Block ab Zeile \d+ ohne Ende/);
+      assert.equal(r.dateien.size, 0);
+    });
+    test("Negativfall: eine Besitz-Markdown-Datei mit Block-Marker ist ein Befund (ihr Block bliebe im Export)", () => {
+      const md = ".agents/skills/review-lenses/SKILL.md";
+      const r = ex.baueExport({ leser: mitAenderung(leser, { [md]: zusatz(md, blockUm("Spiel-Passage")) }) });
+      assert.match(r.befunde.join("|"), /SKILL\.md: Besitz-Datei trägt einen Projekt-Block/);
+    });
+    test("Negativfall: scheitert docs-gen im Export, ist das ein Befund mit der ersten Fehlerzeile", () => {
+      const r = ex.baueExport({ leser: mitAenderung(leser, { ".factory/produkt/vorlagen/scripts/docs-gen/config.json.vorlage": "{ kaputt" }) });
+      assert.match(r.befunde.join("|"), /docs-gen/);
+      assert.equal(r.dateien.size, 0);
+    });
+    test("der Lauf nennt die neuen Zähler im Bericht", () => {
+      const out = lauf(["--ziel", leerOrdner()], leser).out;
+      assert.match(out, new RegExp(`Projekt-Blöcke in Factory-Seiten gestrichen: ${echt.bericht.gestrichen.bloecke} in ${echt.bericht.gestrichen.seiten} Seiten`));
+      assert.match(out, new RegExp(`Rollen-Namen in Factory-Seiten umgeschrieben: ${echt.bericht.rollenUmgeschrieben}`));
+      assert.match(out, new RegExp(`Generierte Abschnitte neu erzeugt: ${echt.bericht.generiert} Dateien`));
     });
   });
 
@@ -960,7 +1042,7 @@ describe("Export aus HEAD", () => {
     assert.deepEqual(pfade, [...pfade].sort());
   });
 
-  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", () => {
+  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", { timeout: 60_000 }, () => {
     const abbruch = (aend: Record<string, string | null>, muster: RegExp): void => {
       const z = leerOrdner();
       const r = lauf(["--ziel", z], mitAenderung(leser, aend));
