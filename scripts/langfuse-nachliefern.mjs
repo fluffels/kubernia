@@ -30,7 +30,9 @@ import {
   LEDGER_NAME,
   RUHEFRIST_MIN,
   ledgerLesen,
+  endeGilt,
   endeGiltFuer,
+  ENDE_SCHLUPF_MS,
   nachliefererWartet,
   standUnveraendert,
   scoreId,
@@ -40,13 +42,12 @@ import {
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { kindEnv } from "./langfuse-zugang.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
-import { gesperrterLauf, kurzerStand, lockMeldung, warte, zeigenswert } from "./langfuse-lock.mjs";
+import { gesperrterLauf, kurzerStand, leseStartMarke, lockMeldung, markiereStart, warte, zeigenswert } from "./langfuse-lock.mjs";
 
 // Stichtag und Fristen stehen im Kern (eine Definition); die Tests lesen sie hier.
 export { RUHEFRIST_BEENDET_MS, RUHEFRIST_OHNE_ENDE_H, STICHTAG } from "./langfuse-abgleich-kern.mjs";
 
-/** Zeitversatz zwischen dem Ende-Zeitpunkt des Hooks und der letzten Transkript-Änderung. */
-export const ENDE_SCHLUPF_MS = 5_000;
+export { ENDE_SCHLUPF_MS };
 /** Ein Ledger-`gesendet` gilt so lange als unterwegs (Ingestion-Verzug), danach wird ein noch fehlender Call erneut gesendet (die IDs sind deterministisch, eine Wiederholung ist ungefährlich). */
 export const GESENDET_ABLAUF_MS = 4 * RUHEFRIST_MIN * 60_000;
 /** Gesamtfrist eines Laufs: unter LOCK_VERALTET_MS (15 min), damit kein Lauf länger hängt als sein Lock; übrige Sessions folgen beim nächsten Lauf. */
@@ -146,15 +147,18 @@ async function verarbeite(s, c) {
   const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo } = c;
   const alt = ledger.sessions[s.id];
   const unveraendert = standUnveraendert(alt, s);
-  const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false };
+  const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false, fortgesetzt: false };
   protokoll.sessions.push(rec);
   if (args.aktuell === s.id) return Object.assign(rec, { status: "aktuell" });
-  // Das SessionEnd-Kind wartet 3 min: wuchs das Transkript danach (resume), gilt das Ende nicht mehr und die laufende Session bleibt unberührt.
-  const endeGilt = args.ende == null || s.mtime <= args.ende + ENDE_SCHLUPF_MS;
+  // Das SessionEnd-Kind wartet 10 min: wuchs das Transkript danach oder startete die Session neu (Startmarke, resume), gilt das Ende nicht mehr
+  // und die laufende Session bleibt unberührt (ihre weiteren Turns sendet der Plugin-Hook selbst, #1953).
   const endeAngegeben = args.beendet === s.id || args.session === s.id;
-  const endeBekannt = endeAngegeben && endeGilt;
+  const fortgesetztAm = endeAngegeben ? c.startMarke ?? null : null;
+  const endeOk = endeGilt({ ende: args.ende, mtime: s.mtime, fortgesetztAm });
+  const endeBekannt = endeAngegeben && endeOk;
   // Ob Claude Code nach dem SessionEnd-Hook noch länger ins Transkript schreibt, zeigt dieses Logfeld (sonst fiele jede Session still auf die 24-h-Frist zurück).
-  rec.endeVerworfen = endeAngegeben && !endeGilt;
+  rec.endeVerworfen = endeAngegeben && !endeOk;
+  rec.fortgesetzt = rec.endeVerworfen && endeGilt({ ende: args.ende, mtime: s.mtime });
   const beendet = endeBekannt || endeGiltFuer(alt, s);
   // Bekanntes Ende vor jedem Fetch festhalten (auch wenn dieser wirft), sonst gälte beim nächsten Lauf wieder die 24-h-Frist.
   if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: giltBestaetigt(alt) && unveraendert, beendet: true };
@@ -234,7 +238,7 @@ function bericht(args, protokoll) {
   const p = protokoll;
   const zeilen = [`Nachliefern: ${p.geprueft} Session(s) geprüft, ${p.gesendet} Call(s) und ${p.spans} Subagent-Span(s) gesendet, ${p.dubletten} Dublette(n) (nur gemeldet), würde senden: ${p.wuerdeSenden}.`];
   for (const r of p.sessions.filter(zeigenswert)) {
-    zeilen.push(`- ${r.session.slice(0, 8)} ${r.status}: gesendet ${r.gesendet}, würde senden ${r.wuerdeSenden}, Dubletten ${r.dubletten}, ausstehend ${r.ausstehend}${r.befund ? `, ${r.befund}` : ""}${r.endeVerworfen ? ", Ende verworfen (Transkript wuchs nach dem SessionEnd-Hook)" : ""}`);
+    zeilen.push(`- ${r.session.slice(0, 8)} ${r.status}: gesendet ${r.gesendet}, würde senden ${r.wuerdeSenden}, Dubletten ${r.dubletten}, ausstehend ${r.ausstehend}${r.befund ? `, ${r.befund}` : ""}${r.endeVerworfen ? (r.fortgesetzt ? ", Ende verworfen (Session nach dem SessionEnd neu gestartet, Startmarke)" : ", Ende verworfen (Transkript wuchs nach dem SessionEnd-Hook)") : ""}`);
   }
   if (p.uebrig) zeilen.push(`Gesamtfrist von ${GESAMTFRIST_MS / 60_000} min erreicht: ${p.uebrig} Session(s) folgen beim nächsten Lauf.`);
   for (const f of p.fehler) zeilen.push(`FEHLER ${f.session.slice(0, 8)} (HTTP ${f.status ?? "–"}): ${f.meldung}`);
@@ -273,6 +277,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
   const vorher = JSON.stringify(ledger);
   // resume: die Session läuft wieder, ein früheres SessionEnd gilt nicht mehr (sonst sendete der nächste Lauf nach der kurzen Ruhefrist mitten in die Session).
   if (args.aktuell && !args.trocken && ledger.sessions[args.aktuell]?.beendet) ledger.sessions[args.aktuell].beendet = false;
+  const startMarke = args.beendet || args.session ? leseStartMarke(stateDir, args.beendet ?? args.session) : null;
   const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session });
   // Gesamtfrist: nach GESAMTFRIST_MS beginnt keine weitere Session; die übrigen folgen beim nächsten Lauf.
   const start = uhr();
@@ -283,7 +288,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
     }
     protokoll.geprueft += 1;
     try {
-      await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo });
+      await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo, startMarke });
     } catch (e) {
       protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: fehlerText(e) });
     }
@@ -300,14 +305,16 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
 // ── Hook-Betrieb: Wartezeit, Lock und Log (#1578; Lock und Log: langfuse-lock.mjs) ─────
 
 /** Nach SessionEnd zuerst warten: Plugin-Flush und Ingestion-Verzug. Muss länger sein als RUHEFRIST_BEENDET_MS, sonst gälte die Session beim Lauf noch als laufend. */
-export const WARTE_SESSIONEND = 180_000;
+export const WARTE_SESSIONEND = 600_000;
 
 /** Hook-Lauf: SessionEnd wartet zuerst WARTE_SESSIONEND (der Lauf misst die Ruhe danach) und versucht einen belegten Lock einmal erneut. */
 export async function hookLauf(args, optionen) {
   const ende = args.ausloeser === "sessionend";
-  const endeZeit = (optionen.uhr ?? Date.now)();
+  const jetzt = (optionen.uhr ?? Date.now)();
+  // Startmarke je SessionStart (auch bei belegtem Lock): ein wartendes SessionEnd-Kind derselben Session erkennt so die Fortsetzung.
+  if (args.ausloeser === "sessionstart" && args.aktuell) markiereStart(optionen.stateDir, args.aktuell, jetzt);
   if (ende) await (optionen.schlafen ?? warte)(WARTE_SESSIONEND);
-  return gesperrterLauf(ende ? { ...args, ende: endeZeit } : args, { ...optionen, ausloeser: args.ausloeser, wiederholen: ende });
+  return gesperrterLauf(ende ? { ...args, ende: jetzt } : args, { ...optionen, ausloeser: args.ausloeser, wiederholen: ende });
 }
 
 async function main() {

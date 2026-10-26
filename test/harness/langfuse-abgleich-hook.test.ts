@@ -56,6 +56,7 @@ const N = { ...rawNachEinstieg, ...rawLock } as unknown as {
   hookLauf: (a: Args, o: { stateDir: string; lauf: Lauf; schlafen: (ms: number) => Promise<void>; uhr: () => number; pid: number }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
   kurzerStand: (wurzel: string) => string | null;
   raeumePluginLocks: (stateDir: string, now?: number) => number;
+  leseStartMarke: (stateDir: string, session: string) => number | null;
   PLUGIN_LOCK_ALTER_MS: number;
   gesperrterLauf: (a: Args, o: { stateDir: string; lauf: Lauf; ausloeser: string; pid: number; stand?: string | null }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
 };
@@ -364,6 +365,25 @@ describe("Plugin-Locks aufräumen (raeumePluginLocks)", () => {
     expect(N.raeumePluginLocks(join(dir, "gibt-es-nicht"), T0)).toBe(0);
   });
 
+  test("gesperrterLauf räumt alte Startmarken nach genommenem Lock weg, bei belegtem Lock nicht (#1953)", async () => {
+    const dir = stateMit({});
+    const marke = (name: string) => {
+      mkdirSync(join(dir, "langfuse-start"), { recursive: true });
+      writeFileSync(join(dir, "langfuse-start", name), "x");
+      utimesSync(join(dir, "langfuse-start", name), new Date(T0 - 2 * TAG), new Date(T0 - 2 * TAG));
+    };
+    const lauf: Lauf = () => Promise.resolve({ exitCode: 0, text: "", protokoll: { zugang: true, geprueft: 0, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [], fehler: [] } });
+    marke("alt1");
+    writeFileSync(join(dir, "langfuse-abgleich.lock"), JSON.stringify({ pid: 4242, zeit: T0 }));
+    const belegt = await N.gesperrterLauf(N.parseArgs(["--session", "s1"]), { stateDir: dir, lauf, ausloeser: "manuell", pid: 7, uhr: () => T0 } as never);
+    expect(belegt.lock).toBe("belegt");
+    expect(existsSync(join(dir, "langfuse-start", "alt1"))).toBe(true);
+    unlinkSync(join(dir, "langfuse-abgleich.lock"));
+    const frei = await N.gesperrterLauf(N.parseArgs(["--session", "s1"]), { stateDir: dir, lauf, ausloeser: "manuell", pid: 7, uhr: () => T0 } as never);
+    expect(frei.lock).toBe("frei");
+    expect(existsSync(join(dir, "langfuse-start", "alt1"))).toBe(false);
+  });
+
   test("auch wenn lauf wirft: aufgeräumt und die Zahl im Fehler-Logeintrag", async () => {
     const dir = stateMit({ "langfuse_state.0c.lock": { alterMs: 2 * TAG } });
     const lauf: Lauf = () => Promise.reject(new Error("kaputt"));
@@ -453,7 +473,9 @@ describe("Log: Ende verworfen (#1579)", () => {
   test("eine Session mit verworfenem Ende steht im Log, auch wenn sonst nichts zu melden ist; ohne das Feld bleibt sie draußen", () => {
     const sess = (endeVerworfen: boolean) => ({ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, befund: null, endeVerworfen });
     const mit = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(true)], fehler: [] } });
-    expect(mit.sessions).toEqual([{ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, endeVerworfen: true }]);
+    expect(mit.sessions).toEqual([{ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, endeVerworfen: true, fortgesetzt: false }]);
+    const fort = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [{ ...sess(true), fortgesetzt: true }], fehler: [] } });
+    expect(fort.sessions).toMatchObject([{ session: "s1", endeVerworfen: true, fortgesetzt: true }]);
     const ohne = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(false)], fehler: [] } });
     expect(ohne.sessions).toEqual([]);
   });
@@ -494,6 +516,20 @@ describe("hookLauf", () => {
     expect(a.ereignisse).toEqual([`schlafen ${N.WARTE_SESSIONEND}`, `lauf now=${N.WARTE_SESSIONEND} session=s1 beendet=s1 aktuell=null`]);
     expect(a.logZeilen()).toMatchObject([{ ausloeser: "sessionend", session: "s1", lock: "frei", zugang: true, exitCode: 0, gesendet: 1 }]);
     expect(existsSync(a.lock)).toBe(false);
+  });
+
+  test("SessionStart schreibt die Startmarke mit der Uhr, auch bei belegtem Lock; SessionEnd schreibt keine (#1953)", async () => {
+    const a = aufbau();
+    belegen(a.lock, T0 + 5 * MIN);
+    await N.hookLauf(argsVon(START_ARGS), { stateDir: a.stateDir, lauf: a.lauf, schlafen: a.schlafen, uhr: a.uhr, pid: 7 });
+    expect(N.leseStartMarke(a.stateDir, "s1")).toBe(T0);
+    const b = aufbau();
+    await N.hookLauf(argsVon(ENDE), { stateDir: b.stateDir, lauf: b.lauf, schlafen: b.schlafen, uhr: b.uhr, pid: 7 });
+    expect(N.leseStartMarke(b.stateDir, "s1")).toBeNull();
+    // ein manueller Lauf mit --aktuell ohne Auslöser geht nicht über hookLauf; ohne --aktuell gibt es keine Marke
+    const c = aufbau();
+    await N.hookLauf(argsVon(["--ausloeser", "sessionstart"]), { stateDir: c.stateDir, lauf: c.lauf, schlafen: c.schlafen, uhr: c.uhr, pid: 7 });
+    expect(existsSync(join(c.stateDir, "langfuse-start"))).toBe(false);
   });
 
   test("SessionStart: kein Schlafen, lauf sofort mit --aktuell", async () => {
@@ -602,6 +638,10 @@ describe("hookLauf", () => {
 
   test("Invariante: die Wartezeit nach SessionEnd ist länger als die Ruhefrist bei bekanntem Ende (sonst gälte die Session beim Lauf noch als laufend)", () => {
     expect(N.WARTE_SESSIONEND).toBeGreaterThan(N.RUHEFRIST_BEENDET_MS);
+  });
+
+  test("Untergrenze: die Wartezeit nach SessionEnd beträgt mindestens 10 min (beobachtete Fortsetzungen lagen 1 bis 3,5 min nach dem Ende, #1953)", () => {
+    expect(N.WARTE_SESSIONEND).toBeGreaterThanOrEqual(10 * MIN);
   });
 });
 

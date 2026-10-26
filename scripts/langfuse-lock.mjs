@@ -87,6 +87,57 @@ export function raeumePluginLocks(stateDir, now = Date.now()) {
   return n;
 }
 
+/** Startmarken (#1953): eine Datei je Session-Start, Inhalt = ISO-Zeit. Ein wartendes SessionEnd-Kind liest sie als Fortsetzung der Session. */
+export const START_ORDNER = "langfuse-start";
+export const START_MARKE_ALTER_MS = 24 * 3_600_000;
+const SESSION_ID = /^[0-9A-Za-z][\w-]*$/;
+
+/** Schreibt die Startmarke der Session (`zeit` in ms); wirft nie. Eine unzulässige Session-ID schreibt nichts. */
+export function markiereStart(stateDir, session, zeit) {
+  try {
+    if (typeof session !== "string" || !SESSION_ID.test(session)) return false;
+    mkdirSync(join(stateDir, START_ORDNER), { recursive: true });
+    writeFileSync(join(stateDir, START_ORDNER, session), new Date(zeit).toISOString());
+    return true;
+  } catch {
+    return false; // Kosmetik: ohne Marke gilt weiter das Transkript-Wachstum
+  }
+}
+
+/** Zeit der Startmarke in ms; `null`, wenn sie fehlt, unlesbar oder die ID unzulässig ist. */
+export function leseStartMarke(stateDir, session) {
+  try {
+    if (typeof session !== "string" || !SESSION_ID.test(session)) return null;
+    const t = Date.parse(readFileSync(join(stateDir, START_ORDNER, session), "utf8").trim());
+    return Number.isFinite(t) ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Räumt Startmarken über START_MARKE_ALTER_MS weg (nur Dateien mit zulässigem Namen); Rückgabe: Anzahl. Wirft nie. */
+export function raeumeStartMarken(stateDir, now = Date.now()) {
+  let n = 0;
+  const ordner = join(stateDir, START_ORDNER);
+  let namen;
+  try {
+    namen = readdirSync(ordner);
+  } catch {
+    return 0;
+  }
+  for (const name of namen.filter((x) => SESSION_ID.test(x))) {
+    try {
+      const pfad = join(ordner, name);
+      if (now - statSync(pfad).mtimeMs <= START_MARKE_ALTER_MS) continue;
+      unlinkSync(pfad);
+      n++;
+    } catch {
+      // schon weg oder nicht lesbar
+    }
+  }
+  return n;
+}
+
 /**
  * `"frei"` (neu angelegt), `"übernommen"` (veralteten Lock ersetzt) oder `"belegt"`. Anlage atomar per `wx` mit pid und Zeit.
  * `nachPruefung` ist eine Testnaht zwischen „veraltet gesehen“ und „übernehmen“.
@@ -188,7 +239,7 @@ export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, pr
     dubletten: p.dubletten,
     wuerdeSenden: p.wuerdeSenden,
     uebrig: p.uebrig ?? 0,
-    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, ausstehend: r.ausstehend, endeVerworfen: Boolean(r.endeVerworfen) })),
+    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, ausstehend: r.ausstehend, endeVerworfen: Boolean(r.endeVerworfen), fortgesetzt: Boolean(r.fortgesetzt) })),
     fehler: [...p.fehler, ...fehler].map(kurz),
   };
 }
@@ -227,6 +278,7 @@ export async function gesperrterLauf(args, { stateDir, lauf, ausloeser, wiederho
   }
   // Lock ist unser: jetzt die liegen gelassenen Plugin-Locks wegräumen (nie bei belegt oder fehler).
   const pluginLocks = raeumePluginLocks(stateDir, uhr()); // wirft nie (Kosmetik)
+  raeumeStartMarken(stateDir, uhr()); // wirft nie (Kosmetik)
   try {
     const ergebnis = await lauf(args, { now: uhr() });
     logge({ exitCode: ergebnis.exitCode, protokoll: ergebnis.protokoll, pluginLocks });

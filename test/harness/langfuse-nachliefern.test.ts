@@ -23,6 +23,8 @@ import * as rawOtlp from "../../scripts/langfuse-otlp.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleich from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLock from "../../scripts/langfuse-lock.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawApi from "../../scripts/langfuse-api.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPreise from "../../scripts/preise.mjs";
@@ -37,7 +39,7 @@ type Payload = { resourceSpans: { resource: { attributes: Attr[] }; scopeSpans: 
 type Chunk = { payload: Payload; generationIds: string[]; spanIds: string[] };
 type Antwort = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }) => Promise<Antwort>;
-type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null; endeVerworfen: boolean };
+type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null; endeVerworfen: boolean; fortgesetzt: boolean };
 type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; uebrig: number; fehler: { session: string; status: number | null; meldung: string }[] };
 type Args = { ende?: number; ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
 type LedgerEintrag = { gesendetAm?: Record<string, number>; vermerk?: string; pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
@@ -71,6 +73,12 @@ const A = rawAbgleich as unknown as {
   subagentSpanId: (s: string, a: string) => string;
   scoreId: (s: string, n: string) => string;
   findeSessions: (o: { projectsRoot: string; praefix: string }) => { id: string; pfad: string; mtime: number; groesse: number }[];
+  endeGilt: (o: { ende?: number; mtime: number; fortgesetztAm?: number | null }) => boolean;
+};
+const L = rawLock as unknown as {
+  markiereStart: (stateDir: string, session: unknown, zeit: number) => boolean;
+  leseStartMarke: (stateDir: string, session: unknown) => number | null;
+  raeumeStartMarken: (stateDir: string, now?: number) => number;
 };
 const API = rawApi as unknown as {
   sendeOtlp: (p: unknown, z: { baseUrl: string; publicKey: string; secretKey: string; fetchImpl: Fetch }) => Promise<unknown>;
@@ -889,6 +897,141 @@ describe("Ledger-Zustand und Grenzfälle", () => {
     const a = aufbau([msg("a", 1)]);
     const r = await lauf(a, mock({ ist: 1 }), { json: true });
     expect(JSON.parse(r.text)).toMatchObject({ geprueft: 1, gesendet: 0 });
+  });
+});
+
+describe("endeGilt (#1953)", () => {
+  const ENDE = 1_000_000;
+  const SCHLUPF = 5_000;
+  test.each([
+    ["kein Ende bekannt", { ende: undefined, mtime: ENDE + 99 * 60_000, fortgesetztAm: ENDE + 60_000 }, true],
+    ["Transkript im Schlupf, keine Marke", { ende: ENDE, mtime: ENDE + SCHLUPF }, true],
+    ["Transkript um mehr als den Schlupf gewachsen", { ende: ENDE, mtime: ENDE + SCHLUPF + 1 }, false],
+    ["Marke nach dem Ende", { ende: ENDE, mtime: ENDE, fortgesetztAm: ENDE + 1 }, false],
+    ["Marke vor dem Ende (eigener Start)", { ende: ENDE, mtime: ENDE, fortgesetztAm: ENDE - 1 }, true],
+    ["Marke genau gleich dem Ende", { ende: ENDE, mtime: ENDE, fortgesetztAm: ENDE }, true],
+    ["Marke null", { ende: ENDE, mtime: ENDE, fortgesetztAm: null }, true],
+  ] as const)("%s", (_n, eingabe, erwartet) => {
+    expect(A.endeGilt(eingabe as never)).toBe(erwartet);
+  });
+});
+
+describe("Fortsetzung nach SessionEnd: keine Doppelsendung (#1953)", () => {
+  const MIN = 60_000;
+  const jetzt = Date.now();
+  /** Zwei fehlende Calls; Transkript zuletzt vor `mtimeVor` geändert. */
+  const sessionAlt = (mtimeVor: number) => {
+    const a = aufbau([msg("a", 1), msg("b", 2)]);
+    const t = new Date(jetzt - mtimeVor);
+    utimesSync(join(a.root, PRAEFIX, "s1.jsonl"), t, t);
+    return a;
+  };
+  const marke = (a: { state: string }, zeit: number) => L.markiereStart(a.state, "s1", zeit);
+
+  test("K2: Startmarke nach dem Ende: Status läuft, kein Request, Ende verworfen und fortgesetzt, kein beendet im Ledger; der Folgelauf sendet nichts doppelt", async () => {
+    const a = sessionAlt(6 * MIN);
+    const ende = jetzt - 6 * MIN;
+    marke(a, ende + 4 * MIN); // die Session wurde 4 min nach dem Ende fortgesetzt, das Transkript wuchs bis zum Lauf nicht
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { beendet: "s1", ende }, jetzt);
+    expect(r.protokoll.sessions[0]).toMatchObject({ status: "läuft", endeVerworfen: true, fortgesetzt: true });
+    expect(m.aufrufe).toHaveLength(0);
+    expect(existsSync(a.ledger)).toBe(false);
+    // Zweites Ende später: der Plugin-Hook hat inzwischen alles gesendet (Ist = Soll), die Marke liegt vor dem neuen Ende
+    const [sa, sb] = [sollZu("a", 1), sollZu("b", 2)];
+    const m2 = mock({ ist: 2, obs: [obsZu(sa), obsZu(sb)] });
+    const r2 = await lauf(a, m2, { beendet: "s1", ende: jetzt - MIN }, jetzt + 10 * MIN);
+    expect(m2.otlp).toHaveLength(0);
+    expect(r2.protokoll.sessions[0]).toMatchObject({ dubletten: 0, gesendet: 0, fortgesetzt: false });
+  });
+
+  test("K3 Normalfall: ohne Marke oder mit eigener Startmarke vor dem Ende werden alle fehlenden Calls gesendet und das Ende vermerkt", async () => {
+    for (const mitMarke of [false, true]) {
+      const a = sessionAlt(6 * MIN);
+      if (mitMarke) marke(a, jetzt - 60 * MIN);
+      const m = mock({ ist: 0 });
+      const r = await lauf(a, m, { beendet: "s1", ende: jetzt - 6 * MIN }, jetzt);
+      expect(r.protokoll.sessions[0]).toMatchObject({ status: "gesendet", gesendet: 2, fortgesetzt: false, endeVerworfen: false });
+      expect(spansVon(m.otlp[0])).toHaveLength(2);
+      expect(ledgerVon(a.ledger).s1.beendet).toBe(true);
+    }
+  });
+
+  test("gewachsenes Transkript hebt das Ende auf, ist aber keine Fortsetzung per Startmarke (fortgesetzt false), mit und ohne Marke", async () => {
+    for (const mitMarke of [false, true]) {
+      const a = sessionAlt(6 * MIN);
+      if (mitMarke) marke(a, jetzt - 2 * MIN);
+      // Ende 10 min vor der letzten Transkript-Änderung: das Transkript wuchs danach
+      const r = await lauf(a, mock({ ist: 0 }), { beendet: "s1", ende: jetzt - 16 * MIN }, jetzt);
+      expect(r.protokoll.sessions[0]).toMatchObject({ status: "läuft", endeVerworfen: true, fortgesetzt: false });
+    }
+  });
+
+  test("eine Startmarke einer anderen Session oder ein kaputter Inhalt hebt das Ende nicht auf", async () => {
+    const a = sessionAlt(6 * MIN);
+    L.markiereStart(a.state, "andere", jetzt);
+    writeFileSync(join(a.state, "langfuse-start", "s1"), "kein Datum");
+    const r = await lauf(a, mock({ ist: 0 }), { beendet: "s1", ende: jetzt - 6 * MIN }, jetzt);
+    expect(r.protokoll.sessions[0]).toMatchObject({ status: "gesendet", fortgesetzt: false });
+  });
+
+  test("ohne --beendet und --session (SessionStart-Lauf) liest der Lauf keine Marke", async () => {
+    const a = sessionAlt(30 * 3_600_000);
+    marke(a, jetzt);
+    const r = await lauf(a, mock({ ist: 0 }), {}, jetzt);
+    expect(r.protokoll.sessions[0]).toMatchObject({ status: "gesendet", fortgesetzt: false });
+  });
+});
+
+describe("Startmarken (#1953)", () => {
+  const TAG = 24 * 3_600_000;
+  const T = Date.parse("2026-10-26T12:00:00Z");
+  const neu = () => join(fixture({}), "state");
+
+  test("schreiben und lesen ergibt die Zeit in ms; fehlende Datei und kaputter Inhalt ergeben null", () => {
+    const dir = neu();
+    expect(L.markiereStart(dir, "abc-1", T)).toBe(true);
+    expect(L.leseStartMarke(dir, "abc-1")).toBe(T);
+    expect(L.leseStartMarke(dir, "fehlt")).toBeNull();
+    writeFileSync(join(dir, "langfuse-start", "kaputt"), "xx");
+    expect(L.leseStartMarke(dir, "kaputt")).toBeNull();
+  });
+
+  test("eine unzulässige Session-ID schreibt und liest nichts", () => {
+    const dir = neu();
+    for (const id of ["../x", "a/b", "a\\b", "", ".versteckt", null, 5]) {
+      expect(L.markiereStart(dir, id, T)).toBe(false);
+      expect(L.leseStartMarke(dir, id)).toBeNull();
+    }
+    expect(existsSync(join(dir, "langfuse-start"))).toBe(false);
+    expect(existsSync(join(dir, "x"))).toBe(false);
+    // Lesen: eine gültige Marke unter `<state>/x` wird über `../x` nicht erreicht
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "x"), new Date(T).toISOString());
+    expect(L.leseStartMarke(dir, "../x")).toBeNull();
+  });
+
+  test("ein unbeschreibbarer Zustandsordner wirft nie", () => {
+    const datei = join(fixture({}), "datei");
+    writeFileSync(datei, "x");
+    expect(L.markiereStart(datei, "s1", T)).toBe(false);
+    expect(L.leseStartMarke(datei, "s1")).toBeNull();
+    expect(L.raeumeStartMarken(datei, T)).toBe(0);
+  });
+
+  test("Aufräumen löscht Marken über 24 h, lässt frischere und Dateien mit unzulässigem Namen stehen", () => {
+    const dir = neu();
+    const setze = (name: string, alterMs: number) => {
+      mkdirSync(join(dir, "langfuse-start"), { recursive: true });
+      writeFileSync(join(dir, "langfuse-start", name), "x");
+      utimesSync(join(dir, "langfuse-start", name), new Date(T - alterMs), new Date(T - alterMs));
+    };
+    setze("alt", TAG + 60_000);
+    setze("grenze", TAG);
+    setze("frisch", TAG - 60_000);
+    setze(".fremd", 40 * TAG);
+    expect(L.raeumeStartMarken(dir, T)).toBe(1);
+    expect(readdirSync(join(dir, "langfuse-start")).sort()).toEqual([".fremd", "frisch", "grenze"]);
   });
 });
 
