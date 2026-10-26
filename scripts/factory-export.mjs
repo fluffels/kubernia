@@ -335,7 +335,9 @@ function streicheBloeckeInSeiten(k, seiten) {
   }
   for (const e of k.manifest.eintraege.filter(istGanzeDatei).filter((x) => x.pfad.endsWith(".md"))) {
     const roh = k.dateien.get(e.pfad)?.text ?? "";
-    if (streicheProjektBloecke(roh).bloecke > 0) k.befunde.push(`${e.pfad}: Besitz-Datei trägt einen Projekt-Block (nur Factory-Seiten dürfen Block-Marker tragen)`);
+    const s = streicheProjektBloecke(roh);
+    // Eine Markerzeile mitten im Text (Doku über den Marker) ist kein Projekt-Block; jede allein stehende Markerzeile, auch eine einzelne, ist einer.
+    if (s.bloecke > 0 || s.befunde.some((b) => !b.includes("nicht allein"))) k.befunde.push(`${e.pfad}: Besitz-Datei trägt Projekt-Block-Marker (nur Factory-Seiten dürfen Block-Marker tragen)`);
   }
   return r;
 }
@@ -368,7 +370,7 @@ function generiereDoku(k) {
     }
     const lauf = spawnSync(process.execPath, ["scripts/docs-gen.mjs", "--write"], { cwd: staging, encoding: "utf8", timeout: 120_000 });
     if (lauf.status !== 0) {
-      const zeile = `${lauf.stderr ?? ""}${lauf.stdout ?? ""}`.split("\n").find((z) => z.trim() !== "") ?? lauf.error?.message ?? `Exit ${lauf.status}`;
+      const zeile = `${lauf.stderr ?? ""}${lauf.stdout ?? ""}`.split("\n").find((z) => z.trim() !== "") ?? `Exit ${lauf.status}`;
       k.befunde.push(`docs-gen im Export scheitert: ${zeile.trim()}`);
       return 0;
     }

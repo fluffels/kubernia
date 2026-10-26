@@ -291,6 +291,9 @@ describe("streicheProjektBloecke (#1936)", () => {
     assert.equal(r.text, "A\nB\n\nC");
     assert.equal(r.bloecke, 2);
   });
+  test("nach dem Block bleiben spätere Leerzeilen alle stehen (die Unterdrückung gilt nur für die erste)", () => {
+    assert.equal(s(["A", "", PB_START, "x", PB_ENDE, "", "B", "", "C"].join("\n")).text, "A\n\nB\n\nC");
+  });
   test("steht vor dem Block keine Leerzeile, bleibt die Leerzeile danach stehen", () => {
     assert.equal(s(["A", PB_START, "x", PB_ENDE, "", "B"].join("\n")).text, "A\n\nB");
   });
@@ -580,7 +583,7 @@ describe("pruefeSchutzliste (pur)", () => {
     assert.deepEqual(pruefe({ codeowners: `# @owner nur ein Kommentar\n${owners(alle)}` }), []);
   });
 });
-describe("Export aus HEAD", () => {
+describe("Export aus HEAD", { timeout: 60_000 }, () => {
   let leser: Leser;
   let echt: Ergebnis;
   beforeAll(() => {
@@ -693,8 +696,10 @@ describe("Export aus HEAD", () => {
       assert.match(leser.lies(SEITE) ?? "", /pixellab\.ai/);
       assert.doesNotMatch(text(echt, ROUTING), /\| Projekt-Phase \|/);
       assert.doesNotMatch(text(echt, SEITE), /pixellab/);
-      assert.ok(echt.bericht.gestrichen.bloecke >= 2);
-      assert.ok(echt.bericht.gestrichen.seiten >= 2);
+      const jeSeite = leser.pfade.filter((q) => q.endsWith(".md") && q !== "AGENTS.md").map((q) => (leser.lies(q) ?? "").split("\n").filter((z) => z.trim() === PB_START).length);
+      assert.equal(echt.bericht.gestrichen.bloecke, jeSeite.reduce((s, n) => s + n, 0));
+      assert.equal(echt.bericht.gestrichen.seiten, jeSeite.filter((n) => n > 0).length);
+      assert.ok(echt.bericht.gestrichen.seiten >= 6);
     });
     test("keine Block-Marker mehr in den Markdown-Dateien des Exports (nur die AGENTS.md trägt ihren Projekt-Block)", () => {
       const mitMarker = [...echt.dateien].filter(([p, d]) => p.endsWith(".md") && p !== "AGENTS.md" && (d.text.includes(PB_START) || d.text.includes(PB_ENDE))).map(([p]) => p);
@@ -744,12 +749,37 @@ describe("Export aus HEAD", () => {
     test("Negativfall: eine Besitz-Markdown-Datei mit Block-Marker ist ein Befund (ihr Block bliebe im Export)", () => {
       const md = ".agents/skills/review-lenses/SKILL.md";
       const r = ex.baueExport({ leser: mitAenderung(leser, { [md]: zusatz(md, blockUm("Spiel-Passage")) }) });
-      assert.match(r.befunde.join("|"), /SKILL\.md: Besitz-Datei trägt einen Projekt-Block/);
+      assert.match(r.befunde.join("|"), /SKILL\.md: Besitz-Datei trägt Projekt-Block-Marker/);
+    });
+    test("Negativfall: auch ein einzelner Marker in einer Besitz-Markdown-Datei ist ein Befund, ein Marker mitten im Text nicht", () => {
+      const md = ".agents/skills/review-lenses/SKILL.md";
+      for (const marke of [PB_START, PB_ENDE]) {
+        const r = ex.baueExport({ leser: mitAenderung(leser, { [md]: zusatz(md, marke) }) });
+        assert.match(r.befunde.join("|"), /SKILL\.md: Besitz-Datei trägt Projekt-Block-Marker/);
+      }
+      const inText = ex.baueExport({ leser: mitAenderung(leser, { [md]: zusatz(md, `Der Marker ${PB_START} steht im Text.`) }) });
+      assert.deepEqual(inText.befunde, []);
     });
     test("Negativfall: scheitert docs-gen im Export, ist das ein Befund mit der ersten Fehlerzeile", () => {
       const r = ex.baueExport({ leser: mitAenderung(leser, { ".factory/produkt/vorlagen/scripts/docs-gen/config.json.vorlage": "{ kaputt" }) });
-      assert.match(r.befunde.join("|"), /docs-gen/);
+      assert.match(r.befunde.join("|"), /docs-gen im Export scheitert: ✖ Config nicht lesbar: .*kein gültiges JSON/);
       assert.equal(r.dateien.size, 0);
+    });
+    test("der Staging-Ordner der Doku-Generierung wird im Erfolgs- und im Fehlerpfad gelöscht", () => {
+      const privat = leerOrdner();
+      const alt = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
+      Object.assign(process.env, { TEMP: privat, TMP: privat, TMPDIR: privat });
+      try {
+        assert.deepEqual(ex.baueExport({ leser }).befunde, []);
+        assert.deepEqual(readdirSync(privat), [], "Erfolgspfad");
+        ex.baueExport({ leser: mitAenderung(leser, { ".factory/produkt/vorlagen/scripts/docs-gen/config.json.vorlage": "{ kaputt" }) });
+        assert.deepEqual(readdirSync(privat), [], "Fehlerpfad");
+      } finally {
+        for (const [k, v] of Object.entries(alt)) {
+          if (v === undefined) delete process.env[k];
+          else process.env[k] = v;
+        }
+      }
     });
     test("der Lauf nennt die neuen Zähler im Bericht", () => {
       const out = lauf(["--ziel", leerOrdner()], leser).out;
@@ -1051,7 +1081,7 @@ describe("Export aus HEAD", () => {
     assert.deepEqual(pfade, [...pfade].sort());
   });
 
-  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", { timeout: 60_000 }, () => {
+  describe("Negativfälle: Befund, Exit 1, nichts geschrieben", () => {
     const abbruch = (aend: Record<string, string | null>, muster: RegExp): void => {
       const z = leerOrdner();
       const r = lauf(["--ziel", z], mitAenderung(leser, aend));

@@ -11,7 +11,14 @@ Regeltext steht nur in diesen Dateien; alle anderen Seiten erklären oder schlag
 | Seite | Wann lesen |
 |---|---|
 | **[AGENTS.md](../../AGENTS.md)** | vor jeder Arbeit — SSOT aller harten Regeln, bei Konflikt maßgeblich |
+
+<!-- factory-projekt:start -->
+
+| Seite | Wann lesen |
+|---|---|
 | [src/content/AGENTS.md](../../src/content/AGENTS.md) | bevor du Quests, NPCs oder Smalltalk anlegst oder änderst (Content-as-Data, Save-Migration) |
+
+<!-- factory-projekt:ende -->
 
 ## ⚖️ Entscheidungen — ADRs (historisch, werden nicht umgeschrieben)
 
@@ -19,24 +26,14 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 
 | ADR | Wann lesen |
 |---|---|
-| [0001 Engine Phaser](../adr/0001-engine-phaser.md) | wenn die Engine-Wahl (Phaser vs. Godot/Unity) oder ein nativer Wrapper zur Debatte steht |
-| [0002 Kein Backend, keine DB](../adr/0002-kein-backend-keine-db.md) | wenn jemand Server, Datenbank oder Service-Aufteilung fürs Kern-Spiel vorschlägt |
-| [0003 Multiplayer out of scope](../adr/0003-multiplayer-coop-out-of-scope.md) | wenn Co-op oder Multiplayer aufkommt |
-| [0004 Skalierungs-Fundament](../adr/0004-skalierungs-fundament.md) | wenn es um Content-as-Data, Entity-Registry, ID-basierten Quest-Fortschritt oder IndexedDB-Saves geht |
-| [0005 Auslieferungsform](../adr/0005-auslieferungsform.md) | wenn Web-App vs. Desktop-Download entschieden werden soll |
-| [0006 Backend bei Stardew-Scope](../adr/0006-backend-und-skalierung.md) | wenn die Backend-Frage mit Blick auf Spielgröße neu aufkommt |
-| [0007 Spielsystem-Fundamente](../adr/0007-spielsystem-fundamente.md) | bevor du am Quest-Modell, an Checks oder an der Spielzeit baust |
 | [0008 KI-Agenten-Harness](../adr/0008-ki-agenten-harness.md) | wenn du verstehen willst, warum das Repo von Agenten gebaut wird und was daraus folgt |
 | [0009 PR-Gating](../adr/0009-pr-gating-required-checks.md) | wenn Required-Checks, Branch-Schutz oder Direkt-Push zur Debatte stehen |
-| [0010 Zwei Karten-Modelle](../adr/0010-karten-modell-tiled-vs-code-builder.md) | bevor du eine Karte baust: Tiled-Daten oder Code-Builder? |
-| [0011 NPC-System-Fundament](../adr/0011-npc-system-fundament.md) | bevor du NPC-Zustand, Routinen oder Beziehungen anfasst |
 | [0012 Harness-Autonomie](../adr/0012-harness-autonomie-audit-spur.md) | wenn es um Selbst-Merge von Leitplanken-Änderungen und die Audit-Spur geht |
 | [0013 docs/ als Wiki](../adr/0013-docs-als-agentengepflegtes-wiki.md) | bevor du Doku anlegst oder umziehst — welche Wissensart wohin gehört |
 | [0014 Leitplanken ohne Label-Riegel](../adr/0014-leitplanken-ohne-label-riegel.md) | wenn es um Gate-/Harness-Änderungen, die Pfadquelle und den Audit-Kommentar geht |
 | [0015 Projekt-Brain](../adr/0015-projekt-brain.md) | wenn es um Prinzipien, Token-Ziel und Messung des Projekt-Brains geht |
 | [0016 Langfuse-Takt](../adr/0016-langfuse-takt-woechentlich.md) | wenn es um den wöchentlichen Takt des Status-Tickets, das Langfuse-Sammelticket oder den Board-Takt (Harness-Sammelticket ab 10 Befund-Kommentaren, Spielquote, Positionskorrektur) geht |
 | [0017 Lebende Doku](../adr/0017-lebende-doku-generierte-abschnitte.md) | wenn Doku generiert, ein Gate beschrieben oder ein Diagramm eingeführt wird |
-| [0018 Content-Chunks je Datei](../adr/0018-content-chunks-je-datei.md) | wenn der Spielcode-Chunk oder ein Bundle-Budget reißt, Content (Quests, Crabquiz, Karten) wächst oder Lazy-Load je Region zur Debatte steht |
 | [0019 Langfuse-Plugin im User-Scope](../adr/0019-langfuse-plugin-im-user-scope.md) | wenn die Langfuse-Erfassung (Plugin, Hooks, User- vs. Projekt-Scope) geändert oder verdächtigt wird, nichts zu erfassen |
 | [0020 Architekturmodell LikeC4](../adr/0020-architekturmodell-likec4.md) | wenn das Architekturmodell unter `docs/architektur/`, `check:c4` oder die Ableitung der Architekturbilder aus `scripts/layers.cjs` angefasst wird |
 | [0021 Agenten-Sandbox über WSL2](../adr/0021-agenten-sandbox-wsl2.md) | wenn Sandbox, WSL2, Devcontainer oder die Netz-Allowlist der Agenten-Shell zur Debatte steht |
@@ -48,6 +45,23 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0027 Evidenzbasiert lockern](../adr/0027-regeln-lockern.md) | wenn eine Regel, ein Gate, eine Lens, ein Hook, ein Workflow-Schritt oder Prompt-Text entfernt, eingeschränkt oder gekürzt werden soll, oder ein Status-Lauf einen Lockern-Kandidaten meldet |
 | [0028 Genau ein Ticket-Ablauf](../adr/0028-ein-ticket-ablauf.md) | wenn ein zweiter Ablauf neben dem Ticket-Ablauf (Ticket-Skills mit gemeinsamem ablauf.md; Workflow-Skript, Zeiger-Skill) vorgeschlagen wird, oder der Ersatz einer früher nur im Workflow deterministischen Garantie gesucht wird |
 | [0029 Harness-Cockpit](../adr/0029-harness-cockpit.md) | wenn eine Oberfläche, ein Dashboard oder ein Werkzeug zur Agenten-Übersicht gebaut, ein Bausatz erwogen oder etwas der Factory zugeordnet wird, das nicht in Projekte verteilt wird |
+
+<!-- factory-projekt:start -->
+
+| ADR | Wann lesen |
+|---|---|
+| [0001 Engine Phaser](../adr/0001-engine-phaser.md) | wenn die Engine-Wahl (Phaser vs. Godot/Unity) oder ein nativer Wrapper zur Debatte steht |
+| [0002 Kein Backend, keine DB](../adr/0002-kein-backend-keine-db.md) | wenn jemand Server, Datenbank oder Service-Aufteilung fürs Kern-Spiel vorschlägt |
+| [0003 Multiplayer out of scope](../adr/0003-multiplayer-coop-out-of-scope.md) | wenn Co-op oder Multiplayer aufkommt |
+| [0004 Skalierungs-Fundament](../adr/0004-skalierungs-fundament.md) | wenn es um Content-as-Data, Entity-Registry, ID-basierten Quest-Fortschritt oder IndexedDB-Saves geht |
+| [0005 Auslieferungsform](../adr/0005-auslieferungsform.md) | wenn Web-App vs. Desktop-Download entschieden werden soll |
+| [0006 Backend bei Stardew-Scope](../adr/0006-backend-und-skalierung.md) | wenn die Backend-Frage mit Blick auf Spielgröße neu aufkommt |
+| [0007 Spielsystem-Fundamente](../adr/0007-spielsystem-fundamente.md) | bevor du am Quest-Modell, an Checks oder an der Spielzeit baust |
+| [0010 Zwei Karten-Modelle](../adr/0010-karten-modell-tiled-vs-code-builder.md) | bevor du eine Karte baust: Tiled-Daten oder Code-Builder? |
+| [0011 NPC-System-Fundament](../adr/0011-npc-system-fundament.md) | bevor du NPC-Zustand, Routinen oder Beziehungen anfasst |
+| [0018 Content-Chunks je Datei](../adr/0018-content-chunks-je-datei.md) | wenn der Spielcode-Chunk oder ein Bundle-Budget reißt, Content (Quests, Crabquiz, Karten) wächst oder Lazy-Load je Region zur Debatte steht |
+
+<!-- factory-projekt:ende -->
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 
@@ -61,6 +75,11 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [architektur/harness.c4](../architektur/harness.c4) | für die Harness-Sichten desselben Modells (Übersicht, Bausteine, Gates und Leitplanken, Gate-Ketten `verify` und `verify:full`, CI und Board, der Ticket-Lauf als dynamische View; Elemente gegen `.claude/`, Hooks, Gates, CI und `.mcp.json` abgeglichen) |
 | [glossar.md](../glossar.md) | wenn dir ein Spielbegriff fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md); Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
+
+<!-- factory-projekt:start -->
+
+| Seite | Wann lesen |
+|---|---|
 | [module/sim.md](../module/sim.md) | beim Arbeiten am Cluster-Simulator (`src/sim/*`) |
 | [sim-treue.md](../sim-treue.md) | wenn du das Verhalten einer Befehlsfamilie des Simulators gegen die Doku abgleichst oder einen Befehl, eine Aufrufform bzw. eine Ressourcenart ergänzt (Treue-Matrix) |
 | [module/content.md](../module/content.md) | für die Interna von Content-as-Data (Loader, Registry) |
@@ -71,6 +90,8 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [performance-budget.md](../performance-budget.md) | bevor die Welt wächst: FPS- und Sprite-Budget, Culling, Messen |
 | [stardew-referenz.md](../stardew-referenz.md) | vor jedem Optik-Ticket — so sieht das Vorbild wirklich aus |
 | [art-direction.md](../art-direction.md) | lebende Abweichungsliste der Optik gegen die Messlatte — vor Optik-Tickets |
+
+<!-- factory-projekt:ende -->
 
 <!-- factory-projekt:start -->
 
@@ -113,13 +134,20 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 
 | Seite | Wann lesen |
 |---|---|
+| [`.devcontainer/`](../../.devcontainer/devcontainer.json) · [`docker-compose.yml`](../../docker-compose.yml) | wenn du im Container entwickelst |
+| [`test/`](../../test/) | wenn du Tests schreibst: Querschnitts-Umgebung in [`test/support/`](../../test/support/), Factories in [`test/factories/`](../../test/factories/) (`freshSim`); Harness-Wächter (Kopf-Marker `@harness-waechter`, geschützt) in [`test/harness/`](../../test/harness/); Kategorien und Fitness-Functions erklärt [agent-harness.md](../agent-harness.md) |
+
+<!-- factory-projekt:start -->
+
+| Seite | Wann lesen |
+|---|---|
 | [deploy.md](../deploy.md) | wenn du das Spiel als Container oder per Helm-Chart in einen Cluster bringen willst (#752) oder `deploy/**` änderst (CI-Validierung, #1544) |
 | [devpanel-docker.md](../devpanel-docker.md) | wenn du das Dev-/Test-Panel als Docker-Image mit Laufzeit-Passwort brauchst |
-| [`.devcontainer/`](../../.devcontainer/devcontainer.json) · [`docker-compose.yml`](../../docker-compose.yml) | wenn du im Container entwickelst |
 | [assets/pixellab/README.md](../../assets/pixellab/README.md) | wenn du ein PixelLab-Asset suchst oder ablegst (Liste + IDs) |
 | [assets/maps/README.md](../../assets/maps/README.md) | beim Arbeiten an Tiled-Maps (`.tmj`) |
 | [`fonts.css`](../../fonts.css) · [`assets/fonts/`](../../assets/fonts/) | bei der HUD-Pixelschrift `KQPixel`/Silkscreen (Quelle + Lizenz, #189) |
-| [`test/`](../../test/) | wenn du Tests schreibst: Querschnitts-Umgebung in [`test/support/`](../../test/support/), Factories in [`test/factories/`](../../test/factories/) (`freshSim`); Harness-Wächter (Kopf-Marker `@harness-waechter`, geschützt) in [`test/harness/`](../../test/harness/); Kategorien und Fitness-Functions erklärt [agent-harness.md](../agent-harness.md) |
+
+<!-- factory-projekt:ende -->
 
 <!-- factory-projekt:start -->
 
