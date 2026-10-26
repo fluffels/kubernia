@@ -168,9 +168,16 @@ Momentaufnahmen eines damaligen Stands. Lesen, um Herkunft und Begründung zu ve
 | [architektur-analyse-2026-07-02-iSAQB.md](../architektur-analyse-2026-07-02-iSAQB.md) | iSAQB-Runde 2 (2026-07-02), Herkunft von #577–#595 |
 | [architektur-analyse-2026-07-03-iSAQB.md](../architektur-analyse-2026-07-03-iSAQB.md) | iSAQB-Runde 3 (2026-07-03): ADRs, DDD, Tests, Harness, Herkunft von #596–#612 |
 | [architektur-analyse-2026-07-14-iSAQB.md](../architektur-analyse-2026-07-14-iSAQB.md) | doku-freie iSAQB-Runde vom 2026-07-14, Herkunft von #861–#880 |
+
+<!-- factory-projekt:start -->
+
+| Seite | Wann lesen |
+|---|---|
 | [spielkonzept-review.md](../spielkonzept-review.md) | führt der Lernpfad zu Senior-DevOps und macht es Spaß? (#52, Juni 2026) |
 | [lernpfad-audit.md](../lernpfad-audit.md) | wird ein Befehl benutzt, bevor er eingeführt ist? (#227, Juni 2026) |
 | [barrierefreiheit-audit.md](../barrierefreiheit-audit.md) | Zugänglichkeit: nur-Farbe-Status, Tastatur, Kontraste (#481, Juli 2026) |
+
+<!-- factory-projekt:ende -->
 
 <!-- factory-projekt:start -->
 
