@@ -8,7 +8,7 @@
  * Soll: `~/.claude/projects/<Projektpräfix>*` (Hauptdatei + `<id>/subagents/`), je Assistant-Message (`message.id`) ein
  * Eintrag mit deterministischen IDs. Ist: zwei Metrics-Abfragen (Zählung und `usageByType` je `sessionId`; bei Erreichen von `row_limit` wird das Zeitfenster halbiert), Observations
  * nur für Sessions mit Differenz. Ohne Secret-Key (Agentenläufe) ersatzweise `--ist <datei>` mit einem `queryMetrics`-Export
- * des Langfuse-MCP (mehrfach nutzbar: Zählung und Tokens dürfen zwei Exporte sein).
+ * des Langfuse-MCP (mehrfach nutzbar: Zählung und Tokens dürfen zwei Exporte sein). `--ist` bleibt immer offline, auch bei gesetzten Schlüsseln.
  *
  * Mit `--session <id>` werden alle Ordner durchsucht (#1862); ein Treffer außerhalb des Projekts bekommt den Score „außerhalb“ und eine Hinweiszeile.
  * Das Präfix trifft sonst nur das Projekt selbst und seine Worktree-Ordner (`<präfix>--claude-worktrees-…`), nie Geschwister-Repos
@@ -271,10 +271,13 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
   const seitMs = args.seit ? Date.parse(args.seit) : now - 7 * 86_400_000;
   if (!Number.isFinite(seitMs)) return { exitCode: 2, text: `--seit ist keine ISO-Zeit: ${args.seit}\n${AUFRUFHILFE}` };
   let zugang = null;
-  try {
-    zugang = langfuseZugang(env, OHNE_ZUGANG);
-  } catch (e) {
-    if (!args.ist.length) return { exitCode: 2, text: e.message };
+  // Mit `--ist` bleibt der Lauf offline (Export-Weg), auch wenn Schlüssel gesetzt sind: kein Zugang laden, keine Requests.
+  if (!args.ist.length) {
+    try {
+      zugang = langfuseZugang(env, OHNE_ZUGANG);
+    } catch (e) {
+      return { exitCode: 2, text: e.message };
+    }
   }
   let worktree;
   try {

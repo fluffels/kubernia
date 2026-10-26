@@ -847,6 +847,20 @@ describe("pruefen (Ablauf)", () => {
     expect((await lauf(["kaputt.json"])).exitCode).toBe(1);
   });
 
+  test("--ist mit gesetzten Schlüsseln und Differenz: 0 Aufrufe an fetchImpl (kein Netzwerk im Export-Weg, #1942)", async () => {
+    const root = mitSession([msg("a"), msg("b")]);
+    const dateien: Record<string, string> = { "z.json": JSON.stringify({ data: [{ sessionId: "s1", count_count: "1" }] }) };
+    let aufrufe = 0;
+    const fetchImpl: Fetch = () => {
+      aufrufe += 1;
+      throw new Error("kein Netzwerk erwartet");
+    };
+    const r = await A.pruefen(args({ ist: ["z.json"], json: true }), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: (p: string) => dateien[p], fetchImpl });
+    expect(r.exitCode).toBe(0);
+    expect(JSON.parse(r.text).sessions[0]).toMatchObject({ fehlend: 1, fehlendeCalls: null });
+    expect(aufrufe).toBe(0);
+  });
+
   test("Markdown-Bericht trägt Tabelle, Summenzeile und die Liste fehlender Calls", async () => {
     const root = mitSession([msg("a"), msg("b")]);
     const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 1 }], observations: [] });
