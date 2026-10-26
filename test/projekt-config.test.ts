@@ -456,6 +456,34 @@ describe("Einstieg scripts/projekt-config.mjs", { timeout: 30_000 }, () => {
   });
 });
 
+describe("Accessoren vertragen eine fehlende Config (null/undefined)", () => {
+  const acc = rawPc as unknown as Record<string, (config: unknown, ...rest: unknown[]) => unknown>;
+  // Standardwert oder klare Fehlermeldung mit Config-Pfad, nie ein TypeError aus `null.feld`.
+  const FAELLE: [string, (c: unknown) => unknown, { wert: unknown } | { fehler: RegExp }][] = [
+    ["bereichAliaseAus", (c) => acc.bereichAliaseAus(c), { wert: {} }],
+    ["labelAus", (c) => acc.labelAus(c, "harness"), { fehler: /labels\.harness fehlt/ }],
+    ["spracheAus", (c) => acc.spracheAus(c), { fehler: /sprache fehlt/ }],
+    ["strukturAus", (c) => acc.strukturAus(c), { fehler: /struktur fehlt/ }],
+    ["escapeKopienAus", (c) => acc.escapeKopienAus(c), { wert: [] }],
+    ["umschriftAus", (c) => acc.umschriftAus(c), { fehler: /sprache\.umschrift fehlt/ }],
+    ["ausnahmenAus", (c) => acc.ausnahmenAus(c), { wert: { groesse: [], kontext: [] } }],
+    ["gatesAus", (c) => acc.gatesAus(c), { wert: { nichtInVerify: [] } }],
+    ["repoName", (c) => acc.repoName(c), { fehler: /repo fehlt/ }],
+    ["repoOwner", (c) => acc.repoOwner(c), { fehler: /repo fehlt/ }],
+    ["berechtigungenAus", (c) => acc.berechtigungenAus(c), { wert: { allow: [], ask: [], deny: [] } }],
+    ["sandboxAus", (c) => acc.sandboxAus(c), { wert: { allowedDomains: [], envVars: [] } }],
+    ["altEnvPraefix", (c) => acc.altEnvPraefix(c), { wert: null }],
+  ];
+  for (const [name, aufruf, erwartet] of FAELLE) {
+    for (const leer of [null, undefined]) {
+      test(`${name}(${String(leer)})`, () => {
+        if ("wert" in erwartet) assert.deepEqual(aufruf(leer), erwartet.wert);
+        else assert.throws(() => aufruf(leer), (e: unknown) => e instanceof Error && !(e instanceof TypeError) && erwartet.fehler.test(e.message));
+      });
+    }
+  }
+});
+
 describe("altEnvPraefix", () => {
   test("Commit-Zeilen-Präfix: Bindestrich wird zum Unterstrich", () => {
     assert.equal(pc.altEnvPraefix({ praefixe: { commitZeile: "ZD-" } }), "ZD_");
