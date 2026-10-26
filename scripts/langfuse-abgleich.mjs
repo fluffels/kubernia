@@ -59,7 +59,7 @@ export const PREIS_TOLERANZ = 0.1;
  * `hinweisUeberpreis` = L strikt über (1 + PREIS_TOLERANZ) · T. Sonst `preisabweichung` null, Hinweis false. Disjunkt zur Überzählung (die setzt Dubletten voraus).
  */
 export function preisVergleich({ fehlend, dubletten, tokenAbweichung, kostenT, kostenL }) {
-  const vergleichbar = fehlend === 0 && dubletten === 0 && !tokenAbweichung && kostenT > 0 && typeof kostenL === "number" && Number.isFinite(kostenL);
+  const vergleichbar = fehlend === 0 && dubletten === 0 && !tokenAbweichung && kostenT > 0 && Number.isFinite(kostenL);
   if (!vergleichbar) return { preisabweichung: null, hinweisUeberpreis: false };
   return { preisabweichung: kostenL - kostenT, hinweisUeberpreis: kostenL > (1 + PREIS_TOLERANZ) * kostenT };
 }

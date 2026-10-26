@@ -1146,6 +1146,15 @@ describe("Preisabweichung und Hinweis Überpreis (#1919)", () => {
     expect(dub.ueberzaehlung).toBeGreaterThan(0);
   });
 
+  test("bewerteSession: Token-Abweichung und Lücke unterdrücken Betrag und Hinweis (keine Abzüge bei Messfehlern)", () => {
+    const tok = { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 };
+    const abw = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: tok, kosten: 1.2 * T }, mtime: 0, now });
+    expect(abw).toMatchObject({ status: "Abweichung", preisabweichung: null, hinweisUeberpreis: false });
+    const luecke = A.bewerteSession({ soll: [eintrag(1), eintrag(2)], ist: { calls: 1, tokens: null, kosten: T }, mtime: 0, now });
+    expect(luecke).toMatchObject({ status: "Lücke", preisabweichung: null, hinweisUeberpreis: false });
+    expect(md([abw, luecke])).not.toContain("Preisabweichung bei");
+  });
+
   test("Summenzeile: Σ der bekannten Preisabweichungen, ohne bekannte null, Ruhefrist-Sessions fallen heraus", () => {
     const a = bew(1.2 * T);
     const b = bew(0.9 * T);
@@ -1172,5 +1181,12 @@ describe("Preisabweichung und Hinweis Überpreis (#1919)", () => {
     expect(unter).not.toContain("Hinweis Überpreis");
     // Ruhefrist: keine Zeile
     expect(md([bew(1.3 * T, { mtime: now - 60_000 })])).not.toContain("Preisabweichung bei");
+    // Betrag genau 0: Zeile ohne Vorzeichen
+    expect(md([bew(T)])).toMatch(/Preisabweichung bei gleichen Calls und Tokens: 0,00 \$ in 1 Session\(s\)/);
+    // ohne Kosten-Export oder bei Dublette kein Betrag, keine Zeile; gemischte Liste zählt nur die vergleichbare Session
+    const dub = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 2, tokens: null, kosten: 2 * T }, mtime: 0, now });
+    expect(md([bew(undefined)])).not.toContain("Preisabweichung bei");
+    expect(md([dub])).not.toContain("Preisabweichung bei");
+    expect(md([bew(1.2 * T), bew(undefined), dub])).toMatch(/Preisabweichung bei gleichen Calls und Tokens: \+[\d,.]+ \$ in 1 Session\(s\)/);
   });
 });
