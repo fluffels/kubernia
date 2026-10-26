@@ -173,7 +173,7 @@ const kuerzel = (liste) => liste.map((x) => String(x.session).slice(0, 8)).join(
 /** Berichtszeilen zur Preisabweichung (je mit führender Leerzeile); leer ohne vergleichbare Session bzw. ohne Hinweis. */
 function preisZeilen(festeSessions) {
   const out = [];
-  const mitAbweichung = festeSessions.filter((x) => x.preisabweichung !== null && x.preisabweichung !== undefined);
+  const mitAbweichung = festeSessions.filter((x) => x.preisabweichung !== null);
   if (mitAbweichung.length) {
     const betrag = mitAbweichung.reduce((s, x) => s + x.preisabweichung, 0);
     out.push("", `Preisabweichung bei gleichen Calls und Tokens: ${betrag > 0 ? "+" : ""}${usd(betrag)} $ in ${mitAbweichung.length} Session(s) (${kuerzel(mitAbweichung)}): Langfuse-Wochensummen um diesen Betrag bereinigen (Checkliste Punkt 7).`);
