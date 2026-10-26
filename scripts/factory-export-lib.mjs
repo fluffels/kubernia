@@ -159,6 +159,33 @@ export function entlinke(text, seitePfad, { gibt, ueberschriften }) {
 }
 
 /**
+ * Entlinkt alle Factory-Seiten (#1935, #1942): `dateien` (Map Pfad zu `{ text }`, wird an Ort und Stelle ersetzt), `exportPfade` (Menge der Export-Pfade) und `seiten`
+ * (die Factory-Seiten). Die Seiten laufen sortiert, damit zwei Läufe byte-gleich sind. Rückgabe `{ links, anker, ziele }` (`ziele`: sortierte Paare Ziel und Anzahl).
+ */
+export function entlinkeSeiten({ dateien, exportPfade, seiten }) {
+  const dateiPfade = [...exportPfade];
+  const gibt = (ziel) => ziel === "" || exportPfade.has(ziel) || dateiPfade.some((p) => p.startsWith(`${ziel}/`));
+  const ueberschriftenCache = new Map();
+  const ueberschriften = (ziel) => {
+    if (!ueberschriftenCache.has(ziel)) {
+      const d = dateien.get(ziel);
+      ueberschriftenCache.set(ziel, d !== undefined && ziel.endsWith(".md") ? new Set(collectHeadingSlugs(d.text)) : null);
+    }
+    return ueberschriftenCache.get(ziel);
+  };
+  const entlinkt = { links: 0, anker: 0, ziele: new Map() };
+  for (const pfad of [...seiten].sort()) {
+    const d = dateien.get(pfad);
+    const r = entlinke(d.text, pfad, { gibt, ueberschriften });
+    d.text = r.text;
+    entlinkt.links += r.links;
+    entlinkt.anker += r.anker;
+    for (const [z, n] of r.ziele) entlinkt.ziele.set(z, (entlinkt.ziele.get(z) ?? 0) + n);
+  }
+  return { ...entlinkt, ziele: [...entlinkt.ziele].sort(([a], [b]) => (a < b ? -1 : 1)) };
+}
+
+/**
  * Lock-Auszug (Auftrag: `package-lock.json` des Factory-Repos als Auszug aus dem Lock von kubernia). Die Wurzel kommt aus `pkg` (der Vorlage),
  * die Hülle ist alles, was von den Wurzel-Abhängigkeiten über `dependencies`, `optionalDependencies` und `peerDependencies` erreichbar ist; die
  * Reihenfolge der Quelle und alle Flags bleiben. Rückgabe `{ lock, befunde }`: ein fehlendes Pflichtziel (Wurzel-Abhängigkeit oder `dependencies`

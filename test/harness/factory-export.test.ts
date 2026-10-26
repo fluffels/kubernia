@@ -69,6 +69,7 @@ const lib = rawLib as unknown as {
   schreibeRollenUm(text: string, paare: [string, string][]): { text: string; anzahl: number };
   pruefeKommandos(texte: Map<string, string>, skripte: Set<string>): { befunde: string[] };
   entlinke(text: string, seite: string, h: { gibt(p: string): boolean; ueberschriften(p: string): Set<string> | null }): { text: string; links: number; anker: number; ziele: Map<string, number> };
+  entlinkeSeiten(e: { dateien: Map<string, { text: string }>; exportPfade: Set<string>; seiten: Set<string> }): { links: number; anker: number; ziele: [string, number][] };
   paketName(spec: string): string | null;
   vorlagenZiel(pfad: string): string | null;
   pruefeSchutzliste(e: { vorlage: string; codeowners: string; quelle: string; pfade: string[] }): string[];
@@ -281,6 +282,36 @@ describe("entlinke (#1935)", () => {
     assert.equal(r.text, "a mitte b und c");
     assert.equal(r.ziele.get("docs/t.md"), 2);
     assert.equal(r.ziele.size, 2);
+  });
+});
+
+describe("entlinkeSeiten (#1942)", () => {
+  const baue = (reihenfolge: string[]) => {
+    const inhalt: Record<string, string> = { "docs/z.md": "[a](../src/zz.ts) [b](../src/aa.ts)", "docs/a.md": "[c](../src/zz.ts) und [d](b.md#weg)", "docs/b.md": "# Titel" };
+    const dateien = new Map(reihenfolge.map((p) => [p, { text: inhalt[p] }]));
+    const exportPfade = new Set(Object.keys(inhalt));
+    return { dateien, exportPfade, seiten: new Set(["docs/z.md", "docs/a.md"]) };
+  };
+
+  test("zwei Seiten mit zwei toten Zielen: Summen, sortierte Ziele, Texte der Seiten ersetzt", () => {
+    const e = baue(["docs/z.md", "docs/a.md", "docs/b.md"]);
+    const r = lib.entlinkeSeiten(e);
+    assert.equal(r.links, 3);
+    assert.equal(r.anker, 1);
+    assert.deepEqual(r.ziele, [["src/aa.ts", 1], ["src/zz.ts", 2]]);
+    assert.equal(e.dateien.get("docs/z.md")?.text, "a b");
+    assert.equal(e.dateien.get("docs/a.md")?.text, "c und [d](b.md)");
+  });
+  test("die Reihenfolge der Map ändert das Ergebnis nicht (Seiten werden sortiert verarbeitet)", () => {
+    const a = lib.entlinkeSeiten(baue(["docs/z.md", "docs/a.md", "docs/b.md"]));
+    const b = lib.entlinkeSeiten(baue(["docs/b.md", "docs/a.md", "docs/z.md"]));
+    assert.deepEqual(a, b);
+  });
+  test("ohne Seiten bleibt alles unberührt, Summen sind 0", () => {
+    const e = baue(["docs/z.md", "docs/a.md", "docs/b.md"]);
+    e.seiten.clear();
+    assert.deepEqual(lib.entlinkeSeiten(e), { links: 0, anker: 0, ziele: [] });
+    assert.equal(e.dateien.get("docs/z.md")?.text, "[a](../src/zz.ts) [b](../src/aa.ts)");
   });
 });
 
