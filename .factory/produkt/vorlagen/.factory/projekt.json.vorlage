@@ -23,6 +23,9 @@
     "groesse": [],
     "kontext": []
   },
+  "gates": {
+    "nichtInVerify": []
+  },
   "berechtigungen": {
     "allow": [
       "mcp__playwright",

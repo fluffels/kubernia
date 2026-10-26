@@ -25,6 +25,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNamen from "../../scripts/ticket-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 
 // Begründete Ausnahme wie in repo-texte.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -38,9 +40,13 @@ const pkg = JSON.parse(readRepo("package.json")) as {
 };
 const scripts = pkg.scripts;
 
-// Projekt-Gates außerhalb der Kette (Bundle-Budget nach den Builds, TS-7-Wächter mit Netz, weicher Duplikat-Bericht): der Projekt-Test
-// `gates-projekt.test.ts` prüft ihre Regeln, hier fallen sie nur aus der Liste der Gates, die `verify` fahren muss.
-const PROJEKT_GATES = new Set(["check:bundle", "check:tseslint-ts7", "check:duplication"]);
+// Projekt-Gates außerhalb der Kette: die Projekt-Config nennt sie samt Grund (`gates.nichtInVerify`, #1925); ihre Regeln prüft ein Projekt-Test,
+// hier fallen sie nur aus der Liste der Gates, die `verify` fahren muss.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const gatesAus: (config: unknown) => { nichtInVerify: { gate: string; grund: string }[] } = rawPc.gatesAus;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const ladeProjektConfig: () => unknown = rawPc.ladeProjektConfig;
+const PROJEKT_GATES = new Set(gatesAus(ladeProjektConfig()).nichtInVerify.map((e) => e.gate));
 
 // Report-ABHÄNGIGE Gates werten ein Artefakt aus, das erst ein anderer Lauf erzeugt —
 // sie können darum ebenfalls nicht in der schnellen `verify`-Kette laufen. #1021:
@@ -85,6 +91,13 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
           ? /\bnpm test\b/
           : new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`);
       expect(verify, `verify muss das Gate "${gate}" enthalten`).toMatch(needle);
+    }
+  });
+
+  it("jedes Gate aus `gates.nichtInVerify` ist ein Skript und steht nicht in `verify` (kein veralteter Eintrag)", () => {
+    for (const gate of PROJEKT_GATES) {
+      expect(scripts[gate], `gates.nichtInVerify nennt "${gate}", das Skript fehlt in package.json`).toBeTruthy();
+      expect(new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`).test(scripts.verify), `"${gate}" steht in verify, gehört aber nicht in gates.nichtInVerify`).toBe(false);
     }
   });
 

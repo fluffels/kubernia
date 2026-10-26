@@ -57,6 +57,18 @@ export default tseslint.config(
     },
   },
 
+  // Komplexität je Funktion in den Skripten: eine God-Function sieht der Dateigröße-Deckel (check:size) nicht. Der Bestand ist als Bulk-Suppressions-Baseline
+  // (eslint-suppressions.json) eingefroren, eine neue oder verschlechterte Verletzung bricht sofort, ein stale Eintrag meldet `npm run lint` bis
+  // `npm run lint:prune` ihn entfernt. Bewusst nicht auf test/** (Test-Callbacks sind legitim lang). Deckel wie im Quell-Repo (hält gate-satz.test.ts).
+  {
+    files: ["scripts/**/*.{js,mjs,cjs}"],
+    rules: {
+      complexity: ["error", 15],
+      "max-depth": ["error", 4],
+      "max-lines-per-function": ["error", { max: 120, skipBlankLines: true, skipComments: true }],
+    },
+  },
+
   // Test-Wächter: ein `expect` im if-/catch-/?:-Zweig wird nie rot, wenn der Zweig nie läuft (falsches Grün).
   {
     files: ["test/**/*.ts"],

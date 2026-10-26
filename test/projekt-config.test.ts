@@ -32,6 +32,7 @@ interface Pc {
   escapeKopienAus(config: unknown): string[];
   bereichAliaseAus(config: unknown): Record<string, string>;
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
+  gatesAus(config: unknown): { nichtInVerify: { gate: string; grund: string }[] };
   umgebungsWert(env: Record<string, string | undefined>, name: string): string | undefined;
   kernEnvNamen(ordner: string): string[];
   sammleKernEnv(datei: string, text: string): { literale: Set<string>; ohneLiteral: string[] };
@@ -837,6 +838,34 @@ describe("Ausnahmelisten als Projektwert (#1860)", () => {
       assert.match(mit({ kontext: [{ datei: p, grund: "#1 x" }] }).join("|"), /ausnahmen\.kontext\[0\]\.datei muss ein repo-relativer POSIX-Pfad/, p);
     }
     assert.match(mit({ groesse: [ok, ok] }).join("|"), /ausnahmen\.groesse\[1\]\.datei „src\/gross\.ts“ steht doppelt/);
+  });
+});
+
+describe("Gates außerhalb von verify als Projektwert (#1925)", () => {
+  const mit = (g: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), gates: g });
+  const ok = { gate: "check:bundle", grund: "misst erst nach den Builds" };
+
+  test("gatesAus: ohne Block leer, sonst die Einträge", () => {
+    assert.deepEqual(pc.gatesAus({}), { nichtInVerify: [] });
+    assert.deepEqual(pc.gatesAus({ gates: {} }), { nichtInVerify: [] });
+    assert.deepEqual(pc.gatesAus({ gates: { nichtInVerify: [ok] } }), { nichtInVerify: [ok] });
+  });
+  test("gatesAus: ein kaputter Block wirft mit Schlüssel und Fix-Zeile", () => {
+    const falsche = ["x", [], { nichtInVerify: {} }, { nichtInVerify: [{ grund: "x" }] }, { nichtInVerify: [{ gate: "check:a", grund: " " }] }, { nichtInVerify: [{ gate: "npm run a", grund: "x" }] }];
+    for (const falsch of falsche) {
+      assert.throws(() => pc.gatesAus({ gates: falsch }), /gates[\s\S]*Fix:/, JSON.stringify(falsch));
+    }
+  });
+  test("Form: gates ist optional, unbekannter Schlüssel, Doppelte und Formfehler werden gemeldet", () => {
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit({ nichtInVerify: [ok] }), []);
+    assert.match(mit("x").join("|"), /gates muss ein Objekt/);
+    assert.match(mit({ andere: [] }).join("|"), /gates\.andere ist kein bekannter Schlüssel/);
+    assert.match(mit({ nichtInVerify: {} }).join("|"), /gates\.nichtInVerify muss eine Liste/);
+    assert.match(mit({ nichtInVerify: [null] }).join("|"), /gates\.nichtInVerify\[0\] muss ein Objekt/);
+    assert.match(mit({ nichtInVerify: [{ gate: "a b", grund: "x" }] }).join("|"), /gates\.nichtInVerify\[0\]\.gate muss ein Skriptname/);
+    assert.match(mit({ nichtInVerify: [{ gate: "check:a", grund: "" }] }).join("|"), /gates\.nichtInVerify\[0\]\.grund muss ein nicht-leerer String/);
+    assert.match(mit({ nichtInVerify: [ok, ok] }).join("|"), /gates\.nichtInVerify\[1\]\.gate „check:bundle“ steht doppelt/);
   });
 });
 

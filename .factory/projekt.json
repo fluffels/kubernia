@@ -58,6 +58,13 @@
     ],
     "kontext": []
   },
+  "gates": {
+    "nichtInVerify": [
+      { "gate": "check:bundle", "grund": "misst dist-offline/index.html und die dist-Chunks, existiert also erst nach den Builds (läuft in verify:full)" },
+      { "gate": "check:tseslint-ts7", "grund": "fragt die npm-Registry (Netz), läuft nur als eigener, nicht blockierender CI-Job" },
+      { "gate": "check:duplication", "grund": "reiner Bericht ohne Schwelle, kein Gate mit Rot" }
+    ]
+  },
   "berechtigungen": {
     "allow": [
       "mcp__playwright",

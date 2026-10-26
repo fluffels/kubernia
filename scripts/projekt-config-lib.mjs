@@ -287,6 +287,38 @@ export function ausnahmenAus(config) {
   return { groesse: wert.groesse ?? [], kontext: wert.kontext ?? [] };
 }
 
+const GATE_FORM = /^[\w:.-]+$/;
+
+/** Pur: prüft den Block `gates` (Form): nur `nichtInVerify`, eine Liste `{ gate, grund }`; das Gate ein Skriptname, je Liste nur einmal, der Grund nicht leer. */
+function pruefeGates(g) {
+  if (!istObjekt(g)) return ["gates muss ein Objekt mit der Liste nichtInVerify sein"];
+  const fehler = Object.keys(g).filter((k) => k !== "nichtInVerify").map((k) => `gates.${k} ist kein bekannter Schlüssel (erlaubt: nichtInVerify)`);
+  if (g.nichtInVerify === undefined) return fehler;
+  if (!Array.isArray(g.nichtInVerify)) return [...fehler, "gates.nichtInVerify muss eine Liste von { gate, grund } sein"];
+  const gesehen = new Set();
+  g.nichtInVerify.forEach((e, i) => {
+    const wo = `gates.nichtInVerify[${i}]`;
+    if (!istObjekt(e)) return fehler.push(`${wo} muss ein Objekt { gate, grund } sein`);
+    if (!istText(e.gate) || !GATE_FORM.test(e.gate)) fehler.push(`${wo}.gate muss ein Skriptname (Buchstaben, Ziffern, : . _ -) sein`);
+    else if (gesehen.has(e.gate)) fehler.push(`${wo}.gate „${e.gate}“ steht doppelt`);
+    else gesehen.add(e.gate);
+    if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);
+  });
+  return fehler;
+}
+
+/**
+ * Pur: die Gates des Projekts, die bewusst nicht in der `verify`-Kette laufen (`gates.nichtInVerify`, je Eintrag `{ gate, grund }`; #1925); ohne Block leer
+ * (die strenge Richtung: dann muss `verify` jedes `check:*` fahren). Wirft mit Fix-Zeile bei kaputter Form.
+ */
+export function gatesAus(config) {
+  const wert = config?.gates;
+  if (wert === undefined) return { nichtInVerify: [] };
+  const fehler = pruefeGates(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block gates (nichtInVerify: Liste von { gate, grund }) in ${PROJEKT_CONFIG} korrigieren`);
+  return { nichtInVerify: wert.nichtInVerify ?? [] };
+}
+
 const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
 
 /** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
@@ -458,6 +490,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
   if (wert.bereiche !== undefined) fehler.push(...pruefeBereiche(wert.bereiche));
   if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
+  if (wert.gates !== undefined) fehler.push(...pruefeGates(wert.gates));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
   return fehler;
