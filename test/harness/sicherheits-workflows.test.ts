@@ -5,7 +5,7 @@
  * Erzwungen wird: minimale Permissions (oben kein `write`, `security-events: write` nur im Job mit `codeql-action/analyze`),
  * Actions per Commit-SHA mit Versionskommentar gepinnt, Scorecard ohne Veröffentlichung (`publish_results: false`, kein PAT,
  * kein `id-token`), keine PR-Trigger bei Scorecard und `persist-credentials: false` am Checkout. Dass kein
- * Jobname einen Required-Check beschattet, erzwingt required-check-shadowing.test.ts für alle Workflows.
+ * Jobname einen Required-Check beschattet, erzwingt required-check-shadowing-projekt.test.ts für alle Workflows.
  *
  * Gelesen wird mit der `yaml`-Bibliothek (Struktur: Trigger, Permissions, Jobs, Schritte, `with`). Ehrliche Grenzen:
  * (1) Die Pin-Prüfung liest zeilenweise, weil der Versionskommentar im Syntaxbaum nicht steht; sie kennt nur `uses:` in einer

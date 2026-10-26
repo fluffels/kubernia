@@ -3,7 +3,7 @@ name: CodeQL
 # #875: Statische Code-Analyse (SAST) als Advanced-Setup, versioniert und reviewbar (kein Default-Setup in den
 # Repo-Einstellungen). BERICHTEND, kein Required-Check: Funde landen im Security-Tab (Code-Scanning), der Lauf sperrt
 # den Merge nicht. `scripts/pr-warten.mjs` meldet ein Rot dieses Workflows nur als HINWEIS (es ist kein Pflicht-Check).
-# Der Jobname beschattet nie einen Required-Check (Wächter: required-check-shadowing.test.ts).
+# Der Jobname beschattet nie einen Required-Check (Wächter: required-check-shadowing-projekt.test.ts).
 # Schreibrecht `security-events` hat nur der Analyse-Job (SARIF-Upload); alle Actions sind per Commit-SHA gepinnt.
 
 on:

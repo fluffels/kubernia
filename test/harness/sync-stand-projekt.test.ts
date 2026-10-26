@@ -17,7 +17,7 @@ const SYNC_WEG = "npm run factory:sync -- --quelle <klon> --tag <name>";
 /** Befunde zu einem gelesenen Sync-Stand (null = Datei fehlt); leer heißt sauber. */
 function syncStandBefunde(json: unknown): string[] {
   if (json === null) return ["kein Sync-Stand: der Kern kommt per Sync vom Tag"];
-  const quelle = (json as { quelle?: { tag?: unknown; commit?: unknown; sauber?: unknown } } | undefined)?.quelle;
+  const quelle = (json as { quelle?: { tag?: unknown; commit?: unknown; sauber?: unknown } }).quelle;
   const out: string[] = [];
   if (typeof quelle?.tag !== "string" || quelle.tag === "") out.push("quelle.tag fehlt oder ist leer");
   if (quelle?.sauber !== true) out.push("quelle.sauber ist nicht true (Entwurfs-Sync)");

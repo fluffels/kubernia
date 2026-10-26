@@ -2,7 +2,7 @@
  *
  * @harness-waechter – Projekt-Test (bleibt im Projekt, zieht nicht ins Factory-Repo): er liest echte Projektdateien
  * (`.claude/settings.json`, `docs/model-routing.md`, `docs/harness-glossar.md`) und den Trace-Tag aus der echten Projekt-Config
- * (Repo-Name). Die projektneutralen Prüfungen derselben Regeln stehen in `langfuse-erfassung.test.ts`.
+ * (Repo-Name). Die projektneutralen Prüfungen derselben Regeln stehen im Factory-Repo (`langfuse-erfassung.test.ts`).
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

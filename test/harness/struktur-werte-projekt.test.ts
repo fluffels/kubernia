@@ -1,7 +1,7 @@
 /* Struktur-Pfade, Größen-Ausnahme, Doku-Generatoren und Projektdateien des Projekts (#1931, #1934, ADR 0022 F10): die projekteigenen Werte hinter den Kern-Tests.
  *
  * @harness-waechter – Projekt-Test (bleibt im Projekt, zieht nicht ins Factory-Repo): er prüft die echten Werte der Projekt-Config
- * (`struktur`, `ausnahmen`) und `scripts/docs-gen/config.json` (`generatoren`). Die projektneutralen Regeln stehen in `projekt-config.test.ts`,
+ * (`struktur`, `ausnahmen`) und `scripts/docs-gen/config.json` (`generatoren`). Die projektneutralen Regeln stehen im Factory-Repo, in `projekt-config.test.ts`,
  * `doctickets.test.ts` und `kern-reinheit.test.ts`. Die Projektdateien, die Kern-Tests nicht lesen dürfen (`src/content/AGENTS.md`, der echte
  * `src`-Baum), lesen nur die Tests hier.
  */

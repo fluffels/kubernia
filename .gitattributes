@@ -15,7 +15,7 @@
 # Claude-Code-Harness (#1026): Workflow-Skripte, Skills, Agenten und Settings reicht
 # Claude Code als Text an den Permission-Dialog weiter – der lehnt Steuerzeichen ab,
 # ein CRLF-Checkout (core.autocrlf=true) machte den Workflow unstartbar. Bewacht von
-# einem Kern-Test des Factory-Repos (line-endings.test.ts).
+# dem Wächter test/harness/line-endings-projekt.test.ts.
 .claude/** text eol=lf
 # Vorsorglich: Binär-Assets eines künftigen Skills nicht durch die Textregel oben
 # verbiegen lassen (spätere Zeile gewinnt).
