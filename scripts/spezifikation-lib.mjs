@@ -128,18 +128,27 @@ function abschnitt(body, namen) {
 }
 
 /**
- * Die Nummern hinter der Blocker-Zeile (`sprache.blocker`, z.B. „blockiert durch #12, #13 (nur solange …)“): zeilenweise, bis zu einer öffnenden Klammer
- * oder dem Zeilenende, Groß-/Kleinschreibung egal. SSOT für Lesen (Auswahl) und Schreiben (anlegen, Sammelticket) der Zeile; wirft ohne Sprache. Pur.
+ * Die Verweise hinter der Blocker-Zeile (`sprache.blocker`, z.B. „blockiert durch #12, owner/name#13 (nur solange …)“): zeilenweise, bis zu einer öffnenden Klammer
+ * oder dem Zeilenende, Groß-/Kleinschreibung egal. Je Verweis `{ repo, nummer }`; `repo` ist `owner/name` bei einem qualifizierten Verweis, sonst `null` (das eigene Repo);
+ * gleiche Verweise zählen einmal. SSOT für Lesen (Auswahl) und Schreiben (anlegen, Sammelticket) der Zeile; wirft ohne Sprache. Pur.
  */
-export function blockerNummern(body, sprache) {
+export function blockerVerweise(body, sprache) {
   const w = wortschatz(sprache);
-  const nummern = new Set();
+  const verweise = new Map();
   for (const zeile of ohneFences(body)) {
     for (const m of zeile.matchAll(w.blockerRe())) {
-      for (const n of m[1].matchAll(/#(\d+)/g)) nummern.add(Number(n[1]));
+      for (const v of m[1].matchAll(/(?:([\w.-]+\/[\w.-]+))?#(\d+)/g)) {
+        const verweis = { repo: v[1] ?? null, nummer: Number(v[2]) };
+        verweise.set(`${verweis.repo ?? ""}#${verweis.nummer}`, verweis);
+      }
     }
   }
-  return [...nummern];
+  return [...verweise.values()];
+}
+
+/** Die Nummern der Blocker im eigenen Repo: die unqualifizierten Verweise aus `blockerVerweise` (ein `owner/name#n` zählt nicht). Pur. */
+export function blockerNummern(body, sprache) {
+  return [...new Set(blockerVerweise(body, sprache).filter((v) => v.repo === null).map((v) => v.nummer))];
 }
 
 /**

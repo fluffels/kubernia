@@ -77,6 +77,7 @@ const optionName = (o) => (typeof o?.name === "string" ? o.name : o?.name?.raw);
 const BOARD_PRUEFUNG = {
   besitzer: () => null,
   besitzerTyp: () => null,
+  repo: () => null, // optional: welches Repo das Board führt; die Form prüft die Config, die Auswahl filtert danach (ADR 0022 F10)
   nummer: (board, b) => (b.number !== board.nummer ? `nummer ${board.nummer} passt nicht zum Board (${b.number})` : null),
   projectId: (board, b) => (b.node_id !== board.projectId ? `projectId ${board.projectId} passt nicht zum Board (${b.node_id})` : null),
   statusFeldId: (board, b, f) => (f.name !== STATUS_FELD_NAME ? `statusFeldId zeigt auf das Feld "${f.name}", erwartet "${STATUS_FELD_NAME}"` : null),

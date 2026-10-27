@@ -23,6 +23,10 @@
  * Kriterien-Abschnitt mit Negativfall, Namen aus `sprache.spezifikation` der Config; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
  * ein REST-Aufruf für offene PRs, je Messfenster-Kandidat ein REST-Aufruf (`closed_at`) und die lokalen Transkripte (`~/.claude/projects`); dazu EINE GraphQL-Abfrage der 50 jüngsten offenen Issues für den Board-Verzug (#1866: Items auf einem Board, die die REST-Listen noch nicht führen, stehen als Zeile `VERZUG #a, #b: …` und als `verzug` im JSON; fail-open, ein Fehler wird zum Hinweis). `--ticket`: statt der Board-Seiten ein REST-Abruf des Issues.
+ *
+ * Ein Board führt die Issues EINES Repos (`boards[].repo` der Projekt-Config, sonst `repo`; ADR 0022 F10): die Auswahl sieht nur Items des eigenen Repos (Nummern verschiedener Repos kollidieren nicht),
+ * ein Board eines anderen Repos bleibt leer („fremdes Board“, Hinweis nennt das Repo, in dem die Auswahl läuft), eigene Items darauf stehen als „verwaist“. Ein Blocker darf auch `owner/name#n`
+ * heißen: ein fremder Verweis wird per REST geprüft, nicht prüfbar zählt als offen (fail-closed).
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
@@ -32,9 +36,9 @@ import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, boardRepo, configAusAufruf, gleichesRepo, labelAus, ladeProjektConfig, nurRepo, spracheAus } from "./projekt-config-lib.mjs";
 import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./produktquote-lib.mjs";
-import { blockerNummern, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
+import { blockerVerweise, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { ladeTicketNamen, ticketNamen } from "./ticket-namen.mjs";
@@ -138,10 +142,11 @@ export function itemAusIssue(issue) {
  * Einzelprüfung einer vorgegebenen Nummer: dieselben Kriterien wie die Board-Auswahl (`ueberspringGrund`, auch Messfenster), aber ohne Status- und
  * Bereichsfilter; ein geschlossenes Issue ist nicht frei. `item` aus `itemAusIssue`. Liefert wie `waehleNaechstes` `{ ticket, uebersprungen }`. Pur.
  */
-export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config }) {
+export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config, repo, fremdStatus }) {
   const nr = item.number;
+  if (repo !== undefined && item.repo !== "" && !gleichesRepo(item.repo, repo)) return { ticket: null, uebersprungen: [{ nr, grund: `gehört zu ${item.repo}, nicht zu ${repo}` }] };
   if (item.state !== "open") return { ticket: null, uebersprungen: [{ nr, grund: "geschlossen" }] };
-  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb, config });
+  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb, config, repo, fremdStatus });
   return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [] };
 }
 
@@ -163,13 +168,13 @@ export function imBereich(item, bereich, config) {
  * (Härtungs-Takt: „füllt sich“), ein nicht prüfbarer Füllstand ebenso (fail-closed; Standard ohne Lader). Er wird nur für dieses Ticket als Kandidat geladen.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, fuellstand = FUELLSTAND_OHNE_LADER, hartAb = 0, nur = () => true, namen, config }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, fuellstand = FUELLSTAND_OHNE_LADER, hartAb = 0, nur = () => true, namen, config, repo, fremdStatus }) {
   labelAus(config, "harness"); // fail-fast, auch ohne Bereich: ohne Config gibt es keine Auswahl
   const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
   const uebersprungen = [];
   for (const item of items) {
     if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich, config) || !nur(item)) continue;
-    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, fuellstand, hartAb, config });
+    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, fuellstand, hartAb, config, repo, fremdStatus });
     if (r.grund) uebersprungen.push(uebersprungenEintrag(item.number, r));
     else return { ticket: ticketVon(item, r), uebersprungen };
   }
@@ -252,12 +257,37 @@ function fuellstandGrund(c, fuellstand) {
   return f < HARNESS_TAKT_KOMMENTARE ? `füllt sich (${f}/${HARNESS_TAKT_KOMMENTARE} Befund-Kommentare)` : "";
 }
 
+const FREMDSTATUS_OHNE_LADER = () => ({ fehler: "kein Lader" });
+
+/**
+ * Überspringgrund der Blocker-Zeile (`""` = kein offener Blocker): ein Verweis ohne Repo oder auf das eigene Repo (`repo`) zählt gegen `offene`,
+ * ein Verweis auf ein anderes Repo fragt `fremdStatus(repo, nr)` (`{ offen }` oder `{ fehler }`); nicht prüfbar gilt als Grund (fail-closed). Pur.
+ */
+export function blockerGrund(c, { offene, repo, fremdStatus = FREMDSTATUS_OHNE_LADER, sprache }) {
+  const offen = [];
+  for (const v of blockerVerweise(c.body, sprache)) {
+    if (v.repo === null || gleichesRepo(v.repo, repo)) {
+      if (offene.has(v.nummer) && v.nummer !== c.number) offen.push(`#${v.nummer}`);
+      continue;
+    }
+    let s;
+    try {
+      s = fremdStatus(v.repo, v.nummer);
+    } catch (e) {
+      s = { fehler: e instanceof Error ? e.message : String(e) };
+    }
+    if (s.fehler !== undefined) return `Blocker ${v.repo}#${v.nummer} nicht prüfbar (${s.fehler})`;
+    if (s.offen) offen.push(`${v.repo}#${v.nummer}`);
+  }
+  return offen.length > 0 ? `offener Blocker ${offen.join(", ")}` : "";
+}
+
 /** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
-function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = null, hartAb, config }) {
+function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = null, hartAb, config, repo, fremdStatus }) {
   if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
   if (istFremdeingang({ user: c.autor, labels: c.labels }, owner, { config }).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
-  const offeneBlocker = blockerNummern(c.body, spracheAus(config).spezifikation).filter((n) => offene.has(n) && n !== c.number);
-  if (offeneBlocker.length > 0) return { grund: `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}` };
+  const blocker = blockerGrund(c, { offene, repo, fremdStatus, sprache: spracheAus(config).spezifikation });
+  if (blocker) return { grund: blocker };
   const fenster = messfenster === null ? [] : messfensterZeilen(c.body); // `null`: Mängelliste, das teure Messfenster zählt dort nicht
   const unlesbar = fenster.find((f) => "fehler" in f);
   if (unlesbar) return { grund: unlesbar.fehler };
@@ -280,7 +310,7 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = 
  * Die Mängelliste (`--maengel`): freie, vertraute, unblockierte Todo-Items mit Spezifikations-Mangel (hart oder Bestand) in Board-Reihenfolge (Produkt vor Factory,
  * mit `bereich` nur dessen Board); Kopf-, Sammel- und Epic-Tickets sind vom Gate ausgenommen. Das Messfenster zählt hier nicht. Liefert `{ anzahl, maengel: [{ nr, titel, fehlt }] }`. Pur.
  */
-export function listeMaengel({ produkt, factory, bereich = null, config, offene, refs = [], worktrees = [], prHeads = [], owner = "", hartAb = 0, namen }) {
+export function listeMaengel({ produkt, factory, bereich = null, config, offene, refs = [], worktrees = [], prHeads = [], owner = "", hartAb = 0, namen, repo, fremdStatus }) {
   if (bereich !== null && !Object.hasOwn(BEREICHE, bereich)) throw new Error(`listeMaengel: bereich erwartet ${bereichsNamen(" oder ")}`);
   const listen = seitenListen(produkt, factory, config);
   const items = bereich === null ? [...listen.produkt, ...listen.factory] : listen[BEREICH_BOARD[bereich]];
@@ -288,7 +318,7 @@ export function listeMaengel({ produkt, factory, bereich = null, config, offene,
   const maengel = [];
   for (const item of items) {
     if (item.status !== "Todo" || item.state !== "open") continue;
-    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster: null, hartAb, config });
+    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster: null, hartAb, config, repo, fremdStatus });
     const fehlt = r.fehlt ?? r.bestandFehlt;
     if (fehlt) maengel.push({ nr: item.number, titel: item.title, fehlt });
   }
@@ -313,23 +343,58 @@ export function formatiere({ ticket, uebersprungen, bereich, einzel = null, hinw
   return [kopf, ...(verzug.length > 0 ? [verzugZeile(verzug)] : []), ...hinweise.map((h) => `hinweis ${h}`), ...hinweis, ...reparierenZeilen(uebersprungen), ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
 }
 
+const nummernText = (items) => `${items.slice(0, 10).map((i) => `#${i.number}`).join(", ")}${items.length > 10 ? ", …" : ""}`;
+
+/**
+ * Die Board-Listen für das Repo `repo` der Auswahl (ADR 0022 F10): nur dessen Items (`nurRepo`; Nummern verschiedener Repos kollidieren sonst), ein Board eines
+ * anderen Repos (`boardRepos[rolle]`, aus `boardRepo`) liefert keine Auswahl-Items. `alle`: die eigenen Items beider Boards (für den Board-Verzug). `hinweise`:
+ * Items des Repos auf einem fremden Board („verwaist“) und, mit `bereich`, dass die Auswahl dieses Bereichs im Repo des Boards läuft. Pur.
+ */
+export function seitenDesRepos({ produkt, factory }, { repo, boardRepos, bereich = null }) {
+  const alle = { produkt: nurRepo(produkt, repo), factory: nurRepo(factory, repo) };
+  const hinweise = [];
+  const seiten = {};
+  const fremd = {};
+  for (const rolle of ["produkt", "factory"]) {
+    fremd[rolle] = !gleichesRepo(boardRepos?.[rolle], repo);
+    seiten[rolle] = fremd[rolle] ? [] : alle[rolle];
+    if (fremd[rolle] && alle[rolle].length > 0) {
+      hinweise.push(`${alle[rolle].length} Items von ${repo} stehen auf dem Board ${rolle}, das die Issues von ${boardRepos?.[rolle]} führt (verwaist, nicht in der Auswahl): ${nummernText(alle[rolle])}`);
+    }
+  }
+  const eigene = bereich ? BEREICH_BOARD[bereich] : null;
+  if (eigene && fremd[eigene]) {
+    hinweise.unshift(`Das Board ${eigene} (Bereich ${BEREICHE[bereich]}) führt die Issues von ${boardRepos?.[eigene]}, nicht die von ${repo}: die Auswahl für diesen Bereich läuft in ${boardRepos?.[eigene]}`);
+  }
+  return { ...seiten, alle, hinweise };
+}
+
+/** Die Ladedaten für das Repo der Auswahl: `{ daten, listen, hinweise }` (`daten` für die Auswahl, `listen` für den Verzug). Ohne `io.repo` (Einspeisung in Tests) unverändert; `echteIo` setzt es immer. */
+function datenDesRepos(daten, io, bereich) {
+  if (io.repo === undefined) return { daten, listen: daten, hinweise: [] };
+  const s = seitenDesRepos(daten, { repo: io.repo, boardRepos: io.boardRepos, bereich });
+  return { daten: { ...daten, produkt: s.produkt, factory: s.factory }, listen: { ...daten, ...s.alle }, hinweise: s.hinweise };
+}
+
 /** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
   const aufruf = aufrufLesen(argv, { aliase: bereichAliaseAus(io.config) });
   if (aufruf.fehler) return fehlerErgebnis(aufruf.fehler);
   try {
+    const gemeinsam = { owner: io.owner, hartAb: io.hartAb, namen: io.namen, config: io.config, repo: io.repo, fremdStatus: io.fremdStatus };
     if (aufruf.maengel) {
-      const liste = listeMaengel({ ...io.lade(), owner: io.owner, bereich: aufruf.bereich, hartAb: io.hartAb, namen: io.namen, config: io.config });
+      const liste = listeMaengel({ ...datenDesRepos(io.lade(), io, aufruf.bereich).daten, ...gemeinsam, bereich: aufruf.bereich });
       return { code: 0, out: aufruf.json ? `${JSON.stringify(liste, null, 2)}\n` : formatiereMaengel(liste), err: "" };
     }
     const einzel = aufruf.ticket;
-    const daten = einzel === null ? io.lade() : null;
-    const { verzug, hinweis: verzugHinweis } = daten ? verzugAus(daten) : { verzug: [] };
+    const geladen = einzel === null ? datenDesRepos(io.lade(), io, aufruf.bereich) : null;
+    const daten = geladen?.daten ?? null;
+    const { verzug, hinweis: verzugHinweis } = geladen ? verzugAus(geladen.listen) : { verzug: [] };
     const roh =
       daten
-        ? { ...waehleUeberBoards({ ...daten, owner: io.owner, bereich: aufruf.bereich, fuellstand: io.fuellstand, hartAb: io.hartAb, namen: io.namen, config: io.config }), bereich: aufruf.bereich }
-        : pruefeTicket({ ...io.ladeEinzeln(einzel), owner: io.owner, hartAb: io.hartAb, namen: io.namen, config: io.config });
-    const hinweise = [...(roh.hinweise ?? []), ...(verzugHinweis ? [verzugHinweis] : [])];
+        ? { ...waehleUeberBoards({ ...daten, ...gemeinsam, bereich: aufruf.bereich, fuellstand: io.fuellstand }), bereich: aufruf.bereich }
+        : pruefeTicket({ ...io.ladeEinzeln(einzel), ...gemeinsam });
+    const hinweise = [...(geladen?.hinweise ?? []), ...(roh.hinweise ?? []), ...(verzugHinweis ? [verzugHinweis] : [])];
     const reparieren = reparierenVon(roh.uebersprungen);
     const mitVerzug = daten ? { ...roh, ...(hinweise.length > 0 ? { hinweise } : {}), verzug } : roh;
     const ergebnis = reparieren.length > 0 ? { ...mitVerzug, reparieren } : mitVerzug;
@@ -403,6 +468,26 @@ export function fuellstandLader({ holeKommentare = (nr, repo) => issueKommentare
   };
 }
 
+/**
+ * Lader für Blocker in einem anderen Repo (`owner/name#n`), I/O: der Stand des Issues per REST (`holeIssue`). Memo je Verweis; ein Abruffehler wird zu `{ fehler }`
+ * (fail-closed: `blockerGrund` meldet den Blocker als nicht prüfbar). `{ offen }` ist true, solange das Issue nicht geschlossen ist.
+ */
+export function fremdStatusLader({ holeIssue = (repo, nr) => ghJson(["api", `repos/${repo}/issues/${nr}`]) } = {}) {
+  const memo = new Map();
+  return (repo, nr) => {
+    const schluessel = `${repo.toLowerCase()}#${nr}`;
+    if (!memo.has(schluessel)) {
+      try {
+        const issue = holeIssue(repo, nr);
+        memo.set(schluessel, typeof issue?.state === "string" ? { offen: issue.state !== "closed" } : { fehler: "Antwort ohne Stand" });
+      } catch {
+        memo.set(schluessel, { fehler: "nicht abrufbar" });
+      }
+    }
+    return memo.get(schluessel);
+  };
+}
+
 /** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
 function ladeBelegung(messfenster) {
   const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
@@ -442,7 +527,8 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   });
   /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
   const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster) });
-  return { lade, ladeEinzeln, fuellstand: fuellstandLader(), owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
+  const boardRepos = { produkt: boardRepo(boardFuerRolle("produkt"), { repo: REPO }), factory: boardRepo(boardFuerRolle("factory"), { repo: REPO }) };
+  return { lade, ladeEinzeln, fuellstand: fuellstandLader(), fremdStatus: fremdStatusLader(), repo: REPO, boardRepos, owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }
 
 if (istDirektaufruf(import.meta.url)) {
