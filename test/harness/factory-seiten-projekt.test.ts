@@ -201,10 +201,15 @@ describe("kuerzungBefunde (AK2 bis AK5)", () => {
     const b = kuerzungBefunde(`${kopf}## A\n\nKernwissen davor. ${KERN}\n`).befunde;
     assert.ok(b.some((x) => x.includes("Prosa außerhalb")), b.join("\n"));
   });
-  test("rot: Marker mit Text dahinter sind keine Marker", () => {
-    assert.ok(kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START --> Text\ny\n<!-- GEN:x END -->\n`).befunde.some((x) => x.includes("Prosa außerhalb")));
-    assert.ok(kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START -->\ny\n<!-- GEN:x END --> Text\n`).befunde.length > 0);
-    assert.ok(kuerzungBefunde(`${kopf}## A\n\nText <!-- GEN:x START -->\ny\n<!-- GEN:x END -->\n`).befunde.some((x) => x.includes("Prosa außerhalb")));
+  test("rot: Marker mit Text davor oder dahinter sind keine Marker", () => {
+    const hat = (md: string, text: string): void => {
+      const b = kuerzungBefunde(`${kopf}## A\n\n${md}`).befunde;
+      assert.ok(b.some((x) => x.includes(text)), b.join("\n"));
+    };
+    hat("<!-- GEN:x START --> Text\ny\n<!-- GEN:x END -->\n", "Prosa außerhalb");
+    hat("Text <!-- GEN:x START -->\ny\n<!-- GEN:x END -->\n", "Prosa außerhalb");
+    hat("<!-- GEN:x START -->\ny\n<!-- GEN:x END --> Text\n", "GEN-Block nicht geschlossen");
+    hat("<!-- GEN:x START -->\nText <!-- GEN:x END -->\n", "GEN-Block nicht geschlossen");
   });
   test("rot: Block im GEN-Block und GEN-Block im GEN-Block (exakte Meldung)", () => {
     const blockInGen = kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START -->\n${START}\nx\n${ENDE}\n<!-- GEN:x END -->\n`).befunde;
