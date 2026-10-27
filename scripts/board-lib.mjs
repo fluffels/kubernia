@@ -462,6 +462,8 @@ export function normalizeItems(pages) {
       // Node-ID des Issues (für addProjectV2ItemById, z.B. beim Umzug auf das andere Board); leer, wenn die REST-Liste sie nicht trägt.
       contentId: typeof i.content.node_id === "string" ? i.content.node_id : "",
       number: i.content.number,
+      // Das Repo des Issues (`owner/name`, aus `repository_url`); leer, wenn die Antwort es nicht trägt: `nurRepo` lässt solche Items weg.
+      repo: /\/repos\/([^/]+\/[^/]+)$/.exec(String(i.content.repository_url ?? ""))?.[1] ?? "",
       status: i.fields?.find((f) => f?.name === "Status")?.value?.name?.raw ?? "",
       title: typeof i.content.title === "string" ? i.content.title : "",
       assignees: Array.isArray(i.content.assignees) ? i.content.assignees.map((a) => a?.login).filter((l) => typeof l === "string") : [],
