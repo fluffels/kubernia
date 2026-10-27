@@ -136,7 +136,7 @@ describe("inventarBefunde (AK1)", () => {
     assert.equal(inventarBefunde("# Titel\n\n## Anderes\n").length, 1);
   });
   test("grün: der Inventar-Abschnitt ist der letzte der Datei", () => {
-    const md = tabelle(vollstaendig()).replace("\n## Nächster Abschnitt\n", "");
+    const md = tabelle(vollstaendig()).replace("\n## Nächster Abschnitt\n", "").trimEnd();
     assert.deepEqual(inventarBefunde(md), []);
   });
   test("grün: Zeilen hinter dem nächsten ##-Abschnitt zählen nicht", () => {
@@ -195,6 +195,21 @@ describe("kuerzungBefunde (AK2 bis AK5)", () => {
   test("rot: Kern-Zeile mit Prosa dahinter ist keine Kern-Zeile", () => {
     const b = kuerzungBefunde(`${kopf}## A\n\n${KERN} und Kernwissen dahinter\n`).befunde;
     assert.ok(b.some((x) => x.includes("Prosa außerhalb")), b.join("\n"));
+  });
+  const ohnePraefix = (b: string[]): string[] => b.map((x) => x.replace(/^Zeile \d+: /, ""));
+  test("rot: Prosa vor der Kern-Zeile (Zeilenanfang)", () => {
+    const b = kuerzungBefunde(`${kopf}## A\n\nKernwissen davor. ${KERN}\n`).befunde;
+    assert.ok(b.some((x) => x.includes("Prosa außerhalb")), b.join("\n"));
+  });
+  test("rot: Marker mit Text dahinter sind keine Marker", () => {
+    assert.ok(kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START --> Text\ny\n<!-- GEN:x END -->\n`).befunde.some((x) => x.includes("Prosa außerhalb")));
+    assert.ok(kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START -->\ny\n<!-- GEN:x END --> Text\n`).befunde.length > 0);
+  });
+  test("rot: Block im GEN-Block und GEN-Block im GEN-Block (exakte Meldung)", () => {
+    const blockInGen = kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START -->\n${START}\nx\n${ENDE}\n<!-- GEN:x END -->\n`).befunde;
+    assert.deepEqual(ohnePraefix(blockInGen), ["Block geschachtelt"]);
+    const genInGen = kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START -->\n<!-- GEN:y START -->\nx\n<!-- GEN:y END -->\n<!-- GEN:x END -->\n`).befunde;
+    assert.ok(genInGen.some((x) => x.includes("GEN-Block geschachtelt")), genInGen.join("\n"));
   });
   test("rot: geschachtelter Block", () => {
     const b = kuerzungBefunde(`${kopf}## A\n\n${START}\n\n${START}\n\nx\n\n${ENDE}\n`).befunde;
