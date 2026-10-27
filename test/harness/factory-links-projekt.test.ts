@@ -50,6 +50,9 @@ describe("factoryLinkStellen: Scan-Umfang (AK4)", () => {
     const s = stellen(`[a](https://github.com/O/F/tree/v1/test/h)\n[b](${u("v1", "d%20e.md", "k%C3%A4se")})`);
     assert.deepEqual(s.map((x) => [x.form, x.pfad, x.anker]), [["tree", "test/h", ""], ["blob", "d e.md", "käse"]]);
   });
+  test("kaputte Prozent-Kodierung wirft nicht, der Rohtext bleibt", () => {
+    assert.equal(stellen(`[a](${u("v1", "a%E0%A4%A.md", "k%zz")})`)[0].pfad, "a%E0%A4%A.md");
+  });
   test("nicht erfasst: Code-Fence, Inline-Code, nackte URL, Referenz-Link, Issues, Pull, Wurzel", () => {
     const md = [
       "```", `[t](${u("v1", "a.md")})`, "```",
