@@ -293,6 +293,8 @@ describe("Schreibmodus e2e mit temporärem Git-Repo als Quelle (AK2, AK3)", () =
     const r = run(["--schreiben", "--quelle", k.dir], ohneStand);
     assert.equal(r.code, 1);
     assert.match(r.err, /\[sync-stand\]/);
+    const ohneCommit = projekt(`[a](${u("v1", "a.md")})\n`, "");
+    assert.match(run(["--schreiben", "--quelle", k.dir], ohneCommit).err, /\[sync-stand\]/);
   });
   test("Ref anderer Länge, mehrere Links in einer Zeile: kein Link wird zerschnitten (von hinten nach vorn)", () => {
     const k = klon();
