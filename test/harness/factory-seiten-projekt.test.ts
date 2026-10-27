@@ -204,6 +204,7 @@ describe("kuerzungBefunde (AK2 bis AK5)", () => {
   test("rot: Marker mit Text dahinter sind keine Marker", () => {
     assert.ok(kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START --> Text\ny\n<!-- GEN:x END -->\n`).befunde.some((x) => x.includes("Prosa außerhalb")));
     assert.ok(kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START -->\ny\n<!-- GEN:x END --> Text\n`).befunde.length > 0);
+    assert.ok(kuerzungBefunde(`${kopf}## A\n\nText <!-- GEN:x START -->\ny\n<!-- GEN:x END -->\n`).befunde.some((x) => x.includes("Prosa außerhalb")));
   });
   test("rot: Block im GEN-Block und GEN-Block im GEN-Block (exakte Meldung)", () => {
     const blockInGen = kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START -->\n${START}\nx\n${ENDE}\n<!-- GEN:x END -->\n`).befunde;
