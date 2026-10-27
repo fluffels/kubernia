@@ -12,6 +12,7 @@
       "check:anysuppress": "Ratchet auf die Zahl begründeter `any`-Ausnahmen",
       "check:docmap": "jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten",
       "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
+      "check:factorylinks": "Links ins Factory-Repo stehen auf dem Sync-Tag und treffen Pfad und Anker laut Index `.factory/factory-links.json`",
       "check:docgen": "generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein",
       "check:c4": "LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein, die hexagonale Sicht in arc42 (Ports und Adapter) mit Pfaden, Schichten und Modell, die Harness-Arten (Agenten, Skills, Workflows, Hooks, Git-Hooks, Gates, CI-Workflows, MCP-Server) mit `.claude/`, `package.json`, `.githooks/`, `.github/workflows/` und `.mcp.json`, die Pflicht-Views",
       "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
