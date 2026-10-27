@@ -7,7 +7,7 @@
  * `factory-projekt`- und `GEN:`-Blöcke nur Überschriften, Leerzeilen, `>`-Zeilen vor der ersten `##` und Kern-Zeilen; eine Überschrift ohne Block und ohne GEN
  * trägt genau eine Kern-Zeile, mit Block höchstens eine; der Kennsatz `Konvergenzschleife` (Kernwissen) darf nicht vorkommen.
  * Bekannte Grenzen: Kernwissen erkennt der Test nur an der Form und am Kennsatz, nicht an der Bedeutung; Prosa innerhalb eines Blocks bleibt Sache des Reviews;
- * Code-Zäune außerhalb von Blöcken zählen als Prosa. Der Test liest die echten Seiten (Lebendprobe mit Leerlauf-Schutz). */
+ * Code-Zäune außerhalb von Blöcken zählen als Prosa; eine Kern-Zeile darf auf jedes github.com-Ziel zeigen (Repo und Tag bindet `check:factorylinks`, nicht dieser Test). Der Test liest die echten Seiten (Lebendprobe mit Leerlauf-Schutz). */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -46,7 +46,8 @@ export function inventarBefunde(md: string): string[] {
   for (const z of zeilen.slice(von + 1, bis)) {
     if (!z.startsWith("|")) continue;
     const zellen = z.split("|").slice(1, -1).map((c) => c.trim());
-    if (zellen.length !== 4 || zellen[0] === "Seite" || /^-+$/.test(zellen[0] ?? "")) continue;
+    if (zellen.length !== 4) { befunde.push(`Tabellenzeile mit ${zellen.length} statt 4 Zellen: ${z.slice(0, 50)}`); continue; }
+    if (zellen[0] === "Seite" || /^-+$/.test(zellen[0] ?? "")) continue;
     const [seite = "", , urteil = "", ziel = ""] = zellen;
     const pfad = /^`([^`]+)`$/.exec(seite)?.[1] ?? "";
     if (!INVENTAR_SEITEN.includes(pfad)) { befunde.push(`unbekannte Seite „${seite}“ (geschlossene Liste)`); continue; }
@@ -81,7 +82,7 @@ export function kuerzungBefunde(md: string): Pruefung {
     if (z === START) { if (block || gen) befunde.push(`Zeile ${nr}: Block geschachtelt`); block = true; if (aktuell) aktuell.inhalt = true; return; }
     if (z === ENDE) { if (!block) befunde.push(`Zeile ${nr}: Blockende ohne Anfang`); block = false; return; }
     if (GEN_START.test(z)) { if (block || gen) befunde.push(`Zeile ${nr}: GEN-Block geschachtelt`); gen = true; if (aktuell) aktuell.inhalt = true; return; }
-    if (GEN_ENDE.test(z)) { gen = false; return; }
+    if (GEN_ENDE.test(z)) { if (!gen) befunde.push(`Zeile ${nr}: GEN-Ende ohne Anfang`); gen = false; return; }
     if (block || gen) return;
     if (z.trim() === "") return;
     const kopf = /^(#{1,6}) (.*)$/.exec(z);
@@ -134,6 +135,25 @@ describe("inventarBefunde (AK1)", () => {
   test("rot: Abschnitt fehlt", () => {
     assert.equal(inventarBefunde("# Titel\n\n## Anderes\n").length, 1);
   });
+  test("grün: der Inventar-Abschnitt ist der letzte der Datei", () => {
+    const md = tabelle(vollstaendig()).replace("\n## Nächster Abschnitt\n", "");
+    assert.deepEqual(inventarBefunde(md), []);
+  });
+  test("grün: Zeilen hinter dem nächsten ##-Abschnitt zählen nicht", () => {
+    assert.deepEqual(inventarBefunde(`${tabelle(vollstaendig())}\n${zeile("docs/andere.md")}\n`), []);
+  });
+  test("rot: Tabellenzeile mit falscher Zellenzahl wird gemeldet statt übersprungen", () => {
+    const fuenf = "| `docs/agent-harness.md` | a | Projekt | b | c |";
+    const drei = "| `docs/agent-harness.md` | Projekt | b |";
+    for (const z of [fuenf, drei]) {
+      const b = inventarBefunde(tabelle([...vollstaendig(), z]));
+      assert.ok(b.some((x) => x.includes("Zellen")), b.join("\n"));
+    }
+  });
+  test("rot: Seitenpfad ohne Backticks ist unbekannt", () => {
+    const b = inventarBefunde(tabelle([...vollstaendig(), "| docs/agent-harness.md | alles | Projekt | bleibt hier |"]));
+    assert.ok(b.some((x) => x.includes("unbekannte Seite")), b.join("\n"));
+  });
 });
 
 describe("kuerzungBefunde (AK2 bis AK5)", () => {
@@ -169,8 +189,35 @@ describe("kuerzungBefunde (AK2 bis AK5)", () => {
     assert.ok(b.some((x) => x.includes("Prosa außerhalb")), b.join("\n"));
   });
   test("rot: Kern-Zeile ohne Factory-Link und unterbrochener Block", () => {
-    assert.ok(kuerzungBefunde(`${kopf}## A\n\nKern: [Titel](lokal.md)\n`).befunde.length > 0);
+    assert.ok(kuerzungBefunde(`${kopf}## A\n\nKern: [Titel](lokal.md)\n`).befunde.some((x) => x.includes("Prosa außerhalb")));
     assert.ok(kuerzungBefunde(`${kopf}## A\n\n${START}\n\nx\n`).befunde.some((x) => x.includes("nicht geschlossen")));
+  });
+  test("rot: Kern-Zeile mit Prosa dahinter ist keine Kern-Zeile", () => {
+    const b = kuerzungBefunde(`${kopf}## A\n\n${KERN} und Kernwissen dahinter\n`).befunde;
+    assert.ok(b.some((x) => x.includes("Prosa außerhalb")), b.join("\n"));
+  });
+  test("rot: geschachtelter Block", () => {
+    const b = kuerzungBefunde(`${kopf}## A\n\n${START}\n\n${START}\n\nx\n\n${ENDE}\n`).befunde;
+    assert.ok(b.some((x) => x.includes("Block geschachtelt")), b.join("\n"));
+  });
+  test("rot: Blockende ohne Anfang", () => {
+    const b = kuerzungBefunde(`${kopf}## A\n\n${KERN}\n\n${ENDE}\n`).befunde;
+    assert.ok(b.some((x) => x.includes("Blockende ohne Anfang")), b.join("\n"));
+  });
+  test("rot: GEN-Block im Block, ohne Ende und GEN-Ende ohne Anfang", () => {
+    const inBlock = kuerzungBefunde(`${kopf}## A\n\n${START}\n\n<!-- GEN:x START -->\ny\n<!-- GEN:x END -->\n\n${ENDE}\n`).befunde;
+    assert.ok(inBlock.some((x) => x.includes("GEN-Block geschachtelt")), inBlock.join("\n"));
+    const offen = kuerzungBefunde(`${kopf}## A\n\n<!-- GEN:x START -->\ny\n`).befunde;
+    assert.ok(offen.some((x) => x.includes("GEN-Block nicht geschlossen")), offen.join("\n"));
+    const ohneAnfang = kuerzungBefunde(`${kopf}## A\n\n${KERN}\n\n<!-- GEN:x END -->\n`).befunde;
+    assert.ok(ohneAnfang.some((x) => x.includes("GEN-Ende ohne Anfang")), ohneAnfang.join("\n"));
+  });
+  test("rot: Kern-Zeile ohne Überschrift", () => {
+    const b = kuerzungBefunde(`# Titel\n\n${KERN}\n\n## A\n\n${KERN}\n`).befunde;
+    assert.deepEqual(b.map((x) => x.replace(/^Zeile \d+: /, "")), ["Kern-Zeile ohne Überschrift"]);
+  });
+  test("grün: Seite ohne ##-Überschrift mit `>`-Intro", () => {
+    assert.deepEqual(kuerzungBefunde("# Titel\n\n> Intro\n").befunde, []);
   });
 });
 
