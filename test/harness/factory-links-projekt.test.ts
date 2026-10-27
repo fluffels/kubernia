@@ -201,6 +201,8 @@ describe("Schreibmodus e2e mit temporärem Git-Repo als Quelle (AK2, AK3)", () =
     writeFileSync(join(d, "a.md"), "# Kopf\n\ntext\n");
     writeFileSync(join(d, "test", "x.test.ts"), "x");
     writeFileSync(join(d, "test", "h", "y.txt"), "y");
+    mkdirSync(join(d, "test", "h.md"), { recursive: true });
+    writeFileSync(join(d, "test", "h.md", "z.txt"), "z");
     git(d, "add", "-A");
     git(d, "commit", "-q", "-m", "c");
     if (tag) git(d, "tag", tag);
@@ -272,7 +274,7 @@ describe("Schreibmodus e2e mit temporärem Git-Repo als Quelle (AK2, AK3)", () =
   });
   test("Anker bei Nicht-Markdown-Ziel und bei tree wird nicht geprüft", () => {
     const k = klon();
-    const root = projekt(`[a](${u("v1", "test/x.test.ts", "L10")})\n[b](${u("v1", "test/h", "irgendwas", "tree")})\n`, k.commit);
+    const root = projekt(`[a](${u("v1", "test/x.test.ts", "L10")})\n[b](${u("v1", "test/h.md", "irgendwas", "tree")})\n`, k.commit);
     assert.equal(run(["--schreiben", "--quelle", k.dir], root).code, 0);
   });
   test("fremde URL-Form: rot, Doku byte-gleich, kein Index", () => {
@@ -293,6 +295,8 @@ describe("Schreibmodus e2e mit temporärem Git-Repo als Quelle (AK2, AK3)", () =
     const r = run(["--schreiben", "--quelle", k.dir], ohneStand);
     assert.equal(r.code, 1);
     assert.match(r.err, /\[sync-stand\]/);
+    assert.equal(lies(ohneStand, "docs/x.md"), `[a](${u("v1", "a.md")})\n`);
+    assert.equal(existiert(ohneStand, ".factory/factory-links.json"), false);
     const ohneCommit = projekt(`[a](${u("v1", "a.md")})\n`, "");
     assert.match(run(["--schreiben", "--quelle", k.dir], ohneCommit).err, /\[sync-stand\]/);
   });
