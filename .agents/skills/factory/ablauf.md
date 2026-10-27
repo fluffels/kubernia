@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.harness` | `area:harness` |
 | `labels.festgefahren` | `status:festgefahren` |
 | `labels.forum` | `forum` |
-| `labels.dependabotInbox` | `area:harness` |
+| `labels.dependabotInbox` | `area:architektur` |
 | `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
