@@ -40,11 +40,11 @@ Der Schichtgedanke ist sprachneutral, das Werkzeug nicht. Alle Angaben sind an d
 
 Hinweise zur Wahl: Für **JS/TS** und **Python** liefert das Werkzeug den Graphen mit, Soll und Ist lassen sich vergleichen. Auf der **JVM** ist das Diagramm schon die Regel, ein zweites Soll-Diagramm wäre doppelt. LikeC4 ist ein Darstellungswerkzeug; wer es nutzt, braucht einen eigenen Test, der Modell und Schichtquelle abgleicht, sonst gilt „Diagramm == Regel“ nicht.
 
-**Ist-Adapter:** der Generator `schichten-ist` liest jede JSON-Ausgabe der Form `{ "modules": [ { "source": "…", "dependencies": [ { "resolved": "…" } ] } ] }` (die Form von dependency-cruiser). Für Python genügt ein kleines Skript, das die Import-Zeilen liest und diese Form ausgibt; [`docgen-fremdrepo.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.1.0/test/docgen-fremdrepo.test.ts) macht das mit einem Mini-Repo vor.
+**Ist-Adapter:** der Generator `schichten-ist` liest jede JSON-Ausgabe der Form `{ "modules": [ { "source": "…", "dependencies": [ { "resolved": "…" } ] } ] }` (die Form von dependency-cruiser). Für Python genügt ein kleines Skript, das die Import-Zeilen liest und diese Form ausgibt; [`docgen-fremdrepo.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/test/docgen-fremdrepo.test.ts) macht das mit einem Mini-Repo vor.
 
 ## docs-gen in ein anderes Repo übernehmen (Stufe 2 und 3)
 
-Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, der ein Mini-Repo (Python, ohne `package.json`, ohne `src/`) mit eigener Config, eigener Schicht-Definition und eigenem Generator (über `generatoren`) durch den Kern fährt ([`docgen-fremdrepo.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.1.0/test/docgen-fremdrepo.test.ts)) und durch einen Wächter, der prüft, dass die Kern-Module nur `node:*` und andere Kern-Module importieren.
+Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, der ein Mini-Repo (Python, ohne `package.json`, ohne `src/`) mit eigener Config, eigener Schicht-Definition und eigenem Generator (über `generatoren`) durch den Kern fährt ([`docgen-fremdrepo.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/test/docgen-fremdrepo.test.ts)) und durch einen Wächter, der prüft, dass die Kern-Module nur `node:*` und andere Kern-Module importieren.
 
 **Ist-Zustand ist Übernahme per Kopie, kein Paket.** Zum Kopieren:
 
@@ -69,7 +69,7 @@ Für Projekte, in deren Repo vom Harness nichts liegen darf, gilt die Betriebsar
 
 Der Produktname ist „Self-Improving Agent Harness and Factory“. Er gilt als source-available: der Quelltext ist einsehbar, die Nutzung bleibt vorbehalten, er ist nicht als Open Source lizenziert.
 
-Das Sync-Werkzeug (`npm run factory:sync`, ADR 0022 F9) überträgt den Besitz aus einem Tag der Quelle (`--tag <name>`), für den Stand eines Projekts nie aus dem Arbeitsbaum, das Drift-Gate (`npm run check:factorydrift`) hält ihn im Projekt unverändert und ist ohne Tag oder bei einem unsauberen Quellstand rot (#1871); nur `--entwurf` liest den Arbeitsbaum, zur Probe. Ist-Zustand: die Quelle ist das Factory-Repo, und dieses Repo bezieht den Kern per Sync vom Tag `v0.1.0` (Sync-Stand `.factory/sync-stand.json`). Update-Weg: upstream ändern, taggen, `npm run factory:sync -- --quelle <klon> --tag <name>`.
+Das Sync-Werkzeug (`npm run factory:sync`, ADR 0022 F9) überträgt den Besitz aus einem Tag der Quelle (`--tag <name>`), für den Stand eines Projekts nie aus dem Arbeitsbaum, das Drift-Gate (`npm run check:factorydrift`) hält ihn im Projekt unverändert und ist ohne Tag oder bei einem unsauberen Quellstand rot (#1871); nur `--entwurf` liest den Arbeitsbaum, zur Probe. Ist-Zustand: die Quelle ist das Factory-Repo, und dieses Repo bezieht den Kern per Sync vom Tag `v0.2.0` (Sync-Stand `.factory/sync-stand.json`). Update-Weg: upstream ändern, taggen, `npm run factory:sync -- --quelle <klon> --tag <name>`.
 
 Wer den Harness übernimmt, schließt eine vertragskonforme Sandbox an ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md), [Sandbox anbinden](sandbox-anbinden.md)).
 

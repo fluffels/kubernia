@@ -51,6 +51,7 @@ model {
       checkAnysuppress = gate 'check:anysuppress'
       checkDocmap = gate 'check:docmap'
       checkDocdrift = gate 'check:docdrift'
+      checkFactorylinks = gate 'check:factorylinks'
       checkDocgen = gate 'check:docgen'
       checkC4 = gate 'check:c4'
       checkInternalrefs = gate 'check:internalrefs'
