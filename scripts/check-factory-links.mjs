@@ -219,7 +219,7 @@ function zielBefund(l, leser) {
   return collectHeadingSlugs(leser.lies(l.pfad) ?? "").includes(l.anker) ? null : befund("anker-tot", `${l.url}: Anker #${l.anker} gibt es in ${l.pfad} am Tag nicht`, l);
 }
 
-/** Refs positionsgenau auf `tag` setzen (von hinten nach vorn, Zeilenenden bleiben); schreibt nur geänderte Dateien. */
+/** Refs positionsgenau auf `tag` setzen (von hinten nach vorn, Zeilenenden bleiben); schreibt jede Datei mit Factory-Links. */
 function schreibeRefs(rootDir, links, tag) {
   const jeDatei = new Map();
   for (const l of links) jeDatei.set(l.datei, [...(jeDatei.get(l.datei) ?? []), l]);

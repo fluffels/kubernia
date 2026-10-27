@@ -69,6 +69,10 @@ describe("factoryLinkStellen: Scan-Umfang (AK4)", () => {
     const s = stellen(`[c](https://github.com/${REPO}/commit/abc123)\n[b](https://github.com/${REPO}/blob/v1)`);
     assert.deepEqual(s.map((x) => x.form), ["fremd", "fremd"]);
   });
+  test("Link mit Titel wird erfasst, Wurzel mit Anker oder Query bleibt unerfasst", () => {
+    assert.deepEqual(stellen(`[t](${u("v1", "a.md")} "Titel")`).map((x) => x.pfad), ["a.md"]);
+    assert.deepEqual(stellen(`[a](https://github.com/${REPO}#readme)\n[b](https://github.com/${REPO}?tab=x)`), []);
+  });
   test("ein Autolink in `[t](<url>)` zählt nur einmal", () => {
     assert.equal(stellen(`[t](<${u("v1", "a.md")}>)`).length, 1);
   });
@@ -144,6 +148,32 @@ describe("Prüfmodus (AK1, AK3)", () => {
     assert.deepEqual(arten(projekt(tagLinks("v1"), null)), ["index-fehlt"]);
     assert.deepEqual(arten(projekt(tagLinks("v1"), gut(), { tag: "", commit: "" })), ["sync-stand"]);
     assert.deepEqual(arten(projekt(`[c](https://github.com/${REPO}/commit/abc)`, indexJson("v1", "c1", {}))), ["form"]);
+  });
+  test("rot: Index-Repo ungleich Config-Repo", () => {
+    assert.deepEqual(arten(projekt(tagLinks("v1"), JSON.stringify({ repo: "x/y", tag: "v1", commit: "c1", ziele: { "a.md": ["kopf"], "test/h": [""] } }))), ["index-stand"]);
+  });
+  test("rot: Sync-Stand ohne Commit (Tag gesetzt) und fehlende Sync-Stand-Datei", () => {
+    assert.deepEqual(arten(projekt(tagLinks("v1"), gut(), { tag: "v1", commit: "" })), ["sync-stand"]);
+    const ohneStand = fixture({
+      ".factory/projekt.json": JSON.stringify({ boards: [{ rolle: "factory", repo: REPO }] }),
+      ".factory/factory-links.json": gut(),
+      "docs/x.md": tagLinks("v1"),
+    });
+    assert.deepEqual(arten(ohneStand), ["sync-stand"]);
+  });
+  test("rot: Index ist kein JSON", () => {
+    assert.deepEqual(arten(projekt(tagLinks("v1"), "{kaputt")), ["index-fehlt"]);
+  });
+  test("rot: kein Board mit Rolle factory in der Projekt-Config", () => {
+    const root = fixture({ ".factory/projekt.json": JSON.stringify({ boards: [{ rolle: "produkt", repo: REPO }] }), "docs/x.md": tagLinks("v1") });
+    assert.deepEqual(arten(root), ["projekt"]);
+    const r = run([], root);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /\[projekt\]/);
+  });
+  test("--wurzel wählt den Projektbaum", () => {
+    const root = projekt(tagLinks("v1"), gut());
+    assert.equal(run(["--wurzel", root], fixture({ "leer.txt": "" })).code, 0);
   });
   test("pruefeIndex ohne Link und ohne Eintrag ist grün", () => {
     assert.deepEqual(lib.pruefeIndex({ links: [], index: { repo: REPO, tag: "v1", commit: "c1", ziele: {} }, sync: { quelle: { tag: "v1", commit: "c1" } }, repo: REPO }), []);
@@ -242,8 +272,45 @@ describe("Schreibmodus e2e mit temporärem Git-Repo als Quelle (AK2, AK3)", () =
   });
   test("Anker bei Nicht-Markdown-Ziel und bei tree wird nicht geprüft", () => {
     const k = klon();
-    const root = projekt(`[a](${u("v1", "test/x.test.ts", "L10")})\n`, k.commit);
+    const root = projekt(`[a](${u("v1", "test/x.test.ts", "L10")})\n[b](${u("v1", "test/h", "irgendwas", "tree")})\n`, k.commit);
     assert.equal(run(["--schreiben", "--quelle", k.dir], root).code, 0);
+  });
+  test("fremde URL-Form: rot, Doku byte-gleich, kein Index", () => {
+    const k = klon();
+    const doku = `[c](https://github.com/${REPO}/commit/abc)\n[a](${u("v1", "a.md")})\n`;
+    const root = projekt(doku, k.commit);
+    const r = run(["--schreiben", "--quelle", k.dir], root);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /\[form\]/);
+    assert.equal(lies(root, "docs/x.md"), doku);
+    assert.equal(existiert(root, ".factory/factory-links.json"), false);
+  });
+  test("kein Board mit Rolle factory und fehlender Sync-Stand: rot, nichts geschrieben", () => {
+    const k = klon();
+    const ohneBoard = fixture({ ".factory/projekt.json": JSON.stringify({ boards: [] }), "docs/x.md": `[a](${u("v1", "a.md")})\n` });
+    assert.match(run(["--schreiben", "--quelle", k.dir], ohneBoard).err, /\[projekt\]/);
+    const ohneStand = fixture({ ".factory/projekt.json": JSON.stringify({ boards: [{ rolle: "factory", repo: REPO }] }), "docs/x.md": `[a](${u("v1", "a.md")})\n` });
+    const r = run(["--schreiben", "--quelle", k.dir], ohneStand);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /\[sync-stand\]/);
+  });
+  test("Ref anderer Länge, mehrere Links in einer Zeile: kein Link wird zerschnitten (von hinten nach vorn)", () => {
+    const k = klon();
+    const doku = `[a](${u("v1.2.3", "a.md", "kopf")}) [t](${u("v1.2.3", "test/x.test.ts")}) [b](${u("v1.2.3", "a.md")})\n`;
+    const root = projekt(doku, k.commit);
+    assert.equal(run(["--schreiben", "--quelle", k.dir], root).code, 0);
+    assert.equal(lies(root, "docs/x.md"), doku.replaceAll("v1.2.3", "v9"));
+  });
+  test("Index: mehrere Anker je Pfad sortiert, doppelte Paare einmal", () => {
+    const k = klon();
+    writeFileSync(join(k.dir, "b.md"), "# Zeta\n\n# Alpha\n");
+    git(k.dir, "add", "-A");
+    git(k.dir, "commit", "-q", "-m", "b");
+    git(k.dir, "tag", "-f", "v9");
+    const commit = git(k.dir, "rev-parse", "HEAD");
+    const root = projekt(`[a](${u("v1", "b.md", "zeta")}) [b](${u("v1", "b.md", "alpha")}) [c](${u("v1", "b.md", "zeta")})\n`, commit);
+    assert.equal(run(["--schreiben", "--quelle", k.dir], root).code, 0);
+    assert.match(lies(root, ".factory/factory-links.json"), /"b\.md": \["alpha","zeta"\]/);
   });
 });
 
