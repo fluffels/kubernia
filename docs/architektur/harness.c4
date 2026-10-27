@@ -86,7 +86,7 @@ model {
       description 'Spiel- und Inhalts-Tickets, die Position im Board ist die Reihenfolge'
     }
     factoryBoard = container 'Factory-Board' {
-      description 'Harness-Arbeit (Label area:harness); die Trennregel boardRolleFuer in scripts/board-lib.mjs wählt das Board je Issue'
+      description 'Harness-Arbeit; das Board führt die Issues des Factory-Repos (boards[].repo), die Trennregel boardRolleFuer in scripts/board-lib.mjs ordnet nach Label area:harness ein'
     }
     pr = container 'Pull Request' {
       description 'Ein PR je Ticket, Auto-Merge nach grüner CI'

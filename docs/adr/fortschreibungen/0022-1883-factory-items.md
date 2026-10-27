@@ -5,7 +5,7 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Verteilun
 ## Ergebnis
 
 - **Labels:** der Label-Satz von kubernia steht im Factory-Repo (`gh label clone --force`, nichts gelöscht; im Factory-Repo kommen die Dependabot-Labels `accessibility`, `javascript`, `github_actions` dazu).
-- **Übertragung:** 74 offene `area:harness`-Issues liegen jetzt als `fluffels/self-improving-agent-harness-and-factory#5` bis `#79`. Nicht übertragen: #1883 (schließt mit diesem PR). Das Mapping alt → neu steht als Kommentar in #1883. Das Board-Item bleibt bei der Übertragung erhalten: gleiche Item-ID, gleicher Status, gleiche Position (Reihenfolge der Board-Liste vor und nach der Übertragung gleich).
+- **Übertragung:** 75 offene `area:harness`-Issues liegen jetzt im Factory-Repo: #4, #5 und #7 bis #79 (#6 ist der Pull Request des Kerns). Nicht übertragen: #1883 (schließt mit diesem PR). Das Mapping alt → neu steht als Kommentar in #1883. Das Board-Item bleibt bei der Übertragung erhalten: gleiche Item-ID, gleicher Status, gleiche Position (Reihenfolge der Board-Liste vor und nach der Übertragung gleich).
 - **Verweise:** GitHub schreibt beim Transfer jedes nackte `#N` in Body und Kommentaren zu `fluffels/kubernia#N` um und führt es bei einem späteren Transfer von `N` auf die neue Nummer nach, auch in Issues, die im Quell-Repo bleiben (kubernia#1129 und #1130 zeigen jetzt auf `fluffels/self-improving-agent-harness-and-factory#29`). Alle 45 Blocker-Verweise der übertragenen Issues lösen auf (Skript prüft Existenz und Titel); ein eigenes Zurückschreiben war nicht nötig.
 - **Konfigs:** `boards[].repo` (neu, optional) in beiden `.factory/projekt.json`: das Factory-Board von kubernia führt `fluffels/self-improving-agent-harness-and-factory`, das Produkt-Board des Factory-Repos führt `fluffels/kubernia`; ohne Schlüssel gilt das `repo` der Config.
 - **Ansichten (F8):** `updateProjectV2View` existiert; „View 1“ beider Boards hat den Filter `-status:Done repo:<Repo des Boards>`.
@@ -13,11 +13,11 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Verteilun
 
 ## Probe (K2)
 
-Die Probe war die Übertragung von `fluffels/kubernia#1090` nach `fluffels/self-improving-agent-harness-and-factory#5` (Kommentar in #1883 mit der Tabelle). Ein früherer Kommentar „Probe-Transfer #4 → #4“ beschreibt keine Übertragung: Issue #4 des Factory-Repos ist ein dort angelegtes Issue, kein Transfer.
+Es gab zwei Proben. Die erste war `fluffels/kubernia#1719` nach `fluffels/self-improving-agent-harness-and-factory#4` (Kommentar „Probe-Transfer #4 → #4“ in #1883: GitHub schrieb den alten Verweis `fluffels/kubernia#1719` nach dem Transfer selbst auf die neue Nummer um, darum steht dort zweimal die #4). Die zweite war `fluffels/kubernia#1090` nach `…#5` (Kommentar mit der Tabelle unten).
 
 | Prüfpunkt | Ergebnis |
 | --- | --- |
-| Labels, Assignees, Kommentare | bleiben (Label nur bei gleichnamigem Label im Ziel) |
+| Labels, Kommentare | bleiben (Label nur bei gleichnamigem Label im Ziel); Assignees: nicht geprüft, kein übertragenes Issue hatte einen |
 | Board-Item | gleiche Item-ID, Status Todo, gleiche Nachbarn |
 | `content.repository_url` | REST zeigt das neue Repo sofort |
 | Verweise | nackte `#N` wurden zu `fluffels/kubernia#N` |
