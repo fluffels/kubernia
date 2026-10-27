@@ -115,12 +115,12 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 
 | Seite | Wann lesen |
 |---|---|
-| [agent-harness.md](../agent-harness.md) | wenn du verstehen willst, wie und warum der Agenten-Harness funktioniert (inkl. Langfassung der harten Regeln) |
-| [agent-harness-faq.md](../agent-harness-faq.md) | wenn du über eine Harness-Falle stolperst (Worktrees unter Windows, Hooks, Gates) |
+| [agent-harness.md](../agent-harness.md) | wenn du den Projektanteil des Agenten-Harness suchst (generierte Abschnitte, Projekt-Gates, Test-Harness, Forum-Eingang); das Kernwissen steht im Factory-Repo, siehe [Factory-Seiten](#factory-seiten-projektanteil-und-kern) |
+| [agent-harness-faq.md](../agent-harness-faq.md) | wenn du eine Projekt-Frage zum Harness hast (Deploybarkeit, Browser im Spiel, Architekturmodell, Perf-Smoke); die Harness-Fallen (Worktrees unter Windows, Hooks, Gates) stehen in der Kern-FAQ |
 | [lessons-learned.md](../lessons-learned.md) | wenn du als Außenstehende:r wissen willst, welche Muster der Bau des Harness gezeigt hat (datierte Belege, was geändert wurde, was offen ist) |
 | [harness-glossar.md](../harness-glossar.md) | wenn dir ein Harness-Begriff fehlt (Subagent, Lens, Leitplanke, Override, Sammelticket, Dark Factory) |
 | [sandbox-anbinden.md](../sandbox-anbinden.md) | wenn du den Harness mit Docker Sandboxes (`sbx`), einer eigenen Container-Sandbox oder der Cloud-Sitzung betreiben willst (Einrichtung, Eigenheiten) |
-| [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
+| [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn du den Forum-Kanal für Fremdtext nachschlägst; Vertrauensmodell und OWASP-Abgleich stehen im Factory-Repo |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
 | [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
 | [factory/entscheidungsprotokoll.md](../factory/entscheidungsprotokoll.md) | wenn du vor einer Ermessens-Weiche oder einem Hand-off (`festgefahren`, Zusatzpass, Override) stehst und entscheiden willst, ob und womit du sie selbst klärst |
@@ -154,6 +154,30 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | Seite | Wann lesen |
 |---|---|
 | [`e2e/`](../../e2e/) | bei Boot-, Interaktions-, FPS-, a11y- und Lern-Loop-Smokes (Playwright, `npm run smoke`); Details in [agent-harness.md › Test-Harness und e2e-Smokes](../agent-harness.md#test-harness-und-e2e-smokes), den Datei-Köpfen und [`playwright.config.ts`](../../playwright.config.ts) |
+
+<!-- factory-projekt:ende -->
+
+## Factory-Seiten: Projektanteil und Kern
+
+<!-- factory-projekt:start -->
+
+Sieben Seiten dieses Repos stammen aus dem Factory-Repo. Je Seite (bei gemischten Seiten je Abschnitt) gilt genau ein Urteil: **Projekt** (bleibt hier, in `factory-projekt`-Blöcken oder als generierter Abschnitt) oder **Kern** (steht nur im Factory-Repo; hier höchstens ein Anker-Stub mit einer Zeile `Kern: [Titel](Factory-Link)`). Regel, Stub-Gründe und Ausnahmen: [Fortschreibung #1967](../adr/fortschreibungen/0022-1967-factory-seiten-projektanteil.md). Der Test `test/harness/factory-seiten-projekt.test.ts` hält die Liste und die gekürzten Seiten zusammen.
+
+| Seite | Abschnitt | Urteil | Zielort |
+|---|---|---|---|
+| `docs/agent-harness.md` | Kernidee, Bausteine, Cockpit, Gates-Langtexte (Tests bis Code-Scanning), Gates, Guards und Durchsetzung, sichere Autonomie-Schleife samt Sandbox-Langtext, Roadmap | Kern | [Factory: agent-harness.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md); hier Anker-Stubs |
+| `docs/agent-harness.md` | generierte Abschnitte (Kennzahlen, Gates, Ablauf, Sequenz, Leitplanken-Schichten), Projekt-Gates (Architektur, Spiel-Generatoren, Architekturmodell, Factory-Link, Smokes, Deploy, Schichtung, Bundle, Duplikation), Test-Harness und e2e-Smokes, Forum-Eingang, Netz-Ergänzung der Sandbox, Verwandte Dokumente | Projekt | bleibt hier: [agent-harness.md](../agent-harness.md) |
+| `docs/agent-harness-faq.md` | alle Fragen außer den folgenden (CI-Ergebnis, Subagent, Übertragung, Mauer, Festgefahren, Self-Merge, Auto-Mode, Worktree, Git-Bash, Probe-Lauf, Scratch, Hooks, Timeouts, mtime, Langfuse, CI-Schritt, Bildanhang) | Kern | [Factory: agent-harness-faq.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md); hier Anker-Stubs |
+| `docs/agent-harness-faq.md` | Deploybarkeit, Browser im Spiel, Architekturmodell, AGE-Werte, Perf-Smoke, Mermaid, Verwandte Dokumente | Projekt | bleibt hier: [agent-harness-faq.md](../agent-harness-faq.md) |
+| `docs/sicherheit-agenten.md` | Quellen, Vertrauensmodell, OWASP-Abgleich, Kanäle außer dem Forum, Grenzen | Kern | [Factory: sicherheit-agenten.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/sicherheit-agenten.md); hier Anker-Stubs |
+| `docs/sicherheit-agenten.md` | Kanal Forum samt Quarantäne-Muster | Projekt | bleibt hier: [sicherheit-agenten.md](../sicherheit-agenten.md#kanäle-für-fremdtext) |
+| `docs/model-routing.md` | alle Abschnitte außer der Forum-Triage-Zeile der Phasen-Matrix | Kern | [Factory: model-routing.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/model-routing.md); Kürzung in #1968 |
+| `docs/model-routing.md` | Forum-Triage (Block der Phasen-Matrix) | Projekt | bleibt hier: [model-routing.md](../model-routing.md) |
+| `docs/ticket-reihenfolge.md` | ganze Seite | Kern | [Factory: ticket-reihenfolge.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/ticket-reihenfolge.md); Kürzung in #1968 |
+| `docs/harness-glossar.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: harness-glossar.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/harness-glossar.md); Kürzung in #1968 |
+| `docs/harness-glossar.md` | Projekt-Blöcke (SBOM, Factory-Link-Begriffe, Anker-Stub, Projektanteil) | Projekt | bleibt hier: [harness-glossar.md](../harness-glossar.md) |
+| `docs/referenz/befehle.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: befehle.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/referenz/befehle.md); Kürzung in #1968 |
+| `docs/referenz/befehle.md` | Projekt-Blöcke (Erste Minute, Projekt-Befehle) | Projekt | bleibt hier: [befehle.md](befehle.md) |
 
 <!-- factory-projekt:ende -->
 
