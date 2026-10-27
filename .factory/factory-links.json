@@ -8,7 +8,7 @@
     "docs/harness-glossar.md": [""],
     "docs/model-routing.md": [""],
     "docs/referenz/befehle.md": [""],
-    "docs/sicherheit-agenten.md": ["","grenzen-ehrlich","kanäle-für-fremdtext"],
+    "docs/sicherheit-agenten.md": ["","grenzen-ehrlich","kanäle-für-fremdtext","owasp-abgleich"],
     "docs/ticket-reihenfolge.md": [""],
     "test/abnahme-nachweis.test.ts": [""],
     "test/board-korrektur.test.ts": [""],
