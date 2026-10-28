@@ -18,8 +18,8 @@
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
+import { gleichesRepo, labelAus, ladeProjektConfig, zielRepoFuer } from "./projekt-config-lib.mjs";
 import {
   REPO,
   SAMMELTICKET_TITEL,
@@ -29,7 +29,6 @@ import {
   boardFuerRolle,
   boardRolleFuer,
   alsDatum,
-  aufnahmePlan,
   frischeOffeneIssues,
   ghJson,
   itemsUeberIssues,
@@ -50,9 +49,10 @@ import {
   wirklichFehlend,
 } from "./board-lib.mjs";
 
+import { aufnahmePlan } from "./board-plan-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { bestaetigeAnlegen, entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
-import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTicketMerges } from "./produktquote-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, holeQuotenCommits, istHarnessCommit, quotenCommitLeser, quotenQuellen, sammelStand, zaehleTicketMerges } from "./produktquote-lib.mjs";
 
 // Die Quote liegt in produktquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
 export { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, istHarnessCommit, zaehleTicketMerges };
@@ -221,23 +221,24 @@ export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REP
   if (kandidaten.length === 0) return { listen, fehler: false };
   let fehlend;
   try {
-    fehlend = wirklichFehlend(kandidaten, [...io.itemsUeberIssues("produkt", kandidaten, { token }), ...io.itemsUeberIssues("factory", kandidaten, { token })]);
+    fehlend = wirklichFehlend(kandidaten, [...io.itemsUeberIssues("produkt", kandidaten, { token, repo }), ...io.itemsUeberIssues("factory", kandidaten, { token, repo })]);
   } catch (err) {
     io.log(fehlerMeldung(err, { praefix: "Board-Wächter: GraphQL-Zweitabfrage fehlgeschlagen: " }));
     return { listen, fehler: true };
   }
   let neu = listen;
   let fehler = false;
+  const alleAbgelehnt = [];
   for (const nr of fehlend) {
     try {
-      const { aufnehmen, abgelehnt } = aufnahmePlan([nr], { [nr]: io.ghJson(["api", `repos/${repo}/issues/${nr}`]) }, { config });
-      for (const a of abgelehnt) io.log(`::warning::Board-Wächter: #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
+      const { aufnehmen, abgelehnt } = aufnahmePlan([nr], { [nr]: io.ghJson(["api", `repos/${repo}/issues/${nr}`]) }, { config, repo });
+      alleAbgelehnt.push(...abgelehnt);
       for (const a of aufnehmen) {
         if (dry) {
           io.log(`Board-Wächter: #${a.number} fehlt im Board, würde als Todo aufgenommen (--dry-run).`);
           continue;
         }
-        const id = io.addToBoardTodo(a.rolle, a.nodeId, { token });
+        const id = io.addToBoardTodo(a.rolle, a.nodeId, { token, repo });
         io.log(`::warning::Board-Wächter: #${a.number} fehlte im Board, als Todo auf dem ${a.rolle}-Board aufgenommen.`);
         neu = { ...neu, [a.rolle]: [...neu[a.rolle], todoItem({ id, number: a.number, title: a.title })] };
       }
@@ -246,14 +247,51 @@ export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REP
       io.log(fehlerMeldung(err, { praefix: `Board-Wächter: #${nr} nicht aufgenommen: ` }));
     }
   }
+  meldeAbgelehnte(alleAbgelehnt, io.log);
   return { listen: neu, fehler };
+}
+
+/** Eine Warnung je Ablehnungsgrund (#78): ein Issue mit Nummer wie bisher, mehrere zusammen mit Anzahl und Nummern statt je Issue bei jedem Takt. */
+function meldeAbgelehnte(abgelehnt, log) {
+  const nachGrund = Map.groupBy(abgelehnt, (a) => a.grund);
+  for (const [grund, liste] of nachGrund) {
+    log(liste.length === 1
+      ? `::warning::Board-Wächter: #${liste[0].number} fehlt im Board, nicht aufgenommen: ${grund}.`
+      : `::warning::Board-Wächter: ${liste.length} Issues fehlen im Board, nicht aufgenommen (${liste.map((a) => `#${a.number}`).join(", ")}): ${grund}.`);
+  }
+}
+
+/**
+ * Fremdes Factory-Board (#76, ADR 0022 F10): führt das Factory-Board der Config die Issues eines anderen Repos als `repo`, pflegt der Takt dort
+ * Status- und Sammelticket. Hier läuft nur der Board-Wächter; Status-Ticket, Harness-Sammelticket und Quotenzeile entfallen. Liefert `{ fehler }`.
+ */
+function nurWaechter({ repo, dry, token, config, io, fuehrt }) {
+  io.log(`Factory-Teil übersprungen: Factory-Board führt ${fuehrt}, der Takt dort pflegt Status- und Sammelticket`);
+  if (!token) return { fehler: false };
+  const listen = { produkt: io.loadItems("produkt", { token, repo }), factory: io.loadItems("factory", { token, repo }) };
+  const gelesen = leseOffene(io, repo);
+  if (gelesen.fehler) return { fehler: true };
+  return { fehler: nimmFehlendeAuf({ offene: gelesen.offene, listen, token, dry, repo, config }, io).fehler };
+}
+
+/**
+ * Die offenen Issues des Repos `repo` (#97): ein Lesefehler (etwa ein Fremd-Repo ohne Lesezugriff des Tokens) wird als Zeile mit dem Weg zur Abhilfe
+ * gemeldet (`schreibrechtText`, sonst der Fehlertext), nicht als Absturz. Liefert `{ offene }` oder `{ fehler: true }`.
+ */
+function leseOffene(io, repo) {
+  try {
+    return { offene: normalizeOffene(io.loadOpenIssuePages(repo)) };
+  } catch (e) {
+    io.log(`Offene Issues von ${repo} nicht lesbar: ${schreibrechtText(e, repo, "lesen") ?? fehlerText(e)}`);
+    return { fehler: true };
+  }
 }
 
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
 export const ECHTE_IO = {
   ghJson,
   frischeOffeneIssues: (a) => frischeOffeneIssues(a),
-  itemsUeberIssues: (rolle, nummern, opts) => itemsUeberIssues(boardFuerRolle(rolle), nummern, opts),
+  itemsUeberIssues: (rolle, nummern, { repo, ...opts } = {}) => itemsUeberIssues(boardFuerRolle(rolle), nummern, opts, repo),
   addToBoardTodo: (rolle, nodeId, opts) => addToBoardTodo(boardFuerRolle(rolle), nodeId, opts),
   loadItems: (rolle, opts) => loadItems(boardFuerRolle(rolle), opts),
   loadOpenIssuePages,
@@ -270,6 +308,8 @@ export const ECHTE_IO = {
  */
 export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, config }) {
   const harnessLabel = labelAus(config, "harness");
+  const fuehrt = zielRepoFuer([harnessLabel], config); // das Repo, dessen Issues das Factory-Board führt
+  if (!gleichesRepo(fuehrt, repo)) return nurWaechter({ repo, dry, token, config, io, fuehrt });
   let position = null;
   let positionFehler = null;
   try {
@@ -277,7 +317,9 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   } catch (err) {
     positionFehler = err.message;
   }
-  const offene = normalizeOffene(io.loadOpenIssuePages(repo));
+  const gelesen = leseOffene(io, repo);
+  if (gelesen.fehler) return { fehler: true };
+  const offene = gelesen.offene;
   const seit = new Date(jetzt.getTime() - 90 * TAG_MS).toISOString();
   const geschlossen = io.ghJson(harnessIssuesAnfrage({ repo, label: harnessLabel, seit }))
     .flat()
@@ -304,10 +346,14 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   const abStatus = mergeFensterAb(fensterStart, jetzt).toISOString();
   const abHarness = mergeFensterAb(abschluss?.closedAt ?? null, jetzt).toISOString();
   const fruehestens = abStatus < abHarness ? abStatus : abHarness;
-  const commits = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${fruehestens}&per_page=100`]).flat();
+  // Nach einem Umzug des Factory-Boards (#78) zählen die Commits beider Repos; ein fremdes Repo liest der Projekt-Token.
+  const commits = holeQuotenCommits({
+    quellen: quotenQuellen({ config, repo }),
+    lies: quotenCommitLeser({ gh: io.ghJson, repo, since: fruehestens, env: io.env ?? process.env }),
+  });
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
   // Beide Board-Listen einmal je Lauf (brauchen den Projekt-Scope des Tokens); Status- und Harness-Takt arbeiten auf der Factory-Liste.
-  const roh = token ? { produkt: io.loadItems("produkt", { token }), factory: io.loadItems("factory", { token }) } : null;
+  const roh = token ? { produkt: io.loadItems("produkt", { token, repo }), factory: io.loadItems("factory", { token, repo }) } : null;
   const doppelt = roh ? seitenListen(roh.produkt, roh.factory, config).doppelt : [];
   for (const nr of doppelt) io.log(`::warning::Board-Wächter: #${nr} steht auf beiden Boards, es zählt das Board laut Trennregel.`);
   let items = roh ? factoryListe(roh.factory, doppelt, config) : null;
@@ -346,7 +392,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   return { fehler };
 }
 
-function main() {
+function main(env = process.env) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
   const aufruf = flagsLesen(process.argv.slice(2), { "dry-run": { type: "boolean" } });
   if (aufruf.fehler) {
@@ -354,13 +400,14 @@ function main() {
     process.exitCode = AUFRUF_EXIT;
     return;
   }
-  if (process.env.PROJECT_TOKEN) mitKontingent("board-takt", { token: process.env.PROJECT_TOKEN });
+  if (env.PROJECT_TOKEN) mitKontingent("board-takt", { token: env.PROJECT_TOKEN });
   const { fehler } = fuehreTaktAus({
     jetzt: new Date(),
     dry: aufruf.werte["dry-run"] === true,
     repo: REPO,
-    ausloeser: process.env.GITHUB_EVENT_NAME || "schedule",
-    token: process.env.PROJECT_TOKEN,
+    ausloeser: env.GITHUB_EVENT_NAME || "schedule",
+    token: env.PROJECT_TOKEN,
+    io: { ...ECHTE_IO, env },
     config: ladeProjektConfig(),
   });
   if (fehler) process.exitCode = 1;

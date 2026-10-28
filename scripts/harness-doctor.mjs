@@ -28,10 +28,10 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { kernEnvNamen, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
-import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, pruefLauf } from "./harness-doctor-lib.mjs";
+import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, ohneActionPins, pruefLauf } from "./harness-doctor-lib.mjs";
 
 // Die Prüf-API (Ableitung, Prüfpunkte, Vorlage) steht in der Lib; sie bleibt unter diesem Namen erreichbar.
-export { BOARD_PRUEFPUNKTE, STATUS_FELD_NAME, TODO_OPTION_NAME, WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, pruefLauf, pruefe, voraussetzungenAus, workflowsLesen } from "./harness-doctor-lib.mjs";
+export { BOARD_PRUEFPUNKTE, STATUS_FELD_NAME, TODO_OPTION_NAME, WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, ohneActionPins, pruefLauf, pruefe, voraussetzungenAus, workflowsLesen } from "./harness-doctor-lib.mjs";
 
 const SKRIPTE = dirname(fileURLToPath(import.meta.url));
 const USAGE = "Aufruf: node scripts/harness-doctor.mjs --pruefen [--config <pfad>] | --einrichten [--dry-run] [--config <pfad>]";
@@ -59,7 +59,7 @@ function wochenlaufDatei({ rootDir, trocken, out }) {
     out(`ANGELEGT Workflow ${WOCHENLAUF_PFAD}`);
     return { geplant: 0, angelegt: 1 };
   }
-  if (ohneCr(readFileSync(ziel, "utf8")) === ohneCr(WOCHENLAUF_WORKFLOW)) out(`OK Workflow ${WOCHENLAUF_PFAD}`);
+  if (ohneActionPins(ohneCr(readFileSync(ziel, "utf8"))) === ohneActionPins(ohneCr(WOCHENLAUF_WORKFLOW))) out(`OK Workflow ${WOCHENLAUF_PFAD}`);
   else out(`HINWEIS Workflow ${WOCHENLAUF_PFAD} weicht von der Vorlage ab und bleibt unverändert (Verteilung: factory-sync)`);
   return { geplant: 0, angelegt: 0 };
 }

@@ -14,9 +14,9 @@
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
-import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { fehlerText, ghJson, ghText, tokenFuerZiel } from "./gh-cli.mjs";
 import { inboxStart } from "./inbox-start-lib.mjs";
-import { labelAus } from "./projekt-config-lib.mjs";
+import { labelAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 
 /** Titel-Präfix der Wiedervorlage-Tickets; derselbe Marker steht als Notfall-Art `wiedervorlage` in `NOTFAELLE` (board-lib.mjs). */
 export const TITEL_PRAEFIX = "⏰ Wiedervorlage:";
@@ -117,22 +117,22 @@ function ladeEintraege() {
 
 /** Alle Issues (offen und geschlossen) aus der konsistenten Listenabfrage, nicht aus dem verzögerten Such-Index. */
 // Grenze: die jüngsten 1000 Issues (alle Zustände). Ein Wiedervorlage-Ticket wird zeitnah abgearbeitet und der Eintrag im selben PR gelöscht; ein Ticket, das hinter die 1000 fällt, stünde nur bei vergessenem Löschen noch an (dann Dublette statt Warnung).
-const ladeTickets = (repo) => ghJson(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "number,state,body,closedAt"]);
+const ladeTickets = (repo, token) => ghJson(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "number,state,body,closedAt"], { token });
 
-function legeAn(e, label, repo) {
+function legeAn(e, label, repo, token) {
   const { titel, body } = ticketText(e);
-  const url = ghText(["issue", "create", "--repo", repo, "--title", titel, "--label", label, "--body", body]).trim();
+  const url = ghText(["issue", "create", "--repo", repo, "--title", titel, "--label", label, "--body", body], { token }).trim();
   return Number(url.split("/").pop());
 }
 
-function sortiereEin(nr, platziereOben) {
+function sortiereEin(nr, platziereOben, repo) {
   const token = process.env.PROJECT_TOKEN;
   if (!token) {
     console.log(`::warning::PROJECT_TOKEN fehlt: #${nr} steht nicht oben im Board.`);
     return false;
   }
   try {
-    platziereOben(nr, "wiedervorlage", token);
+    platziereOben(nr, "wiedervorlage", token, repo);
     return true;
   } catch (err) {
     console.log(`::error::Board-Position für #${nr} nicht gesetzt: ${fehlerText(err)}`);
@@ -141,7 +141,7 @@ function sortiereEin(nr, platziereOben) {
 }
 
 /**
- * Ein Lauf mit eingespeister IO (`anlegen(eintrag) -> Nummer`, `sortiereEin(nr) -> bool`, `log`): liefert den Exit-Code.
+ * Ein Lauf mit eingespeister IO (`anlegen(eintrag) -> Nummer`, `sortiereEin(nr, eintrag) -> bool`, `log`): liefert den Exit-Code.
  * Wächter: ein fälliger Eintrag, dessen Ticket nicht entsteht (oder nicht oben landet), macht den Lauf rot; der Trockenlauf ändert nichts und ist grün.
  */
 export function lauf({ eintraege, heute, tickets, trocken = false, anlegen, sortiereEin: sortiere, log = console.log }) {
@@ -164,27 +164,49 @@ export function lauf({ eintraege, heute, tickets, trocken = false, anlegen, sort
       continue;
     }
     log(`Angelegt: #${nr} (${a.eintrag.id})`);
-    if (!sortiere(nr)) rot = true;
+    if (!sortiere(nr, a.eintrag)) rot = true;
   }
   return rot ? 1 : 0;
 }
 
-/** Die Verdrahtung von `lauf` mit dem Standard-Label aus der Config (`labels.harness`, wirft ohne); Eintrags-Label geht vor. */
-export function ioAus(config, { legen = legeAn, repo, platziereOben } = {}) {
-  const standard = labelAus(config, "harness");
-  return { anlegen: (e) => legen(e, labelFuer(e, standard), repo), sortiereEin: (nr) => sortiereEin(nr, platziereOben) };
+/**
+ * Das Ziel-Repo der Einträge (#78): je Eintrag das Repo, dessen Issues das Board seines Labels führt (`zielRepoFuer`, Standard-Label `labels.harness`, Eintrags-Label geht vor).
+ * Ein fremdes Ziel-Repo braucht `PROJECT_TOKEN` (`tokenFuerZiel`), das eigene `repo` den Standard-`GH_TOKEN`. Pur.
+ */
+export function zielFuer(e, config, { repo, env = process.env }) {
+  const ziel = zielRepoFuer([labelFuer(e, labelAus(config, "harness"))], config);
+  return { ziel, token: tokenFuerZiel({ ziel, eigenes: repo, env }) };
 }
 
-/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `platziereOben`), `eintraegeLaden()`, `ticketsLaden(repo)`, `legen(eintrag, label, repo)`, `log`, `err`. Rückgabe: Exit-Code. */
+/** Die Verdrahtung von `lauf` mit dem Standard-Label aus der Config (`labels.harness`, wirft ohne); Eintrags-Label geht vor. Anlegen und Einsortieren laufen im Ziel-Repo des Labels (`zielFuer`). */
+export function ioAus(config, { legen = legeAn, repo, platziereOben, env = process.env } = {}) {
+  const standard = labelAus(config, "harness");
+  return {
+    anlegen: (e) => {
+      const { ziel, token } = zielFuer(e, config, { repo, env });
+      return legen(e, labelFuer(e, standard), ziel, token);
+    },
+    sortiereEin: (nr, e) => sortiereEin(nr, platziereOben, zielFuer(e, config, { repo, env }).ziel),
+  };
+}
+
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `platziereOben`), `eintraegeLaden()`, `ticketsLaden(repo, token)`, `legen(eintrag, label, repo, token)`, `log`, `err`. Rückgabe: Exit-Code. */
 export async function main(argv = process.argv.slice(2), { ladeConfig, ladeLibs, eintraegeLaden = ladeEintraege, ticketsLaden = ladeTickets, legen, log = console.log, err = console.error } = {}) {
   const start = await inboxStart(argv, { skript: "wiedervorlage", praefix: "Wiedervorlage: Projekt-Config nicht lesbar: ", ladeConfig, ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, config, libs } = start;
   const { REPO, platziereOben } = libs;
+  const eintraege = eintraegeLaden();
+  // Die Duplikat-Prüfung sieht die Tickets aller Ziel-Repos der Einträge (das eigene Repo immer).
+  const ziele = new Map([[REPO, undefined]]);
+  for (const e of eintraege) {
+    const { ziel, token } = zielFuer(e, config, { repo: REPO });
+    ziele.set(ziel, token);
+  }
   return lauf({
-    eintraege: eintraegeLaden(),
+    eintraege,
     heute: new Date().toISOString().slice(0, 10),
-    tickets: ticketsLaden(REPO),
+    tickets: [...ziele].flatMap(([ziel, token]) => ticketsLaden(ziel, token)),
     trocken,
     log,
     ...ioAus(config, { legen, repo: REPO, platziereOben }),

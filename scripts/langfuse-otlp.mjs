@@ -126,7 +126,9 @@ export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans
   if (typeof repoName !== "string" || repoName === "") throw new Error("bauePayloads braucht repoName (Namensteil von repo der Projekt-Config)");
   const scope = scopeName(repoName);
   const traceId = traceIdVon(session);
-  const tags = [repoName, "abgleich", ...[...new Set(soll.map((e) => e.ticket).filter(Boolean))].sort()];
+  // `repoName` bleibt das erste Tag; die Projekt-Tags der Hook-Traces (`CC_LANGFUSE_TRACE_TAGS`, kommagetrennt) kommen additiv dazu, damit der Tag-Filter beide erfasst (#78).
+  const projektTags = String(env.CC_LANGFUSE_TRACE_TAGS ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  const tags = [...new Set([repoName, ...projektTags, "abgleich", ...[...new Set(soll.map((e) => e.ticket).filter(Boolean))].sort()])];
   const traceAttrs = traceAttribute({ session, tags, project, env });
   const agenten = agentenVon(soll);
   const spanIdVon = (agentId) => subagentSpanId(session, agentId);

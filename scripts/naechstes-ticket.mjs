@@ -31,12 +31,12 @@
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, seitenListen } from "./board-lib.mjs";
+import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, nurRepo, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, boardRepo, configAusAufruf, gleichesRepo, labelAus, ladeProjektConfig, nurRepo, spracheAus } from "./projekt-config-lib.mjs";
+import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, boardRepo, configAusAufruf, gleichesRepo, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./produktquote-lib.mjs";
 import { blockerVerweise, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
@@ -144,7 +144,8 @@ export function itemAusIssue(issue) {
  */
 export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config, repo, fremdStatus }) {
   const nr = item.number;
-  if (repo !== undefined && item.repo !== "" && !gleichesRepo(item.repo, repo)) return { ticket: null, uebersprungen: [{ nr, grund: `gehört zu ${item.repo}, nicht zu ${repo}` }] };
+  if (item.repo === "") return { ticket: null, uebersprungen: [{ nr, grund: "Repo des Issues unbekannt (fail-closed)" }] };
+  if (!gleichesRepo(item.repo, repo)) return { ticket: null, uebersprungen: [{ nr, grund: `gehört zu ${item.repo}, nicht zu ${repo}` }] };
   if (item.state !== "open") return { ticket: null, uebersprungen: [{ nr, grund: "geschlossen" }] };
   const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb, config, repo, fremdStatus });
   return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [] };
@@ -369,9 +370,9 @@ export function seitenDesRepos({ produkt, factory }, { repo, boardRepos, bereich
   return { ...seiten, alle, hinweise };
 }
 
-/** Die Ladedaten für das Repo der Auswahl: `{ daten, listen, hinweise }` (`daten` für die Auswahl, `listen` für den Verzug). Ohne `io.repo` (Einspeisung in Tests) unverändert; `echteIo` setzt es immer. */
+/** Die Ladedaten für das Repo der Auswahl: `{ daten, listen, hinweise }` (`daten` für die Auswahl, `listen` für den Verzug); `io.repo` und `io.boardRepos` sind Pflicht (kein Sonderweg ohne Repo). */
 function datenDesRepos(daten, io, bereich) {
-  if (io.repo === undefined) return { daten, listen: daten, hinweise: [] };
+  if (typeof io.repo !== "string" || io.repo === "") throw new Error("io.repo fehlt\nFix: das Repo (owner/name) der Auswahl als io.repo (und io.boardRepos) übergeben");
   const s = seitenDesRepos(daten, { repo: io.repo, boardRepos: io.boardRepos, bereich });
   return { daten: { ...daten, produkt: s.produkt, factory: s.factory }, listen: { ...daten, ...s.alle }, hinweise: s.hinweise };
 }
@@ -490,7 +491,7 @@ export function fremdStatusLader({ holeIssue = (repo, nr) => ghJson(["api", `rep
 
 /** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
 function ladeBelegung(messfenster) {
-  const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
+  const offene = new Set(normalizeOffene(loadOpenIssuePages(REPO)).map((i) => i.number));
   try {
     git(["fetch", "--prune", "origin"]); // fail-open: ohne Netz zählen die lokalen Remote-Refs
   } catch {

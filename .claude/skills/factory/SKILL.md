@@ -1,6 +1,6 @@
 ---
 name: factory
-description: Arbeitet EIN Agentic-Ticket des Factory-Boards end-to-end ab (claimen, planen, Umsetzung bis zum Merge); Epics werden aufgeteilt. Auslösen bei „nächstes Agentic-Ticket“, „nimm das nächste Factory-Ticket“, „nächstes Harness-Ticket“, „mehrere Agentic-Tickets“.
+description: Arbeitet EIN Agentic-Ticket im Factory-Repo (dessen Issues das Factory-Board führt) end-to-end ab (claimen, planen, Umsetzung bis zum Merge); Epics werden aufgeteilt. Auslösen bei „nächstes Agentic-Ticket“, „nimm das nächste Factory-Ticket“, „nächstes Harness-Ticket“, „mehrere Agentic-Tickets“.
 model: sonnet
 effort: medium
 ---

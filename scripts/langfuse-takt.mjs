@@ -9,7 +9,7 @@
  * Nur Node-Builtins, board-lib.mjs und gh-cli.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
-import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
+import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 
 export { STATUS_TITEL };
@@ -140,19 +140,27 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [],
   // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
   const harness = labelAus(config, "harness");
   const board = boardFuerRolle(boardRolleFuer([harness], config));
-  const { gh = ghJson, imBoardAnlegen = (nodeId, opts) => addToBoardTodo(board, nodeId, opts), setze = (id, afterId, opts) => setPosition(board, id, afterId, opts) } = io; // im Test injizierbar
+  const { gh: ghRoh = ghJson, imBoardAnlegen = (nodeId, opts) => addToBoardTodo(board, nodeId, opts), setze = (id, afterId, opts) => setPosition(board, id, afterId, opts) } = io; // im Test injizierbar
+  // Ein Fehler wegen fehlender Rechte im Ziel-Repo (#78 L14) ist eine klare Meldung statt eines Stacktraces; `art` sagt, ob gelesen oder geschrieben wurde.
+  const gh = (args, art) => {
+    try {
+      return ghRoh(args);
+    } catch (err) {
+      throw new Error(schreibrechtText(err, repo, art) ?? fehlerText(err), { cause: err });
+    }
+  };
   let node;
   let nr = e.nr;
   if (e.aktion === "anlegen") {
     const neu = gh([
       "api", "-X", "POST", `repos/${repo}/issues`,
       "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo })}`, "-f", `labels[]=${harness}`,
-    ]);
+    ], "schreiben");
     console.log(`Angelegt: #${neu.number}`);
     node = neu.node_id;
     nr = neu.number;
   } else {
-    node = gh(["api", `repos/${repo}/issues/${e.nr}`]).node_id;
+    node = gh(["api", `repos/${repo}/issues/${e.nr}`], "lesen").node_id;
   }
   if (!token) {
     console.log("::warning::PROJECT_TOKEN fehlt, Board-Position nicht gesetzt (das Ticket steht dann nicht im Board, der nächste Lauf trägt es nach, sofern es ungeclaimt und der Token gesetzt ist; nach dem Setzen des Tokens auch sofort per workflow_dispatch).");
@@ -163,7 +171,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [],
       console.log("Status-Ticket steht schon im Kopf, Position bleibt.");
       return { ok: true, nr, itemId: null };
     }
-    const itemId = imBoardAnlegen(node, { token });
+    const itemId = imBoardAnlegen(node, { token, repo });
     setze(itemId, null, { token });
     console.log("Board-Position oben gesetzt.");
     return { ok: true, nr, itemId };

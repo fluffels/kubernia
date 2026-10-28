@@ -12,7 +12,24 @@ export function pruefeRulesetSpiegel(roh, pfad) {
     throw new Error(`Ruleset-Spiegel ${pfad}: requiredChecks muss eine nicht leere Liste aus Texten sein`);
   }
   if (!Array.isArray(roh.bypassActors)) throw new Error(`Ruleset-Spiegel ${pfad}: bypassActors muss eine Liste sein`);
+  pruefeCodeScanning(roh, pfad);
   return roh;
+}
+
+const text = (x) => typeof x === "string" && x.trim() !== "";
+
+/** `codeScanning` ist optional (fehlt → `[]`): je Eintrag `{ tool, sicherheitsSchwelle, alertSchwelle }`, alle drei nicht leere Texte. */
+function pruefeCodeScanning(roh, pfad) {
+  if (roh.codeScanning === undefined) {
+    roh.codeScanning = [];
+    return;
+  }
+  if (!Array.isArray(roh.codeScanning)) throw new Error(`Ruleset-Spiegel ${pfad}: codeScanning muss eine Liste sein`);
+  roh.codeScanning.forEach((e, i) => {
+    if (!text(e?.tool) || !text(e?.sicherheitsSchwelle) || !text(e?.alertSchwelle)) {
+      throw new Error(`Ruleset-Spiegel ${pfad}: codeScanning[${i}] braucht tool, sicherheitsSchwelle und alertSchwelle als nicht leere Texte`);
+    }
+  });
 }
 
 /** Liest und prüft den Spiegel unter `pfad` (relativ zu `rootDir` oder absolut). */

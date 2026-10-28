@@ -10,7 +10,9 @@
  * entfernt hat (in der Basis, aber nicht in ihrer Fassung). Während eines Merges (`MERGE_HEAD`) ist das Ergebnis der Arbeitsbaum (vor dem Merge-Commit),
  * danach `HEAD` mit seinen zwei Eltern.
  *
- * Exit 0 = nichts verloren, 1 = verlorene Tests (Liste), 2 = kein Merge oder git-Fehler.
+ * Exit 0 = nichts verloren, 1 = verlorene Tests (Liste), 2 = kein Merge oder git-Fehler. „Already up to date“ erzeugt keinen Merge: steht HEAD nicht auf einem
+ * Merge-Commit, ist das Exit 2 (nichts zu prüfen); steht HEAD auf einem älteren Merge-Commit, wird dieser Merge erneut geprüft (Exit 0 oder 1). Den Exit
+ * liest man in PowerShell aus `$LASTEXITCODE` (nicht aus `$?`), die Meldung nennt ihn zusätzlich.
  * Zusätzlich der Hinweis „Wächter-Lauf nötig“, wenn BEIDE Seiten Wächter-relevante Dateien berühren (`WAECHTER_PFAD`: `.claude/`, `.github/`, `docs/`,
  * `test/harness/`, `README.md`, jede `AGENTS.md`), auch verschiedene (Kopplung über zwei Dateien); die Liste nennt höchstens 5 Dateien. Grenze: der Hinweis
  * sagt nur, dass der Lauf nötig ist, er führt ihn nicht aus; Wächter über Pfade außerhalb der Liste (z.B. `src/`-Texte) erkennt er nicht.
@@ -101,11 +103,11 @@ export function pruefeMerge({ git, lies }) {
   } else {
     const eltern = versuch(["rev-list", "--parents", "-n", "1", "HEAD"]);
     const teile = (eltern ?? "").split(/\s+/).filter(Boolean);
-    if (teile.length !== 3) return { code: 2, text: "✖ merge-testabgleich: weder ein Merge in Arbeit (MERGE_HEAD) noch ein Merge-Commit auf HEAD (zwei Eltern)." };
+    if (teile.length !== 3) return { code: 2, text: "✖ merge-testabgleich: weder ein Merge in Arbeit (MERGE_HEAD) noch ein Merge-Commit auf HEAD (zwei Eltern) (Exit 2: nichts zu prüfen, z.B. nach „Already up to date“)." };
     [, unsereRev, ihreRev] = teile;
   }
   const basisRev = versuch(["merge-base", unsereRev, ihreRev]);
-  if (!basisRev) return { code: 2, text: "✖ merge-testabgleich: keine Merge-Basis gefunden (flacher Checkout? `git fetch origin`)." };
+  if (!basisRev) return { code: 2, text: "✖ merge-testabgleich: keine Merge-Basis gefunden (flacher Checkout? `git fetch origin`) (Exit 2: git-Fehler)." };
   const namen = (a, b) => (versuch(["diff", "--name-only", a, b, "--", "test"]) ?? "").split("\n").filter((p) => /^test\/.+\.ts$/.test(p));
   const dateien = [...new Set([...namen(basisRev, unsereRev), ...namen(basisRev, ihreRev)])].sort();
   const aus = (rev) => Object.fromEntries(dateien.map((p) => [p, versuch(["show", `${rev}:${p}`])]));

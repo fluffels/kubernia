@@ -26,14 +26,14 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { ladeSammelKontext, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
+import { ZIEL, ladeSammelKontext, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
-import { configAusAufruf, labelAus, spracheAus } from "./projekt-config-lib.mjs";
-import { fehlerText, ghJson } from "./gh-cli.mjs";
+import { configAusAufruf, istRepoForm, labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { fehlendeLabels, fehlerText, ghJson, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { blockerNummern, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
+import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
 
 const AUFRUF = [
   "Aufruf:",
@@ -57,10 +57,16 @@ const BEFEHLE = {
   gescheitert: { optionen: { mangel: { type: "string" } }, positionale: 1 },
 };
 
+/** `--blocker`-Wert: `<nr>`/`#<nr>` → Nummer, `owner/name#<nr>` → `{ repo, nummer }`, sonst `null`. */
+const blockerArg = (t) => {
+  const q = /^([^#]+)#([1-9][0-9]*)$/.exec(String(t ?? ""));
+  return q && istRepoForm(q[1]) ? { repo: q[1], nummer: Number(q[2]) } : positiveZahl(t);
+};
+
 const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
 
 /**
- * Prüft den Aufruf vor jedem I/O (`befehlLesen`): Unterbefehl, dann die Flag-Menge dieses Unterbefehls (`--blocker` nur mit Ticketnummern, Liste in `werte.blocker`); `reparieren` nimmt genau ein
+ * Prüft den Aufruf vor jedem I/O (`befehlLesen`): Unterbefehl, dann die Flag-Menge dieses Unterbefehls (`--blocker` nur mit Ticketnummer oder `owner/name#<nr>`, Liste in `werte.blocker`); `reparieren` nimmt genau ein
  * Positionsargument, die anderen keins. Liefert `{ befehl, werte, positional }` (`werte.label` immer eine Liste) oder `{ fehler }`. Pur.
  */
 export function aufrufPruefen(argv) {
@@ -70,8 +76,8 @@ export function aufrufPruefen(argv) {
     if (positiveZahl(r.positionale[0]) === null) return { fehler: "gescheitert braucht eine Ticketnummer" };
     if (String(r.werte.mangel ?? "").trim() === "") return { fehler: "gescheitert braucht --mangel \"<text>\"" };
   }
-  const blocker = (r.werte.blocker ?? []).map(positiveZahl);
-  if (blocker.includes(null)) return { fehler: "--blocker braucht eine Ticketnummer (--blocker <nr>, mehrfach möglich)" };
+  const blocker = (r.werte.blocker ?? []).map(blockerArg);
+  if (blocker.includes(null)) return { fehler: "--blocker braucht eine Ticketnummer oder owner/name#<nr> (--blocker <nr>, mehrfach möglich)" };
   return { befehl: r.befehl, werte: { ...r.werte, label: r.werte.label ?? [], ...(r.befehl === "anlegen" ? { blocker } : {}) }, positional: r.positionale };
 }
 
@@ -115,26 +121,43 @@ function gescheitert(werte, nrText, io) {
   try {
     kontext = io.sammelKontext();
   } catch (e) {
-    return aufrufFehler(`Sammelticket nicht lesbar: ${fehlerText(e)}`);
+    return aufrufFehler(`Sammelticket nicht lesbar: ${schreibrechtText(e, io.sammelRepo ?? REPO, "lesen") ?? fehlerText(e)}`);
   }
   if (!kontext.ziel) return ergebnis(1, "", "✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness\n");
-  if (gescheitertBekannt(nr, kontext.kommentare, io.owner)) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
+  if (gescheitertBekannt(nr, kontext.kommentare, kontext.owner)) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
   try {
     io.postZeilen(kontext.ziel, gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute() }));
   } catch (e) {
-    return aufrufFehler(`Zeile nicht gepostet: ${fehlerText(e)}`);
+    return aufrufFehler(`Zeile nicht gepostet: ${schreibrechtText(e, io.sammelRepo ?? REPO) ?? fehlerText(e)}`);
   }
   return ergebnis(0, `Zeile für #${nr} in #${kontext.ziel} gepostet\n`);
 }
 
-function nachholBefehl(werte, nach, nr) {
-  return nach ? `node scripts/board-place.mjs --after ${nach} ${nr}` : `node scripts/board-place.mjs --notfall ${werte.notfall} --top ${nr}`;
+function nachholBefehl(werte, nach, nr, repo) {
+  const ziel = `--repo ${repo} `;
+  return nach ? `node scripts/board-place.mjs ${ziel}--after ${nach} ${nr}` : `node scripts/board-place.mjs ${ziel}--notfall ${werte.notfall} --top ${nr}`;
+}
+
+/** Legt das Issue im Ziel-Repo an (#76): ein Fehler wegen fehlender Schreibrechte oder ein verworfenes Label ist eine klare Meldung (Exit 2), nie ein Rückfall ins eigene Repo. */
+function erzeugeImZiel(werte, body, repo, io) {
+  let neu;
+  try {
+    neu = io.erzeuge({ titel: werte.titel, body, labels: werte.label, repo });
+  } catch (e) {
+    return { fehler: aufrufFehler(`Anlegen in ${repo} fehlgeschlagen: ${schreibrechtText(e, repo) ?? fehlerText(e)}`) };
+  }
+  const ohne = fehlendeLabels(neu, werte.label);
+  if (ohne.length > 0) {
+    return { fehler: aufrufFehler(`#${neu.number} in ${repo} angelegt, aber ohne Label ${ohne.join(", ")} (kein Schreibrecht für Labels dort?): nicht einsortiert\nFix: Schreibrecht im Ziel-Repo klären, Label und Board-Position dort von Hand setzen`) };
+  }
+  return { neu };
 }
 
 /** Hängt die Blocker-Zeile (`<blocker> #a, #b`) mit den Nummern an, die der Body noch nicht als Blocker nennt; nichts Fehlendes: der Body bleibt unverändert. Pur. */
 export function mitBlockerZeile(body, nummern, sprache) {
-  const da = new Set(blockerNummern(body, sprache));
-  const fehlt = nummern.filter((n) => !da.has(n));
+  const schluessel = (b) => (typeof b === "number" ? `#${b}` : `${b.repo.toLowerCase()}#${b.nummer}`); // owner/name ohne Groß/Klein (GitHub), sonst käme eine Blocker-Zeile doppelt
+  const da = new Set(blockerVerweise(body, sprache).map((v) => schluessel(v.repo === null ? v.nummer : v)));
+  const fehlt = nummern.filter((n) => !da.has(schluessel(n)));
   return fehlt.length === 0 ? body : `${body.replace(/\s+$/, "")}\n\n${blockerZeile(fehlt, sprache)}\n`;
 }
 
@@ -148,6 +171,7 @@ export function bereichsPraefix(config) {
 function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   const praefix = bereichsPraefix(io.config);
+  const repo = zielRepoFuer(werte.label, io.config); // Ziel-Repo (#76): das Repo, dessen Issues das Board der Rolle des Labels führt (ohne boards[].repo das eigene)
   if (!werte.label.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) {
     return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
   }
@@ -164,22 +188,18 @@ function anlegen(werte, io, sprache) {
     // Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
     let ankerText;
     try {
-      ankerText = io.pruefeAnker({ nach, labels: werte.label });
+      ankerText = io.pruefeAnker({ nach, labels: werte.label, repo });
     } catch (e) {
       return aufrufFehler(`Anker #${nach} nicht prüfbar, nichts angelegt (${fehlerText(e)})`);
     }
     if (ankerText) return aufrufFehler(`nichts angelegt: ${ankerText}`);
   }
-  let neu;
+  const { neu, fehler } = erzeugeImZiel(werte, body, repo, io);
+  if (fehler) return fehler;
   try {
-    neu = io.erzeuge({ titel: werte.titel, body, labels: werte.label });
+    io.einsortiere({ nr: neu.number, nach, notfall: werte.notfall ?? null, repo });
   } catch (e) {
-    return aufrufFehler(`Anlegen fehlgeschlagen: ${fehlerText(e)}`);
-  }
-  try {
-    io.einsortiere({ nr: neu.number, nach, notfall: werte.notfall ?? null });
-  } catch (e) {
-    return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, nach, neu.number)}`);
+    return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, nach, neu.number, repo)}`);
   }
   return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`);
 }
@@ -236,35 +256,37 @@ export function fuehreAus(argv, io) {
  * nicht); steht der Anker dort, ist nichts zu prüfen. Nur sonst kommt das andere Board dazu, damit die Regel (`ankerFehler`, geteilt mit
  * board-place.mjs) „steht nur auf dem anderen Board“ melden kann. Liefert den Fehlertext oder `null`.
  */
-export function ankerPruefung({ nach, labels }, lade, config) {
+export function ankerPruefung({ nach, labels, repo }, lade, config) {
   const rolle = boardRolleFuer(labels, config);
   const andere = rolle === "factory" ? "produkt" : "factory";
-  const ziel = lade(rolle);
+  const ziel = lade(rolle, repo);
   if (ziel.some((i) => i.number === nach)) return null;
-  const fehler = ankerFehler({ anchor: nach, rolle, [rolle]: ziel, [andere]: lade(andere) });
+  const fehler = ankerFehler({ anchor: nach, rolle, [rolle]: ziel, [andere]: lade(andere, repo) });
   return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
 }
 
-const echteIo = (config) => { // Fabrik: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`)
+/** Fabrik der echten IO: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`). `deps` (Tests, #78 L13h): `ghJson`, `exec` (Prozessaufruf von board-place), `lade` (`loadItems`), `env` (Standard `process.env`; ein fremdes Ziel-Repo liest und schreibt der `PROJECT_TOKEN`). */
+export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems, env = process.env } = {}) => {
   return {
     owner: OWNER,
     config,
+    sammelRepo: ZIEL,
     leseDatei: (pfad) => readFileSync(pfad, "utf8"),
-    erzeuge: ({ titel, body, labels }) =>
-      ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
-    pruefeAnker: (a) => ankerPruefung(a, (rolle) => loadItems(boardFuerRolle(rolle)), config),
-    einsortiere: ({ nr, nach, notfall }) => {
-      const args = nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)];
-      execFileSync(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
+    erzeuge: ({ titel, body, labels, repo }) =>
+      gh(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])], { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) }),
+    pruefeAnker: (a) => ankerPruefung(a, (rolle, repo) => lade(boardFuerRolle(rolle), { repo }), config),
+    einsortiere: ({ nr, nach, notfall, repo }) => {
+      const args = ["--repo", repo, ...(nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)])];
+      exec(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
     },
     sammelKontext: () => {
       const k = ladeSammelKontext();
-      return { ziel: waehleSammelticket(k.offene)?.number ?? null, kommentare: k.kommentare };
+      return { ziel: waehleSammelticket(k.offene)?.number ?? null, kommentare: k.kommentare, owner: k.owner };
     },
     postZeilen,
     heute: () => new Date().toISOString().slice(0, 10),
-    ladeIssue: (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]),
-    bearbeite: (nr, body) => ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
+    ladeIssue: (nr) => gh(["api", `repos/${REPO}/issues/${nr}`]),
+    bearbeite: (nr, body) => gh(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
   };
 };
 

@@ -17,6 +17,10 @@ import { homedir, release as osRelease } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
+const natives = () => factorySeiteIn(WURZEL, "docs/agent-harness.md", "natives-windows");
 
 const ok = (text) => ({ status: "OK", text });
 const fehlt = (text) => ({ status: "FEHLT", text });
@@ -41,7 +45,7 @@ export function wslArt(release) {
 /** Plattform: natives Windows hat keine Sandbox, WSL1 ebenso nicht (WSL2 braucht echten Linux-Kernel). */
 export function pruefePlattform({ platform, release }) {
   if (platform === "win32") {
-    return [fehlt("natives Windows: keine Sandbox; gesandboxt arbeitet man nur unter WSL2 (ADR 0021, docs/agent-harness.md#natives-windows)")];
+    return [fehlt(`natives Windows: keine Sandbox; gesandboxt arbeitet man nur unter WSL2 (ADR 0021, ${natives()})`)];
   }
   if (wslArt(release) === "wsl1") {
     return [fehlt(`WSL1 (Kernel ${release}): die Sandbox braucht WSL2 (wsl --set-version <Name> 2)`)];
@@ -75,16 +79,16 @@ export function pruefeWindowsSperre({ platform, projektText, lokalText }) {
   return enabled === true && erlaubt === false;
 }
 
-const WINDOWS_ABHILFE = `Natives Windows: der Projekt-Block (.claude/settings.json) sperrt hier Shell-Befehle (sicher das PowerShell-Tool), weil es unter Windows keine Sandbox gibt. Abhilfe einmal je Checkout: ${LOKAL_OVERRIDE} in .claude/settings.local.json (ungetrackt, wirkt nur hier), dann die Session neu starten. Gesandboxt arbeitet man nur unter WSL2 (docs/agent-harness.md#natives-windows).`;
+const windowsAbhilfe = () => `Natives Windows: der Projekt-Block (.claude/settings.json) sperrt hier Shell-Befehle (sicher das PowerShell-Tool), weil es unter Windows keine Sandbox gibt. Abhilfe einmal je Checkout: ${LOKAL_OVERRIDE} in .claude/settings.local.json (ungetrackt, wirkt nur hier), dann die Session neu starten. Gesandboxt arbeitet man nur unter WSL2 (${natives()}).`;
 
-/** Die SessionStart-Ausgabe (JSON für Claude Code) bei Sperre, sonst leer. Pur. */
+/** Die SessionStart-Ausgabe (JSON für Claude Code) bei Sperre, sonst leer. Pur bis auf den Seiten-Verweis: factorySeiteIn liest Sync-Stand und Config. */
 export function sessionStartAusgabe(eingabe) {
   if (!pruefeWindowsSperre(eingabe)) return "";
   return JSON.stringify({
-    systemMessage: WINDOWS_ABHILFE,
+    systemMessage: windowsAbhilfe(),
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: `${WINDOWS_ABHILFE} Override nicht selbst eintragen (Leitplanke), der Maintainerin melden; bis dahin das Bash-Tool nehmen.`,
+      additionalContext: `${windowsAbhilfe()} Override nicht selbst eintragen (Leitplanke), der Maintainerin melden; bis dahin das Bash-Tool nehmen.`,
     },
   });
 }

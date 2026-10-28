@@ -21,13 +21,21 @@ const LINK = {
   admin: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/repository-access-and-collaboration/inviting-collaborators-to-a-personal-repository",
 };
 
-/** Die Wochenlauf-Datei, die `--einrichten` installiert (Vorlage = Datei im Repo, ein Wächter hält beide gleich). */
+/**
+ * Pur: neutralisiert die Action-Pins eines Workflow-Texts: `uses: x@<40 Hex>` samt Versionskommentar wird zu `uses: x@<pin>`.
+ * Dependabot hebt Pins an; der Vergleich mit der Vorlage soll daran nicht rot werden. Ein Pin, der fehlt (Tag statt SHA), bleibt stehen und ist ein Unterschied.
+ */
+export function ohneActionPins(text) {
+  return text.replace(/(uses:[ \t]*[^\s@]+@)[0-9a-f]{40}\b(?:[ \t]+#[^\r\n]*)?/g, "$1<pin>");
+}
+
+/** Die Wochenlauf-Datei, die `--einrichten` installiert (Vorlage = Datei im Repo, ein Wächter hält beide gleich, Action-Pins ausgenommen). */
 export const WOCHENLAUF_PFAD = ".github/workflows/harness-doctor.yml";
 export const WOCHENLAUF_WORKFLOW = [
   "name: Harness-Doctor (Wochenlauf)",
   "",
   "# Meldet Lücken der Factory-Voraussetzungen (scripts/harness-doctor.mjs) einmal pro Woche als Zeile im Harness-Sammelticket, mit Abgleich",
-  "# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN, gepostet mit github.token; fehlt das Secret,",
+  "# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN; gepostet wird im eigenen Repo mit github.token, in einem fremden Ziel-Repo mit PROJECT_TOKEN; fehlt das Secret,",
   "# meldet der Lauf genau das als Lücke. Diese Datei ist die Vorlage von `harness-doctor.mjs --einrichten` (ein Wächter hält beide gleich).",
   "",
   "on:",
@@ -53,8 +61,8 @@ export const WOCHENLAUF_WORKFLOW = [
   "    name: \"Harness-Doctor: Lücken ins Sammelticket\"",
   "    runs-on: ubuntu-latest",
   "    steps:",
-  "      - uses: actions/checkout@v7",
-  "      - uses: actions/setup-node@v7",
+  "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+  "      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0",
   "        with:",
   "          node-version-file: .nvmrc",
   "      - name: Voraussetzungen prüfen und Lücken melden",
@@ -228,7 +236,10 @@ function pruefeRuleset(gh, repo, repoInfo, spiegel) {
   const noetig = spiegel?.requiredChecks ?? [];
   const rs = spiegel?.name ? `Ruleset "${spiegel.name}"` : "das Ruleset";
   const fehlend = fehlen(noetig, kontexte).map((c) => luecke(`Required-Check ${c}`, `Required-Check "${c}" fehlt auf ${branch}`, `"${c}" in ${rs} unter Required status checks ergänzen`, LINK.ruleset));
-  return fehlend.length ? fehlend : [gut("Ruleset")];
+  const werkzeuge = regeln.filter((r) => r.type === "code_scanning").flatMap((r) => (r.parameters?.code_scanning_tools ?? []).map((w) => w.tool));
+  const csFehlend = fehlen((spiegel?.codeScanning ?? []).map((e) => e.tool), werkzeuge).map((w) => luecke(`Code-Scanning ${w}`, `Code-Scanning "${w}" fehlt auf ${branch}`, `Regel in ${rs} ergänzen (Pre-Flight)`, LINK.ruleset));
+  const alle = [...fehlend, ...csFehlend];
+  return alle.length ? alle : [gut("Ruleset")];
 }
 
 /**

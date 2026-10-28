@@ -7,8 +7,8 @@
  * Zeile: `- [ ] <YYYY-MM-DD> Harness-Doctor (Wochenlauf): LÜCKE <Punkt>: <Befund> Fix: <Schritt>`. Bekannt ist ein Punkt, wenn irgendeine offene
  * Zeile `- [ ]` eines vertrauten Autors (`istVertraut`) in einem offenen Harness-Sammelticket (auch einem geclaimten) `Harness-Doctor (Wochenlauf):
  * LÜCKE <Punkt>: ` enthält; Schlüssel ist der Punkt, nicht der Befund (ein geänderter Befund erzeugt keine zweite Zeile). Alle neuen Zeilen
- * eines Laufs gehen in einem Kommentar an das jüngste ungeclaimte Sammelticket. Geprüft wird mit `PROJECT_TOKEN` (Project-Scope), gepostet mit
- * dem Standard-`GH_TOKEN`; fehlt das Secret in Actions, meldet der Lauf genau das als Lücke. Langfuse bleibt außen vor (läuft nur lokal).
+ * eines Laufs gehen in einem Kommentar an das jüngste ungeclaimte Sammelticket. Geprüft wird mit `PROJECT_TOKEN` (Project-Scope); gelesen und
+ * gepostet wird im eigenen Repo mit dem Standard-`GH_TOKEN` (`github.token`), in einem fremden Ziel-Repo mit `PROJECT_TOKEN`; fehlt das Secret in Actions, meldet der Lauf genau das als Lücke. Langfuse bleibt außen vor (läuft nur lokal).
  * Exit 0: nichts Neues oder gemeldet (bzw. Dry-Run); 1: Doctor nicht lauffähig, kein ungeclaimtes Sammelticket oder Post fehlgeschlagen
  * (`::error::` mit Fix). Eigenes Skript statt Flag in harness-doctor.mjs: das lädt die Board-Libs nicht (deren Import-Zeit-Config
  * bräche dort den Exit-2-Vertrag der Config-Fehler).
@@ -16,7 +16,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inboxStart, ladeBoardLibs } from "./inbox-start-lib.mjs";
-import { fehlerText, ghText } from "./gh-cli.mjs";
+import { fehlerText, ghJson, ghText, tokenFuerZiel } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -50,7 +50,7 @@ export const plane = ({ luecken, kommentare, owner, heute }) =>
  */
 export function ermittleLuecken({ env, repo, pruefe }) {
   if (env.GITHUB_ACTIONS === "true" && !env.PROJECT_TOKEN) {
-    return [{ punkt: "Secret PROJECT_TOKEN", befund: "im Wochenlauf leer, der Doctor kann nicht prüfen", fix: `gh secret set PROJECT_TOKEN --repo ${repo}` }];
+    return [{ punkt: "Secret PROJECT_TOKEN", befund: "im Wochenlauf leer, der Doctor kann nicht prüfen", fix: `Wert per stdin, ohne TTY: \`<wert-quelle> | gh secret set PROJECT_TOKEN --repo ${repo}\` (z. B. \`Get-Clipboard | …\`)` }];
   }
   return pruefe().filter((p) => !p.ok);
 }
@@ -107,25 +107,27 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `ladeSammelKontext`, `postZeilen`, `waehleSammelticket`), `log`, `err`, `pruefLauf` (Doctor-Lauf; der Wochenlauf ruft ihn mit `rootDir`, `gh` und `langfuse: null`, ohne `umgebung`). */
-export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, log = console.log, err = console.error, pruefLauf: doctorLauf = pruefLauf } = {}) {
+/** Einstieg. `deps` (Tests): `env` (Standard `process.env`), `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `ladeSammelKontext`, `postZeilen`, `waehleSammelticket`), `log`, `err`, `pruefLauf` (Doctor-Lauf; der Wochenlauf ruft ihn mit `rootDir`, `gh` und `langfuse: null`, ohne `umgebung`). */
+export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, log = console.log, err = console.error, pruefLauf: doctorLauf = pruefLauf, env = process.env } = {}) {
   const start = await inboxStart(argv, { skript: "harness-doctor-melden", praefix: `${KENNUNG}: Projekt-Config nicht lesbar: `, ladeConfig, ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, libs } = start;
-  const { OWNER, REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
-  const projektToken = process.env.PROJECT_TOKEN;
+  const { REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
+  const ziel = libs.ZIEL ?? REPO; // Ziel-Repo der Harness-Befunde (#78): ein fremdes braucht PROJECT_TOKEN zum Lesen und Posten
+  const zielToken = tokenFuerZiel({ ziel, eigenes: REPO, env });
+  const projektToken = env.PROJECT_TOKEN;
   const io = {
     ermittle: () =>
       ermittleLuecken({
-        env: process.env,
+        env,
         repo: REPO,
         pruefe: () => doctorLauf({ rootDir: WURZEL, gh: (a) => ghText(a, { token: projektToken, timeout: 30000 }), langfuse: null }).ergebnis,
       }),
     kontext: () => {
-      const { offene, kommentare } = ladeSammelKontext();
-      return { kommentare, owner: OWNER, ziel: waehleSammelticket(offene)?.number ?? null };
+      const { offene, kommentare, owner } = ladeSammelKontext({ token: zielToken });
+      return { kommentare, owner, ziel: waehleSammelticket(offene, ziel, (a) => ghJson(a, { token: zielToken }))?.number ?? null };
     },
-    postZeilen,
+    postZeilen: (nr, text) => postZeilen(nr, text, ziel, zielToken),
     heute: new Date().toISOString().slice(0, 10),
     log,
   };

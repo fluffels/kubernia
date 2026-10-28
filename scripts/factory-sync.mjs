@@ -10,24 +10,15 @@ import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
+import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, quelleRepoAusText, STAND_PFAD, syncStandAusText, wendeTeileAn } from "./factory-sync-lib.mjs";
 
 // Teile der Bibliothek, die die Tests über dieses Modul kennen (das Export-Werkzeug importiert aus der Bibliothek).
-export { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn };
+export { leserVomCommit, liesErgaenzung, pruefeErgebnis, STAND_PFAD, wendeTeileAn };
 
 export const MANIFEST_PFAD = ".factory/besitz.json";
-export const STAND_PFAD = ".factory/sync-stand.json";
 export const PROJEKT_PFAD = PROJEKT_CONFIG;
 
-function leseAltStand(zielLies) {
-  const t = zielLies(STAND_PFAD);
-  if (t === null) return null;
-  try {
-    return JSON.parse(t);
-  } catch {
-    return null;
-  }
-}
+const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
 
 /**
  * Plan eines Syncs, ohne zu schreiben. `quelleLies`/`zielLies` liefern den Dateitext (relativer Pfad, Schrägstrich-Form) oder `null`.
@@ -117,6 +108,9 @@ export function planeSync({
   for (const e of verteilt) einheiten[einheitId(e)] = einheitHash(e, ziele.get(e.pfad).srcText, erg.quelle);
   const sortiert = Object.fromEntries(Object.entries(einheiten).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   const herkunft = quelleStand.tag ? { commit: quelleStand.commit, tag: quelleStand.tag, sauber: quelleStand.sauber } : { commit: quelleStand.commit, sauber: quelleStand.sauber };
+  // Das Factory-Repo, aus dem der Besitz kommt: Bezieher lesen daraus Tags und Seiten-Links (nie aus ihrem eigenen Board-Routing).
+  const quelleRepo = quelleRepoAusText(quelleLies(PROJEKT_PFAD));
+  if (quelleRepo !== undefined) herkunft.repo = quelleRepo;
   res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert };
   ziehe(STAND_PFAD, `${JSON.stringify(res.stand, null, 2)}\n`, zielLies(STAND_PFAD), false);
 
@@ -174,8 +168,27 @@ function parseArgs(argv) {
   return { quelle: werte.quelle ?? null, ziel: werte.ziel ?? null, tag: werte.tag ?? null, entwurf: werte.entwurf === true, trocken: werte.trocken === true, fehler: fehler?.text ?? beide };
 }
 
+/** Unter Windows kennt das Dateisystem kein Ausführbit: ein neu geschriebenes Skript (Hooks) landete mit 100644
+ *  im Index des Ziels und liefe nach dem Checkout unter Linux/macOS nicht. Darum den Modus 100755 im Index setzen
+ *  und per `ls-files -s` gegenprüfen. Liefert `null` (ok, oder Ziel ohne Git-Arbeitsbaum: kein Index,
+ *  dann nur ein Hinweis über `out`) oder die Fehlermeldung samt Fix-Zeile. `git(args)` ist injizierbar. */
+function setzeAusfuehrbitImIndex(ziel, pfade, git, out) {
+  if (pfade.length === 0) return null;
+  const imRepo = git(["-C", ziel, "rev-parse", "--is-inside-work-tree"]);
+  if (!imRepo.ok || imRepo.out.toString("utf8").trim() !== "true") {
+    out(`Hinweis: Ausführbit nicht gesetzt: Ziel ohne Git-Arbeitsbaum (${pfade.join(", ")}); nach dem Einchecken im Ziel \`git update-index --chmod=+x\` auf diese Pfade`);
+    return null;
+  }
+  git(["-C", ziel, "update-index", "--add", "--chmod=+x", "--", ...pfade]);
+  const stand = git(["-C", ziel, "ls-files", "-s", "--", ...pfade]);
+  const modi = new Map(stand.out.toString("utf8").split("\n").filter((z) => z !== "").map((z) => [z.split("\t")[1], z.split(" ")[0]]));
+  const falsch = pfade.filter((p) => modi.get(p) !== "100755");
+  if (falsch.length === 0) return null;
+  return `Ausführbit im Index von '${ziel}' fehlt (erwartet 100755): ${falsch.join(", ")}\nFix: git -C <ziel> update-index --add --chmod=+x -- ${falsch.join(" ")}`;
+}
+
 /** Kommandozeile; Rückgabe = Exit-Code (0 ok, 1 Fehler, 2 Aufruf). */
-export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s) } = {}) {
+export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)) } = {}) {
   const opt = parseArgs(argv);
   const usage = "Aufruf: node scripts/factory-sync.mjs --quelle <pfad> (--tag <name> | --entwurf) [--ziel <pfad>] [--trocken]";
   if (opt.fehler !== null) {
@@ -219,13 +232,22 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     err("factory-sync: nichts geschrieben");
     return 1;
   }
+  const ausfuehrbarePfade = [];
   for (const [pfad, d] of plan.dateien) {
     out(`${opt.trocken ? "würde " : ""}${d.neu ? "neu" : "geändert"}: ${pfad}`);
     if (opt.trocken) continue;
     const voll = join(ziel, ...pfad.split("/"));
     mkdirSync(dirname(voll), { recursive: true });
     writeFileSync(voll, d.text);
-    if (d.neu && d.ausfuehrbar && process.platform !== "win32") chmodSync(voll, 0o755);
+    if (d.neu && d.ausfuehrbar) {
+      if (plattform !== "win32") chmodSync(voll, 0o755);
+      else ausfuehrbarePfade.push(pfad);
+    }
+  }
+  const indexFehler = setzeAusfuehrbitImIndex(ziel, ausfuehrbarePfade, git, out);
+  if (indexFehler !== null) {
+    err(`factory-sync: ${indexFehler}`);
+    return 1;
   }
   for (const m of plan.meldungen) out(`Hinweis: ${m}`);
   if (opt.tag === null) out("Hinweis: Entwurf aus dem Arbeitsbaum, check:factorydrift im Ziel bleibt rot bis zum Sync von einem Tag");

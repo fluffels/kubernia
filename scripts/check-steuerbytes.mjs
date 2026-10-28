@@ -18,6 +18,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -66,7 +67,7 @@ function main() {
   for (const v of violations) console.error(paint("31", `✖ ${v.file}:${v.line} — Steuerbyte in der Textdatei`));
   console.error(
     `\n${violations.length} Datei(en) mit NUL oder anderem C0-Steuerzeichen (außer Tab, LF, CR): git hielte sie für binär, Diff und Review sähen sie nicht. ` +
-      `Skript per Write schreiben, Steuerzeichen nur als Escape-Folge im Quelltext (docs/agent-harness-faq.md).`,
+      `Skript per Write schreiben, Steuerzeichen nur als Escape-Folge im Quelltext (${factorySeiteIn(ROOT, "docs/agent-harness-faq.md", "windows-und-git-bash-was-geht-beim-skripten-verloren")}).`,
   );
   process.exit(1);
 }

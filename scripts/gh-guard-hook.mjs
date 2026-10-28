@@ -34,7 +34,7 @@
  *    PR-Gate + Review.
  *  - Backtick-Ersetzungen werden nur unter Bash erkannt und nicht geschachtelt; Wrapper vor einer Variablen höchstens mit 4
  *    Options-/Wertwörtern; neue Umwege (Verschleierung, exotische Shell-Formen) sind Bekannte Grenzen und kein Fehler des Guards
- *    (Blocker-Maßstab, docs/agent-harness.md §4). Bekannt: `gh api`-Text in Heredocs ohne Daten-Befehl davor bleibt Befehlstext (fragt).
+ *    (Blocker-Maßstab, Factory-Seite docs/agent-harness.md §4). Bekannt: `gh api`-Text in Heredocs ohne Daten-Befehl davor bleibt Befehlstext (fragt).
  *  - Er schaut nur auf `gh api`: `gh issue delete` & Co. stehen als eigene `ask`-Regeln in settings.json.
  *  - Fail-open bei kaputtem Payload: der Hook darf nie selbst jeden Aufruf blockieren.
  *

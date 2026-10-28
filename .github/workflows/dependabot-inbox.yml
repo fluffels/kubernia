@@ -32,18 +32,30 @@ jobs:
       # Volles Repo und Node für scripts/board-place.mjs (Board-Position mit Wiederholung, #1628); kein npm ci nötig.
       # Das Label kommt aus der Projekt-Config; ohne Checkout gäbe es keines, darum bricht ein gescheiterter Schritt den Lauf sichtbar rot ab.
       - name: Repo auschecken
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Node einrichten
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
 
       - name: Label der Sammel-Issues aus der Projekt-Config lesen
         id: label
+        env:
+          REPO: ${{ github.repository }}
         run: |
           if ! wert=$(node scripts/projekt-config.mjs labels.dependabotInbox); then
             echo "::error::labels.dependabotInbox fehlt oder .factory/projekt.json ist ungültig (Fix: Schlüssel in .factory/projekt.json eintragen)"
+            exit 1
+          fi
+          # Ziel-Repo (#76): ein Label, dessen Issues ein anderes Repo führt (Harness-Label bei fremdem Factory-Board), würde hier im
+          # eigenen Repo angelegt und dann am Board-Guard scheitern: vor dem Anlegen klar abbrechen, nie still im eigenen Repo anlegen.
+          if ! ziel=$(node scripts/projekt-config.mjs --ziel-repo "$wert"); then
+            echo "::error::Ziel-Repo zu labels.dependabotInbox nicht bestimmbar (Fix: .factory/projekt.json prüfen)"
+            exit 1
+          fi
+          if [ "${ziel,,}" != "${REPO,,}" ]; then
+            echo "::error::labels.dependabotInbox ($wert) gehört zu $ziel, nicht zu $REPO: das Sammel-Issue entstünde im falschen Repo (Fix: labels.dependabotInbox auf ein Label des eigenen Boards setzen)"
             exit 1
           fi
           echo "wert=$wert" >> "$GITHUB_OUTPUT"

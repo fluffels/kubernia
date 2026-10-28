@@ -10,11 +10,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar, leereErgaenzung, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { STAND_PFAD, syncStandAusText } from "./factory-sync-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const MANIFEST_PFAD = ".factory/besitz.json";
-const STAND_PFAD = ".factory/sync-stand.json";
-const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";
+const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";
 
 const TAG_WEG = "Weg: von einem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`)";
 
@@ -70,16 +70,11 @@ export function pruefeErgaenzung(lies) {
  * Rückgabe: `{ entfaellt, fehler, einheiten }`; jeder Fehler nennt den Weg.
  */
 export function pruefeDrift(lies) {
-  const standText = lies(STAND_PFAD);
-  if (standText === null) return { entfaellt: true, fehler: [], einheiten: 0 };
+  const { zustand, stand } = syncStandAusText(lies(STAND_PFAD));
+  if (zustand === "fehlt") return { entfaellt: true, fehler: [], einheiten: 0 };
   const rot = (msg) => ({ entfaellt: false, fehler: [`${msg}. ${WEG}`], einheiten: 0 });
-  let stand;
-  try {
-    stand = JSON.parse(standText);
-  } catch {
-    return rot(`${STAND_PFAD} ist kein gültiges JSON`);
-  }
-  if ((stand?.version !== 1 && stand?.version !== 2) || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object") {
+  if (zustand === "kaputt") return rot(`${STAND_PFAD} ist kein gültiges JSON-Objekt`);
+  if ((stand.version !== 1 && stand.version !== 2) || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object") {
     return rot(`${STAND_PFAD} ist kaputt (Version, Manifest-Hash oder Einheiten fehlen)`);
   }
   const manifestText = lies(MANIFEST_PFAD);
