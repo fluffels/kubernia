@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * Tag-Takt (#103): Besitz-Änderungen im Factory-Repo erreichen die Bezieher zeitnah. Je Push auf main und wöchentlich zählt dieses Skript die
- * Besitz-PRs seit dem letzten Release-Tag (Form `v1.2.3` aus factory-update-check, #90) und das Alter der ältesten ungetaggten Änderung.
+ * Besitz-PRs seit dem letzten Release-Tag (Form `v1.2.3` aus release-tag-lib.mjs, #90) und das Alter der ältesten ungetaggten Änderung.
  *  - Besitz-PR: ein Commit auf main (erster Elternteil), der einen verteilten Pfad aus `.factory/besitz.json` (Ring `oberflaeche` zählt nicht) oder das
  *    Manifest selbst berührt. Bewusste Grenze: Pfad-Ebene, nicht Block- oder Schlüssel-Ebene; das zählt eher zu viel als zu wenig.
  *  - Ab 3 Besitz-PRs, einem ältesten Commit über 7 Tage oder einer Commit-Zeile `<praefixe.commitZeile>Sync-Dringlich: <grund>` in einem Besitz-Commit
  *    hält das Skript GENAU EIN Kopf-Ticket „🏷️ Tag v<x> setzen und syncen“ (Board-Spitze, Art `tag`) mit Tag-Vorschlag, PRs, CI-Status des
- *    main-Commits, fertigem Befehl und der Checkliste „Trockenlauf-Sync in einem Bezieher“. Ein offenes Ticket wird nie verdoppelt, sondern bei
+ *    main-Commits, fertigem Befehl und der Checkliste („Trockenlauf-Sync in einem Bezieher“, „CI des Sync-PR je Bezieher grün“). Ein offenes Ticket wird nie verdoppelt, sondern bei
  *    Änderung aktualisiert (geclaimt: unberührt) und geschlossen, sobald nichts Ungetaggtes mehr da ist.
  *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach setzt der Agent den Tag und erstellt je Bezieher den Sync-PR.
  *  - Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret = Pre-Flight); ohne ihn bleibt die Checkliste.
@@ -20,12 +20,12 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { teile, vergleicheTags } from "./factory-update-check.mjs";
 import { liesSyncStand } from "./factory-sync-lib.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { inboxStart, vertrauterOwner, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
+import { teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 
 export const TAG_MARKER = "🏷️ Tag ";
@@ -182,7 +182,8 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci })
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
     `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`)`,
-    "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
+    "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf listet nur Dateiänderungen; check:docdrift und die Wächter-Tests des Beziehers laufen erst dort; rot: Folge-Fix in der Factory und Patch-Tag)",
+    "- [ ] Ticket schließen, sobald der Tag steht und die Sync-PRs grün sind (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
     "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: docs/agent-harness.md › Tag-Takt (#103).",
   ].join("\n");

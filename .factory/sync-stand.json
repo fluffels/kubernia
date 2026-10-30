@@ -1,12 +1,12 @@
 {
   "version": 2,
   "quelle": {
-    "commit": "f9f17fd0bea89f273e710c27a14af4501c25a649",
-    "tag": "v0.4.1",
+    "commit": "2d4d1b9658c49efd11f25545e8ae8e89c7828478",
+    "tag": "v0.4.2",
     "sauber": true,
     "repo": "fluffels/self-improving-agent-harness-and-factory"
   },
-  "manifest": "sha256:db67a85e01ee8bd597b539b388e46cc0948eef6a0315cacef80b51a38e368df2",
+  "manifest": "sha256:8b13185ce0edcb48c7d7cc50e845835867739246a6f91b499d84825227774995",
   "einheiten": {
     ".agents/skills/factory/SKILL.md": "sha256:fb3b9ee07ba8cd4f92513be3b5f8bf30420ccf60403648e779cba25fe3794c9b",
     ".agents/skills/factory/ablauf.md": "sha256:9387581d28bd98158aad437d0fdbf81939d8a2796ce00ebda969de6d9a79a6d6",
@@ -89,7 +89,7 @@
     "scripts/factory-seite.mjs": "sha256:fc1777d871f4a3924ce3be7c7aff617f14ba7701220cee60cfa7a8e1c20b860d",
     "scripts/factory-sync-lib.mjs": "sha256:d574d51e5cf5a9ff3547fe38df2a64f987b5e5cd4c5a8fe6d9937b8abbcf1dd3",
     "scripts/factory-sync.mjs": "sha256:700a5d45df0ff976080981bf079c899794e6546c29a9731ad8280943ed8bd66e",
-    "scripts/factory-update-check.mjs": "sha256:ff87691dd0053e0956bed2ad2de258d0c7eaf62fdd4d17a52c101ade04efed74",
+    "scripts/factory-update-check.mjs": "sha256:1bbb9776e0d6862feaa182d11cae2db7e498f38290170d36cace1d977efe01f1",
     "scripts/flag-lib.mjs": "sha256:134e51859ef4f4f60255ca1caaa54824e05bf519bf645c45bc9bd20a777ee164",
     "scripts/fremd-config-probe.mjs": "sha256:930d1810a7bde2759c276cb5da97bfcdea4ecaf1edb9bd79cf57813ed67f5a28",
     "scripts/fremdtext-lib.mjs": "sha256:94ae796d682f18f7b7d5a02fffa037e954e74aa7fb3859b998107f050c7d9a41",
@@ -138,6 +138,7 @@
     "scripts/projekt-config.mjs": "sha256:ac00f5c2ed61c4f525bc96ecfd371fa03df36caf3d4466a6ef0d37d571164366",
     "scripts/projektwerte.mjs": "sha256:f5ecec8dbc8ca3d01b9c8dfe33b93887f03fa843c5d04e8d7241b216350b1358",
     "scripts/quote-folge.mjs": "sha256:408d8576e815cf4c7120deba64c5ee974012a9b76ace59b90a713679af694a7f",
+    "scripts/release-tag-lib.mjs": "sha256:413cb4171fd38556305529bf10eedb7d1c4da701b626598068aa5113482db8f5",
     "scripts/sammelticket-anlegen.mjs": "sha256:1e71244ecfe7c579e910b32a49d6979bdd0b90aa44e0354ddd96a909e2690571",
     "scripts/sandbox-doctor.mjs": "sha256:c963253fdc5bf1c597317fc170ae625e0b8c7973b6a28dee34e40caedb95ea99",
     "scripts/schichten-kern.cjs": "sha256:1bc8070d43c4b6e3aa0d513d0b1c81d169a855b511e2c92752179920637141f0",
@@ -152,7 +153,7 @@
     "scripts/stop-verify-hook.mjs": "sha256:45294adc467f9fdd00701e0dcc40d11a0fada6f41f9af0b79e0f9a0028166cd0",
     "scripts/subagent-laeufe.mjs": "sha256:66b9bb2a330fc6bd66258e010cea0d481921d24896120dbd2ead556e6183fcff",
     "scripts/subagent-laufzeit.mjs": "sha256:3ad40085c462429a4de10e46e1d807eeee09ec56f071394f747b6890ccbbcdd7",
-    "scripts/tag-takt.mjs": "sha256:8bea057a0904aafefe72b0a84b4b296c7e5222e44f31ce14b1d016f6f4be7961",
+    "scripts/tag-takt.mjs": "sha256:2b826227bb7c89aaaa632d36870e047b91939bba25ba4f9895889dcb1f09335d",
     "scripts/ticket-lock-lib.mjs": "sha256:81ffb9e8231ae1c8887c1105109ad2821dca8e5bc945a5e7a5c3ff8ee1773fee",
     "scripts/ticket-lock.mjs": "sha256:b87af01e85c56c39d57c8e2f0f4e8661cb98c95c952d5146eb8404316a9c651c",
     "scripts/ticket-namen.mjs": "sha256:c37a05efa7a0a27084d8399f65f06470413a7b57208596d96b5fa3cad3fbc5d1",
