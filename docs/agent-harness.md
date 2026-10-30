@@ -1,12 +1,12 @@
 # Der KI-Agenten-Harness von Kubernia — wie + warum
 
-> **Projektanteil.** Das erklärende Gesamtbild des Harness (Kernidee, Bausteine, Gates, Schleife) steht im Factory-Repo: [Der KI-Agenten-Harness](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md). Hier bleiben die generierten Abschnitte und das, was nur dieses Projekt betrifft.
+> **Projektanteil.** Das erklärende Gesamtbild des Harness (Kernidee, Bausteine, Gates, Schleife) steht im Factory-Repo: [Der KI-Agenten-Harness](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md). Hier bleiben die generierten Abschnitte und das, was nur dieses Projekt betrifft.
 >
 > Welche Seite Projekt und welche Kern ist: [Inventar](referenz/anlaufstellen.md#factory-seiten-projektanteil-und-kern). Begriffe: [Harness-Glossar](harness-glossar.md).
 
 ## 1. Die Kernidee
 
-Kern: [1. Die Kernidee](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#1-die-kernidee)
+Kern: [1. Die Kernidee](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#1-die-kernidee)
 
 <!-- factory-projekt:start -->
 
@@ -21,28 +21,28 @@ Kern: [1. Die Kernidee](https://github.com/fluffels/self-improving-agent-harness
 |---|---|---|
 | Prüfschritte in `verify` | 17 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Prüfschritte in `verify:full` | 6 | eigene Schritte der Kette `verify:full` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | ≥ 150 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
+| Skripte | ≥ 160 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 40 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
-| CI-Workflows | 15 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
+| CI-Workflows | 16 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 29 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
 ## 2. Die fünf Bausteine
 
-Kern: [2. Die fünf Bausteine](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#2-die-fünf-bausteine)
+Kern: [2. Die fünf Bausteine](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#2-die-fünf-bausteine)
 
 ### 2.3 Kollisionsschutz für parallele Agenten
 
-Kern: [2.3 Kollisionsschutz für parallele Agenten](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#23-kollisionsschutz-für-parallele-agenten)
+Kern: [2.3 Kollisionsschutz für parallele Agenten](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#23-kollisionsschutz-für-parallele-agenten)
 
 ### 2.5 Skills + Setup als reproduzierbare Abläufe
 
-Kern: [2.5 Skills + Setup als reproduzierbare Abläufe](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe)
+Kern: [2.5 Skills + Setup als reproduzierbare Abläufe](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe)
 
 ## 3. Die Fitness-Functions im Detail
 
-Kern: [3. Die Fitness-Functions im Detail](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#3-die-fitness-functions-im-detail)
+Kern: [3. Die Fitness-Functions im Detail](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#3-die-fitness-functions-im-detail)
 
 <!-- GEN:gates START -->
 <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
@@ -90,7 +90,7 @@ Kern: [3. Die Fitness-Functions im Detail](https://github.com/fluffels/self-impr
 
 ### Lebende-Doku-Wächter (`npm run check:docgen`, #1355)
 
-Kern: [Lebende-Doku-Wächter (`npm run check:docgen`, #1355)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#lebende-doku-wächter-npm-run-checkdocgen-1355)
+Kern: [Lebende-Doku-Wächter (`npm run check:docgen`, #1355)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#lebende-doku-wächter-npm-run-checkdocgen-1355)
 
 <!-- factory-projekt:start -->
 
@@ -120,7 +120,7 @@ Kern: [Lebende-Doku-Wächter (`npm run check:docgen`, #1355)](https://github.com
 
 ### Selbstbeschreibungs-Wächter (`test/harness/selbstbeschreibung.test.ts`, #1714)
 
-Kern: [Selbstbeschreibungs-Wächter (`test/harness/selbstbeschreibung.test.ts`, #1714)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#selbstbeschreibungs-wächter-testharnessselbstbeschreibungtestts-1714)
+Kern: [Selbstbeschreibungs-Wächter (`test/harness/selbstbeschreibung.test.ts`, #1714)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#selbstbeschreibungs-wächter-1714)
 
 <!-- factory-projekt:start -->
 
@@ -145,7 +145,7 @@ Kern: [Selbstbeschreibungs-Wächter (`test/harness/selbstbeschreibung.test.ts`, 
 <!-- factory-projekt:start -->
 
 - **Schichtung wird automatisch bewacht.** Die Schichtungsregeln (siehe [AGENTS.md › Architektur](../AGENTS.md#architektur): pure Domäne ↔ Anwendung ↔ Präsentation, Phaser-Grenze) werden von `dependency-cruiser` erzwungen, nicht nur per Review-Disziplin gehalten: `npm run check:arch` (`.dependency-cruiser.cjs`) schlägt fehl, wenn z.B. die Domäne/Anwendung `phaser` oder `scenes`/`ui`/`sfx` importiert. Läuft in der CI als Gate (nach dem Typecheck) und muss grün bleiben – verschiebst du Module zwischen Schichten, den Check lokal laufen lassen.
-- **Zyklen, verwaiste Module & Dateigröße werden automatisch bewacht.** `check:arch` verbietet zusätzlich **Import-Zyklen** (`keine-zyklen`) und **verwaiste Module** (`keine-verwaisten-module`, toter Code) – Typ-Importe zählen dabei mit (`tsPreCompilationDeps`). Separat meldet `npm run check:size` (`scripts/check-size.mjs`) jedes `src`-Modul über dem **Zeilen-Budget (800 LOC)** als God-File-Frühwarnung – dieselbe Logik testet [`filesize.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/test/filesize.test.ts) (also auch im `npm test`-Gate). Beide laufen in der CI. **Kein Grün-durch-Aufweichen:** einen Zyklus auflösen (geteilten Zustand nach `runtime.ts`/`sim/state.ts` ziehen, wie bei #390 für `ExecResult` gemacht), toten Code löschen, ein zu großes Modul aufteilen – eine Ausnahme nur mit offenem Split-Ticket als Eintrag unter `ausnahmen.groesse` (`.factory/projekt.json`) bzw. `pathNot` (`.dependency-cruiser.cjs`), mit Begründung. Fällt eine allowlistete Datei wieder unter Budget, meldet der Wächter den Eintrag als stale.
+- **Zyklen, verwaiste Module & Dateigröße werden automatisch bewacht.** `check:arch` verbietet zusätzlich **Import-Zyklen** (`keine-zyklen`) und **verwaiste Module** (`keine-verwaisten-module`, toter Code) – Typ-Importe zählen dabei mit (`tsPreCompilationDeps`). Separat meldet `npm run check:size` (`scripts/check-size.mjs`) jedes `src`-Modul über dem **Zeilen-Budget (800 LOC)** als God-File-Frühwarnung – dieselbe Logik testet [`filesize.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/test/filesize.test.ts) (also auch im `npm test`-Gate). Beide laufen in der CI. **Kein Grün-durch-Aufweichen:** einen Zyklus auflösen (geteilten Zustand nach `runtime.ts`/`sim/state.ts` ziehen, wie bei #390 für `ExecResult` gemacht), toten Code löschen, ein zu großes Modul aufteilen – eine Ausnahme nur mit offenem Split-Ticket als Eintrag unter `ausnahmen.groesse` (`.factory/projekt.json`) bzw. `pathNot` (`.dependency-cruiser.cjs`), mit Begründung. Fällt eine allowlistete Datei wieder unter Budget, meldet der Wächter den Eintrag als stale.
 
 <!-- factory-projekt:ende -->
 
@@ -169,7 +169,7 @@ Kern: [Selbstbeschreibungs-Wächter (`test/harness/selbstbeschreibung.test.ts`, 
 
 ## 3a. Langfassung der harten Regeln (ausgelagert aus AGENTS.md)
 
-Kern: [3a. Langfassung der harten Regeln (ausgelagert aus AGENTS.md)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)
+Kern: [3a. Langfassung der harten Regeln (ausgelagert aus AGENTS.md)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)
 
 ### Test-Harness und e2e-Smokes
 
@@ -178,7 +178,7 @@ Kern: [3a. Langfassung der harten Regeln (ausgelagert aus AGENTS.md)](https://gi
 Tests in `test/` (Vitest), u.a.: `sim.test.ts` (Simulator-Kern/Dispatch; die Befehlsfamilien gespiegelt zu den `sim/`-Modulen unter `test/sim/`, Split #383), `content.test.ts` (Konsistenz aller Inhalte), `quests.test.ts` (spielt die ganze Story + alle Drills durch), `readme.test.ts` (Doku-Sync: Quest-Zahl der README gegen den Code).
 
 
-**Test-Infrastruktur – zwei getrennte Rollen (#475; nicht zu verwechseln mit dem Wächter-Ordner `test/harness/`, s.u.).** Die Test-Infrastruktur folgt einer klaren Trennlinie, statt in einen Sammel-Ordner zu wachsen: **Querschnitts-Umgebung** (die Browser-Umgebung, die die Anwendungs-/Persistenz-Schicht im Node-Lauf braucht: `window`/`localStorage`-Stub + frisches Laden des Spiel-Stacks) liegt **einmal** in `test/support/` (`browser-env.ts`, `quota-stub.ts`); **Setup-Dateien** (`test.setupFiles`, z.B. `test/support/git-umgebung.ts`) tragen nur den Seiteneffekt, die Logik liegt pur daneben (`git-umgebung-env.ts`), und die Verdrahtung belegt ein Test, der das Setup nicht importiert (`test/git-umgebung.test.ts`: ein direkter Import führte den Seiteneffekt selbst aus und bewiese die `setupFiles`-Zeile nicht); **valide Domänen-Eingaben** entstehen über **Factories** in `test/factories/` (`freshSim()` – „immer ohne Argumente baubar", Varianten überschreiben nur das Nötige; `test/sim/helpers.ts` re-exportiert daraus, keine Link-Brüche). **Leitprinzip:** Tests prüfen **Verhalten/Funktionalität über die öffentliche API**, nicht die Implementierung/Interna – die Infrastruktur liefert nur Umgebung + valide Eingaben, keine Gucklöcher in Interna, damit die Tests Refactorings der Domäne überleben. **Abgrenzung:** Die Architektur-**Fitness-Functions** (z.B. `test/layering.test.ts`, [`filesize.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/test/filesize.test.ts), `test/harness/readme.test.ts`, `test/docmap.test.ts`) prüfen bewusst Struktur-/Doku-Regeln statt Verhalten – eigene Kategorie, nicht mit Verhaltens-Tests vermischen. **Harness-Wächter (#1156/#1165)** sind die Fitness-Functions, die selbst der **einzige** Durchsetzer ihrer Regel sind (kein geschütztes `scripts/check-*.mjs` dahinter): sie liegen in [`test/harness/`](../test/harness/), tragen im Dateikopf den Marker `@harness-waechter` und sind über den Ordner-Präfix in `.github/protected-paths.json` auditpflichtig. Ein neuer Wächter braucht damit keinen eigenen Schutz-Eintrag; dass Marker und Ordner übereinstimmen, prüft [`harness-approval-projekt.test.ts`](../test/harness/harness-approval-projekt.test.ts).
+**Test-Infrastruktur – zwei getrennte Rollen (#475; nicht zu verwechseln mit dem Wächter-Ordner `test/harness/`, s.u.).** Die Test-Infrastruktur folgt einer klaren Trennlinie, statt in einen Sammel-Ordner zu wachsen: **Querschnitts-Umgebung** (die Browser-Umgebung, die die Anwendungs-/Persistenz-Schicht im Node-Lauf braucht: `window`/`localStorage`-Stub + frisches Laden des Spiel-Stacks) liegt **einmal** in `test/support/` (`browser-env.ts`, `quota-stub.ts`); **Setup-Dateien** (`test.setupFiles`, z.B. `test/support/git-umgebung.ts`) tragen nur den Seiteneffekt, die Logik liegt pur daneben (`git-umgebung-env.ts`), und die Verdrahtung belegt ein Test, der das Setup nicht importiert (`test/git-umgebung.test.ts`: ein direkter Import führte den Seiteneffekt selbst aus und bewiese die `setupFiles`-Zeile nicht); **valide Domänen-Eingaben** entstehen über **Factories** in `test/factories/` (`freshSim()` – „immer ohne Argumente baubar", Varianten überschreiben nur das Nötige; `test/sim/helpers.ts` re-exportiert daraus, keine Link-Brüche). **Leitprinzip:** Tests prüfen **Verhalten/Funktionalität über die öffentliche API**, nicht die Implementierung/Interna – die Infrastruktur liefert nur Umgebung + valide Eingaben, keine Gucklöcher in Interna, damit die Tests Refactorings der Domäne überleben. **Abgrenzung:** Die Architektur-**Fitness-Functions** (z.B. `test/layering.test.ts`, [`filesize.test.ts`](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/test/filesize.test.ts), `test/harness/readme.test.ts`, `test/docmap.test.ts`) prüfen bewusst Struktur-/Doku-Regeln statt Verhalten – eigene Kategorie, nicht mit Verhaltens-Tests vermischen. **Harness-Wächter (#1156/#1165)** sind die Fitness-Functions, die selbst der **einzige** Durchsetzer ihrer Regel sind (kein geschütztes `scripts/check-*.mjs` dahinter): sie liegen in [`test/harness/`](../test/harness/), tragen im Dateikopf den Marker `@harness-waechter` und sind über den Ordner-Präfix in `.github/protected-paths.json` auditpflichtig. Ein neuer Wächter braucht damit keinen eigenen Schutz-Eintrag; dass Marker und Ordner übereinstimmen, prüft [`harness-approval-projekt.test.ts`](../test/harness/harness-approval-projekt.test.ts).
 
 
 **Boot-Smoke-Test (#391, getrennt von Vitest).** Die Unit-Tests fassen die Präsentation (Engine/DOM) bewusst nicht an – ein Fehler, der erst beim echten Boot auftritt (Phaser-Init, ein werfender Content-Loader, ein kaputtes Asset-Manifest), käme durch. Darum lädt ein **Playwright/headless-Chromium-Test** den **gebauten Offline-Build** (`dist-offline/index.html` per `file://`, also genau den Doppelklick-Pfad; der Host-Build läuft zusätzlich über einen Preview-Server, #1408) und prüft: der Boot-Flag `body[data-kq-booted="1"]` erscheint, die Phaser-Canvas ist da, das index.html-Sicherheitsnetz tauchte **nicht** auf, und es fielen **keine** Konsolen-/Laufzeit-Fehler. Liegt in [`e2e/`](../e2e/) (Config `playwright.config.ts`), läuft lokal mit `npm run smoke` (baut Offline + testet) und in der CI als eigener Schritt nach den Builds. **Vitest ignoriert `e2e/`** (Include ist `test/**/*.test.ts`) – die beiden Test-Welten überschneiden sich nicht.
@@ -210,7 +210,7 @@ Das **Forum** sind die **GitHub Discussions** des Repos. Damit eine Forum-Nachri
 
 ## 4. Die sichere Autonomie-Schleife
 
-Kern: [4. Die sichere Autonomie-Schleife](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#4-die-sichere-autonomie-schleife)
+Kern: [4. Die sichere Autonomie-Schleife](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#4-die-sichere-autonomie-schleife)
 
 <!-- GEN:agenten-ablauf START -->
 <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
@@ -288,7 +288,7 @@ flowchart TD
 
 ### Agenten-Sandbox (WSL2)
 
-Kern: [Agenten-Sandbox (WSL2)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#agenten-sandbox-wsl2)
+Kern: [Agenten-Sandbox (WSL2)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#agenten-sandbox-wsl2)
 
 <!-- factory-projekt:start -->
 
@@ -302,11 +302,11 @@ Ergänzung des Projekts:
 
 ### Natives Windows
 
-Kern: [Natives Windows](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#natives-windows)
+Kern: [Natives Windows](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#natives-windows)
 
 ### Wer macht was
 
-Kern: [Wer macht was](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#wer-macht-was)
+Kern: [Wer macht was](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#wer-macht-was)
 
 <!-- GEN:agenten-sequenz START -->
 <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
@@ -392,7 +392,7 @@ sequenceDiagram
 
 ### Leitplanken-Schichten: Bitte und Mauer
 
-Kern: [Leitplanken-Schichten: Bitte und Mauer](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#leitplanken-schichten-bitte-und-mauer)
+Kern: [Leitplanken-Schichten: Bitte und Mauer](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#leitplanken-schichten-bitte-und-mauer)
 
 <!-- GEN:leitplanken-schichten START -->
 <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
@@ -438,11 +438,11 @@ flowchart LR
 
 ### Belege: der Rot→Fix→Grün-Bogen in echt
 
-Kern: [Belege: der Rot→Fix→Grün-Bogen in echt](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#belege-der-rotfixgrün-bogen-in-echt)
+Kern: [Belege: der Rot→Fix→Grün-Bogen in echt](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#belege-der-rotfixgrün-bogen-in-echt)
 
 ## 5. Roadmap / bekannte Lücken
 
-Kern: [5. Roadmap / bekannte Lücken](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#5-roadmap--bekannte-lücken)
+Kern: [5. Roadmap / bekannte Lücken](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#5-roadmap--bekannte-lücken)
 
 ## 6. Verwandte Dokumente
 

@@ -1,6 +1,6 @@
 # Häufig gestellte Fragen zum Agenten-Harness (FAQ)
 
-> Projektanteil der FAQ: Deploybarkeit, Browser-Prüfung im Spiel, Architekturmodell, AGE-Werte, Perf-Smoke und das Mermaid-Werkzeug. Die übrigen Fragen stehen in der [Kern-FAQ](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md); Inventar: [Factory-Seiten](referenz/anlaufstellen.md#factory-seiten-projektanteil-und-kern).
+> Projektanteil der FAQ: Deploybarkeit, Browser-Prüfung im Spiel, Architekturmodell, AGE-Werte, Perf-Smoke und das Mermaid-Werkzeug. Die übrigen Fragen stehen in der [Kern-FAQ](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md); Inventar: [Factory-Seiten](referenz/anlaufstellen.md#factory-seiten-projektanteil-und-kern).
 
 <!-- factory-projekt:start -->
 
@@ -12,15 +12,15 @@ Beides. Der Standard-Build (`npm run build`) ist schon ein statisches Bundle ohn
 
 ## Der Auto-Mode blockt die Sabotage-Probe der Test-Lens („Self-Modification“): was tun?
 
-Kern: [Der Auto-Mode blockt die Sabotage-Probe der Test-Lens („Self-Modification“): was tun?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md#der-auto-mode-blockt-die-sabotage-probe-der-test-lens-self-modification-was-tun)
+Kern: [Der Auto-Mode blockt die Sabotage-Probe der Test-Lens („Self-Modification“): was tun?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md#der-auto-mode-blockt-die-sabotage-probe-der-test-lens-self-modification-was-tun)
 
 ## Wie entferne ich einen Worktree unter Windows sauber (und was ist mit `node_modules`)?
 
-Kern: [Wie entferne ich einen Worktree unter Windows sauber (und was ist mit `node_modules`)?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md#wie-entferne-ich-einen-worktree-unter-windows-sauber-und-was-ist-mit-nodemodules)
+Kern: [Wie entferne ich einen Worktree unter Windows sauber (und was ist mit `node_modules`)?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md#wie-entferne-ich-einen-worktree-unter-windows-sauber-und-was-ist-mit-nodemodules)
 
 ## Wie verifiziere ich im Browser?
 
-Kern: [Wie verifiziere ich im Browser?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md#wie-verifiziere-ich-im-browser)
+Kern: [Wie verifiziere ich im Browser?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md#wie-verifiziere-ich-im-browser)
 
 <!-- factory-projekt:start -->
 
@@ -54,7 +54,7 @@ Phasers Zeitgeber klemmt die ersten 120 Frames (`panicMax`) auf 16,7 ms: der `Fr
 
 ## Wie hänge ich ein Bild an einen PR, und wie prüfe ich ein Mermaid-Diagramm?
 
-Kern: [Wie hänge ich ein Bild an einen PR, und wie prüfe ich ein Mermaid-Diagramm?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md#wie-hänge-ich-ein-bild-an-einen-pr-und-wie-prüfe-ich-ein-mermaid-diagramm)
+Kern: [Wie hänge ich ein Bild an einen PR, und wie prüfe ich ein Mermaid-Diagramm?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md#wie-hänge-ich-ein-bild-an-einen-pr-und-wie-prüfe-ich-ein-mermaid-diagramm)
 
 <!-- factory-projekt:start -->
 
@@ -73,21 +73,21 @@ Dann `browser_navigate` auf `http://127.0.0.1:4173/`, per `browser_evaluate` war
 
 ## Windows und Git-Bash: was geht beim Skripten verloren?
 
-Kern: [Windows und Git-Bash: was geht beim Skripten verloren?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md#windows-und-git-bash-was-geht-beim-skripten-verloren)
+Kern: [Windows und Git-Bash: was geht beim Skripten verloren?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md#windows-und-git-bash-was-geht-beim-skripten-verloren)
 
 ## Wie fahre ich einen Probe-Lauf und warte auf sein Ergebnis?
 
-Kern: [Wie fahre ich einen Probe-Lauf und warte auf sein Ergebnis?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md#wie-fahre-ich-einen-probe-lauf-und-warte-auf-sein-ergebnis)
+Kern: [Wie fahre ich einen Probe-Lauf und warte auf sein Ergebnis?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md#wie-fahre-ich-einen-probe-lauf-und-warte-auf-sein-ergebnis)
 
 ## Wie räume ich Scratch auf, wenn Befehle blockiert werden?
 
-Kern: [Wie räume ich Scratch auf, wenn Befehle blockiert werden?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md#wie-räume-ich-scratch-auf-wenn-befehle-blockiert-werden)
+Kern: [Wie räume ich Scratch auf, wenn Befehle blockiert werden?](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md#wie-räume-ich-scratch-auf-wenn-befehle-blockiert-werden)
 
 ## Verwandte Dokumente
 
 <!-- factory-projekt:start -->
 
-- [Kern-FAQ](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness-faq.md) — die projektneutralen Fragen zum Harness
+- [Kern-FAQ](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness-faq.md) — die projektneutralen Fragen zum Harness
 - [agent-harness.md](agent-harness.md) — die erklärende Gesamtsicht auf den Harness
 - [AGENTS.md](../AGENTS.md) — operative Arbeitsanweisung
 - [`docs/referenz/`](referenz/anlaufstellen.md) — Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen)

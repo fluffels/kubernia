@@ -1,10 +1,10 @@
 {
   "repo": "fluffels/self-improving-agent-harness-and-factory",
-  "tag": "v0.2.0",
-  "commit": "00245cb34f1e110fadd04ee7934cf022bcb7ed2f",
+  "tag": "v0.4.1",
+  "commit": "f9f17fd0bea89f273e710c27a14af4501c25a649",
   "ziele": {
     "docs/agent-harness-faq.md": ["","der-auto-mode-blockt-die-sabotage-probe-der-test-lens-self-modification-was-tun","langfuse-lokal-aus","wie-entferne-ich-einen-worktree-unter-windows-sauber-und-was-ist-mit-nodemodules","wie-fahre-ich-einen-probe-lauf-und-warte-auf-sein-ergebnis","wie-hänge-ich-ein-bild-an-einen-pr-und-wie-prüfe-ich-ein-mermaid-diagramm","wie-räume-ich-scratch-auf-wenn-befehle-blockiert-werden","wie-verifiziere-ich-im-browser","windows-und-git-bash-was-geht-beim-skripten-verloren"],
-    "docs/agent-harness.md": ["","1-die-kernidee","2-die-fünf-bausteine","23-kollisionsschutz-für-parallele-agenten","25-skills--setup-als-reproduzierbare-abläufe","2a-harness-cockpit-adr-0029","3-die-fitness-functions-im-detail","3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd","4-die-sichere-autonomie-schleife","5-roadmap--bekannte-lücken","agenten-sandbox-wsl2","belege-der-rotfixgrün-bogen-in-echt","code-scanning-und-posture-codeqlyml-scorecardyml-875","drift-gate-npm-run-checkfactorydrift-1613","extraktionsliste-und-kern-tests-testharnessextraktiontestts-1875","gates-guards-und-durchsetzung","kern-reinheits-wächter-testharnesskern-reinheittestts-1610","lebende-doku-wächter-npm-run-checkdocgen-1355","leitplanken-schichten-bitte-und-mauer","natives-windows","selbstbeschreibungs-wächter-testharnessselbstbeschreibungtestts-1714","tests-npm-test-vitest","wer-macht-was"],
+    "docs/agent-harness.md": ["","1-die-kernidee","2-die-fünf-bausteine","23-kollisionsschutz-für-parallele-agenten","25-skills--setup-als-reproduzierbare-abläufe","2a-harness-cockpit-adr-0029","3-die-fitness-functions-im-detail","3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd","4-die-sichere-autonomie-schleife","5-roadmap--bekannte-lücken","agenten-sandbox-wsl2","belege-der-rotfixgrün-bogen-in-echt","code-scanning-und-posture-codeqlyml-scorecardyml-875","drift-gate-npm-run-checkfactorydrift-1613","extraktionsliste-und-kern-tests-1875","gates-guards-und-durchsetzung","kern-reinheits-wächter-testharnesskern-reinheittestts-1610","lebende-doku-wächter-npm-run-checkdocgen-1355","leitplanken-schichten-bitte-und-mauer","natives-windows","selbstbeschreibungs-wächter-1714","tests-npm-test-vitest","wer-macht-was"],
     "docs/harness-glossar.md": [""],
     "docs/model-routing.md": [""],
     "docs/referenz/befehle.md": [""],

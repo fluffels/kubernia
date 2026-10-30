@@ -98,6 +98,7 @@ model {
 
       auditEinordnung = ciworkflow 'audit-einordnung.yml'
       boardTakt = ciworkflow 'board-takt.yml'
+      factoryUpdate = ciworkflow 'factory-update.yml'
       ciYml = ciworkflow 'ci.yml'
       codeql = ciworkflow 'codeql.yml'
       codescanningInbox = ciworkflow 'codescanning-inbox.yml'

@@ -1,6 +1,6 @@
 # Sandbox anbinden
 
-> Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Standard- und Rückfallweg: ADR 0025, Abschnitt Fortschreibung #1827. Den WSL2-Weg von Kubernia beschreibt [agent-harness.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/agent-harness.md#agenten-sandbox-wsl2).
+> Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Standard- und Rückfallweg: ADR 0025, Abschnitt Fortschreibung #1827. Den WSL2-Weg von Kubernia beschreibt [agent-harness.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/agent-harness.md#agenten-sandbox-wsl2).
 
 ## Docker Sandboxes (`sbx`)
 

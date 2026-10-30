@@ -1,10 +1,10 @@
 # Sicherheit der Agenten: Forum-Kanal (Projektanteil, #1433)
 
-> Projektanteil: der Forum-Kanal. Quellen, Vertrauensmodell, OWASP-Abgleich und die übrigen Kanäle stehen in [Sicherheit der Agenten](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/sicherheit-agenten.md) im Factory-Repo; Inventar: [Factory-Seiten](referenz/anlaufstellen.md#factory-seiten-projektanteil-und-kern).
+> Projektanteil: der Forum-Kanal. Quellen, Vertrauensmodell, OWASP-Abgleich und die übrigen Kanäle stehen in [Sicherheit der Agenten](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/sicherheit-agenten.md) im Factory-Repo; Inventar: [Factory-Seiten](referenz/anlaufstellen.md#factory-seiten-projektanteil-und-kern).
 
 ## Kanäle für Fremdtext
 
-Kern: [Kanäle für Fremdtext](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/sicherheit-agenten.md#kanäle-für-fremdtext)
+Kern: [Kanäle für Fremdtext](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/sicherheit-agenten.md#kanäle-für-fremdtext)
 
 <!-- factory-projekt:start -->
 
@@ -18,4 +18,4 @@ Kern: [Kanäle für Fremdtext](https://github.com/fluffels/self-improving-agent-
 
 ## Grenzen (ehrlich)
 
-Kern: [Grenzen (ehrlich)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.2.0/docs/sicherheit-agenten.md#grenzen-ehrlich)
+Kern: [Grenzen (ehrlich)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.4.1/docs/sicherheit-agenten.md#grenzen-ehrlich)

@@ -127,6 +127,7 @@ describe("gültige --config wird gelesen", { timeout: 60_000 }, () => {
     writeFileSync(pfad, JSON.stringify(config));
     const issue = JSON.stringify({
       number: 1,
+      repository_url: `https://api.github.com/repos/${config.repo}`,
       title: "T",
       state: "open",
       user: { login: config.repo.split("/")[0], type: "User" },
