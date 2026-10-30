@@ -7,8 +7,9 @@
  * Schlüssel und „Fix:“-Zeile; `namenOderGrund` wirft nie und liefert statt der Namen einen Grund, den ein Hook als
  * deny/block ausgibt. Geladen wird nie beim Import eines Hook-Moduls (ein Import-Fehler schaltete den Dispatcher ab).
  *
- * Nur Node-Builtins und `projekt-config-lib.mjs`.
+ * Nur Node-Builtins, `arbeitsplatz-lib.mjs` und `projekt-config-lib.mjs`.
  */
+import { repoSegment } from "./arbeitsplatz-lib.mjs";
 import { ladeProjektConfig, PFLICHT_AGENTEN, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const istText = (v) => typeof v === "string" && v.trim() !== "";
@@ -46,8 +47,8 @@ function worktreeTeil(worktree) {
     lensNameKern,
     /** Ganzer Lens-Worktree-Name (`^…$`). */
     lensWorktreeMuster: new RegExp(`^${lensNameKern}$`),
-    /** Pfadform `/.claude/worktrees/<Lens-Name>/`, Groß-/Kleinschreibung egal (Windows-Pfade). */
-    lensPfadMuster: new RegExp(String.raw`/\.claude/worktrees/${lensNameKern}/`, "i"),
+    /** Pfadform `/.claude/worktrees/[<Repo>/]<Lens-Name>/` (Repo-Segment im Arbeitsplatz), Groß-/Kleinschreibung egal (Windows-Pfade). */
+    lensPfadMuster: new RegExp(String.raw`/\.claude/worktrees/${repoSegment(w, "/")}${lensNameKern}/`, "i"),
     /** Lose Datei `<wt><nr>` gefolgt von `-`, `.` oder Ende; Gruppe 1 ist der Eltern-Worktree. */
     dateiMuster: new RegExp(String.raw`^(${w}\d+)(?=[-.]|$)`),
   };
@@ -69,7 +70,7 @@ export function ticketNamen(config) {
   const b = escapeRegex(branch);
   const w = escapeRegex(worktree);
   const ende = String.raw`(?=$|[-/\\\s])`;
-  const ticketRef = new RegExp(String.raw`(?:${b}|worktrees[\\/]${w})(\d+)${ende}`);
+  const ticketRef = new RegExp(String.raw`(?:${b}|worktrees[\\/]${repoSegment(w, String.raw`[\\/]`)}${w})(\d+)${ende}`);
   return {
     praefixe: { branch, worktree },
     agenten: { ...config.agenten },

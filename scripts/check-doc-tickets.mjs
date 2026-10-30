@@ -6,7 +6,7 @@
  * check-docdrift.mjs) um die eine Dimension, die dieser NICHT prüft: **inhaltliche
  * Aktualität**.
  *
- * Hintergrund: docs/agent-harness.md § „Roadmap / bekannte Lücken" listet
+ * Hintergrund: Factory-Seite docs/agent-harness.md § „Roadmap / bekannte Lücken" listet
  * Harness-Verbesserungen, die noch **offen** sind. Diese Liste veraltet leise —
  * genau so wie die alte „#492 (RNG-Determinismus) ist offen"-Zeile, die noch
  * dastand, obwohl das Gate längst existierte (ein realer Fund dieser Klasse). check:docdrift
@@ -40,7 +40,7 @@ import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Die Doku-Datei mit der Roadmap-Tabelle. */
+/** Die Doku-Datei mit der Roadmap-Tabelle. Im Bezieher ein Stub: Roadmap-Ticketnummern sind Factory-Repo-Nummern und werden dort geprüft; ein Link auf den Tag hilft nicht. */
 export const HARNESS_DOC = "docs/agent-harness.md";
 
 /** Marker, zwischen denen die als „offen" dokumentierten Ticket-Nummern stehen.

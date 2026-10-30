@@ -1,7 +1,7 @@
 name: Harness-Doctor (Wochenlauf)
 
 # Meldet Lücken der Factory-Voraussetzungen (scripts/harness-doctor.mjs) einmal pro Woche als Zeile im Harness-Sammelticket, mit Abgleich
-# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN, gepostet mit github.token; fehlt das Secret,
+# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN; gepostet wird im eigenen Repo mit github.token, in einem fremden Ziel-Repo mit PROJECT_TOKEN; fehlt das Secret,
 # meldet der Lauf genau das als Lücke. Diese Datei ist die Vorlage von `harness-doctor.mjs --einrichten` (ein Wächter hält beide gleich).
 
 on:
@@ -27,8 +27,8 @@ jobs:
     name: "Harness-Doctor: Lücken ins Sammelticket"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Voraussetzungen prüfen und Lücken melden

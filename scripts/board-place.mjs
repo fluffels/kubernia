@@ -46,7 +46,6 @@ import {
   addToBoardTodo,
   boardFuerRolle,
   boardRolleFuer,
-  aufnahmePlan,
   entferneVomBoard,
   ergaenzeFehlende,
   fehlendeNummern,
@@ -64,8 +63,10 @@ import {
   umzugsPlan,
   wirklichFehlend,
 } from "./board-lib.mjs";
+import { aufnahmePlan, brauchtRepo } from "./board-plan-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { tokenFuerZiel } from "./gh-cli.mjs";
+import { fremdesBoardText, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 export { NOTFALL_ARTEN };
 
@@ -81,12 +82,13 @@ const MODI = ["top", "after", "position", "missing", "umzug"];
  * oder doppelte Flags und ein Options-Terminator `--` (er steht nicht unter den Positionsargumenten) sind ungültig.
  */
 export function parseArgs(argv) {
-  const optionen = { "dry-run": { type: "boolean" }, notfall: { type: "string" } };
+  const optionen = { "dry-run": { type: "boolean" }, notfall: { type: "string" }, repo: { type: "string" } };
   for (const m of MODI) optionen[m] = { type: "boolean" };
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, optionen, { positionale: true });
   if (fehler) return null;
   const dry = werte["dry-run"] === true;
-  const reihe = tokens.filter((t) => !(t.kind === "option" && t.name === "dry-run"));
+  if (!repoFormOk(werte.repo)) return null;
+  const reihe = tokens.filter((t) => !(t.kind === "option" && (t.name === "dry-run" || t.name === "repo")));
   let i = 0;
   let notfall = null;
   if (reihe[0]?.kind === "option" && reihe[0].name === "notfall") {
@@ -98,8 +100,14 @@ export function parseArgs(argv) {
   if (modus?.kind !== "option") return null;
   if (!reihe.slice(i + 1).every((t) => t.kind === "positional")) return null;
   const geparst = parseModus(modus.name, positionale, dry);
-  return geparst && notfall ? { ...geparst, notfall } : geparst;
+  return geparst && { ...geparst, ...zusatzOptionen(werte.repo, notfall) };
 }
+
+/** Die optionalen Felder `repo` und `notfall` des Parse-Ergebnisses (nur gesetzte). */
+const zusatzOptionen = (repo, notfall) => ({ ...(repo === undefined ? {} : { repo }), ...(notfall ? { notfall } : {}) });
+
+/** `--repo` fehlt oder hat die Form `owner/name`. */
+const repoFormOk = (repo) => repo === undefined || istRepoForm(repo);
 
 function parseModus(modus, positionale, dry) {
   if (modus === "umzug") return positionale.length === 0 ? { umzug: true, dry } : null;
@@ -117,18 +125,18 @@ function parseModus(modus, positionale, dry) {
  * `--after`-Anker nicht (Meldung „fehlt im Board, nicht aufgenommen: <Grund>“, am Ende Exit 1).
  */
 export function nimmFehlendeAuf(items, args, io = {}) {
-  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns, config, log = console.log, warn = console.error } = io;
+  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns, config, repo = args.repo ?? REPO, log = console.log, warn = console.error } = io;
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length === 0) return items;
   const issues = {};
   for (const nr of fehlend) {
     try {
-      issues[nr] = lade(["api", `repos/${REPO}/issues/${nr}`]);
+      issues[nr] = lade(["api", `repos/${repo}/issues/${nr}`]);
     } catch {
       issues[nr] = null;
     }
   }
-  const { aufnehmen, abgelehnt } = aufnahmePlan(fehlend, issues, { config, ankerNr: args.anchor });
+  const { aufnehmen, abgelehnt } = aufnahmePlan(fehlend, issues, { config, ankerNr: args.anchor, repo });
   for (const a of abgelehnt) warn(`⚠ #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
   const neu = aufnehmen.map((a) => {
     if (args.dry) {
@@ -146,7 +154,8 @@ export function nimmFehlendeAuf(items, args, io = {}) {
  * der Issue-REST (für Nummern, deren Item keine Labels trägt). Liefert `{ rolle, doppelt }` (`doppelt`: Nummern auf beiden Boards) oder `{ fehler }`
  * bei gemischten Rollen, einem `--after`-Anker nur auf dem anderen Board oder nicht bestimmbarer Rolle. Pur.
  */
-export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {}, config }) {
+export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {}, config, repo }) {
+  brauchtRepo(repo, "zielRolle");
   const stehtAuf = (liste, nr) => liste.find((i) => i.number === nr);
   const rollen = new Map();
   for (const nr of numbers) {
@@ -157,17 +166,19 @@ export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest
   const verschieden = new Set(rollen.values());
   if (verschieden.size !== 1) return { fehler: `gemischte Nummern: ${[...rollen].map(([nr, rolle]) => `#${nr} ${rolle}`).join(", ")}; getrennt einsortieren` };
   const rolle = [...verschieden][0];
+  const fremd = fremdesBoardText(rolle, repo, config);
+  if (fremd) return { fehler: fremd };
   const fehler = anchor === null ? null : ankerFehler({ anchor, rolle, produkt, factory });
   if (fehler) return { fehler };
   return { rolle, doppelt: numbers.filter((nr) => stehtAuf(produkt, nr) && stehtAuf(factory, nr)) };
 }
 
 /** Bericht: offene Issues, die auf keinem Board stehen; REST-Treffer werden per GraphQL gegengeprüft (frische Items fehlen in der REST-Liste teils lange, #1628). */
-function reportMissing() {
+function reportMissing(repo) {
   try {
-    const beide = ["produkt", "factory"].map((rolle) => ({ rolle, items: loadItems(boardFuerRolle(rolle)) }));
-    const rest = missingFromBoard(loadOpenIssueNumbers(), beide.flatMap((b) => b.items));
-    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, beide.flatMap((b) => itemsUeberIssues(boardFuerRolle(b.rolle), rest)));
+    const beide = ["produkt", "factory"].map((rolle) => ({ rolle, items: loadItems(boardFuerRolle(rolle), { repo }) }));
+    const rest = missingFromBoard(loadOpenIssueNumbers(repo), beide.flatMap((b) => b.items));
+    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, beide.flatMap((b) => itemsUeberIssues(boardFuerRolle(b.rolle), rest, {}, repo)));
     console.log(missing.length === 0 ? "Alle offenen Issues stehen im Board." : `Offen, aber nicht im Board: ${missing.map((n) => `#${n}`).join(", ")}`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}.`);
@@ -175,59 +186,83 @@ function reportMissing() {
   }
 }
 
+/**
+ * Die echte I/O von `einsortieren` und `umziehen` (#97): Board-Lesen und -Schreiben, Labels, Pause und Ausgabe. Beide Funktionen nehmen sie als
+ * letzten, optionalen Parameter, damit ihre Verdrahtung (Repo, Reihenfolge, Abbruch) ohne Netz testbar ist.
+ */
+export const ECHTE_PLACE_IO = {
+  loadItems: (board, opts) => loadItems(board, opts),
+  ladeLabels: (nr, repo) => ladeLabels(nr, repo),
+  itemsUeberIssues: (board, nummern, opts, repo) => itemsUeberIssues(board, nummern, opts, repo),
+  addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts),
+  setPosition: (board, id, afterId) => setPosition(board, id, afterId),
+  entferneVomBoard: (board, id) => entferneVomBoard(board, id),
+  positionOderWarnung,
+  schlafe: () => sleep(PAUSE_MS),
+  log: (z) => console.log(z),
+  warn: (z) => console.error(z),
+};
+
 /** Labels eines Issues per REST (für Nummern ohne Board-Item mit Labels); `null` bei einem Ladefehler (dann ist die Rolle nicht bestimmbar). */
-function ladeLabels(nr) {
+function ladeLabels(nr, repo) {
   try {
-    return (ghJson(["api", `repos/${REPO}/issues/${nr}`]).labels ?? []).map((l) => (typeof l === "string" ? l : l?.name));
+    return (ghJson(["api", `repos/${repo}/issues/${nr}`]).labels ?? []).map((l) => (typeof l === "string" ? l : l?.name));
   } catch {
     return null;
   }
+}
+
+/** Die Items beider Boards (nur die des Repos) und die Labels der Nummern, deren Item keine Labels trägt (REST). */
+function ladeListenUndLabels(numbers, repo, io) {
+  const listen = { produkt: io.loadItems(boardFuerRolle("produkt"), { repo }), factory: io.loadItems(boardFuerRolle("factory"), { repo }) };
+  const labelsRest = {};
+  for (const nr of numbers) {
+    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = io.ladeLabels(nr, repo);
+  }
+  return { listen, labelsRest };
 }
 
 /** Fehler mit Exit-Code: `einsortieren` wirft statt `process.exit`, damit `mitWiederholung` vorübergehende Wettläufe wiederholen kann. */
 const abbruch = (message, exitCode = 1) => Object.assign(new Error(message), { exitCode });
 
 /** Ein Durchlauf: laden, aufnehmen, planen, positionieren. Wirft bei jedem Fehler (`exitCode` am Fehler, Standard 1). */
-async function einsortieren(args, config) {
-  const listen = { produkt: loadItems(boardFuerRolle("produkt")), factory: loadItems(boardFuerRolle("factory")) };
-  const labelsRest = {};
-  for (const nr of args.numbers) {
-    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = ladeLabels(nr);
-  }
-  const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest, config });
+export async function einsortieren(args, config, io = ECHTE_PLACE_IO) {
+  const { repo } = args;
+  const { listen, labelsRest } = ladeListenUndLabels(args.numbers, repo, io);
+  const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest, config, repo });
   if (ziel.fehler) throw abbruch(ziel.fehler, 2);
-  for (const nr of ziel.doppelt) console.error(`⚠ #${nr} steht auf beiden Boards; eingeordnet auf dem ${ziel.rolle}-Board (Trennregel).`);
+  for (const nr of ziel.doppelt) io.warn(`⚠ #${nr} steht auf beiden Boards; eingeordnet auf dem ${ziel.rolle}-Board (Trennregel).`);
   const board = boardFuerRolle(ziel.rolle);
   let items = listen[ziel.rolle];
   // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
   const fehlend = fehlendeNummern(items, args);
-  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(board, fehlend));
-  items = nimmFehlendeAuf(items, args, { config, addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, ...opts }) });
+  if (fehlend.length > 0) items = ergaenzeFehlende(items, io.itemsUeberIssues(board, fehlend, {}, repo));
+  items = nimmFehlendeAuf(items, args, { config, repo, addToBoardTodo: (nodeId, opts) => io.addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, repo, ...opts }) });
   if (args.notfall) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
     if (fehler) throw abbruch(fehler, 2);
   }
-  const { korrektur, plan } = planMitKorrektur(items, args, args.notfall ? null : positionOderWarnung());
-  if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
+  const { korrektur, plan } = planMitKorrektur(items, args, args.notfall ? null : io.positionOderWarnung());
+  if (plan.klemmung.geklemmt) io.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
   const { steps, missing, anchorMissing } = plan;
   if (anchorMissing) throw abbruch(`Anker #${args.anchor} steht nicht im Board (weder in der REST-Liste noch per GraphQL gefunden).`);
   if (korrektur) {
-    console.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
+    io.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
     if (!args.dry) {
-      setPosition(board, korrektur.id, korrektur.afterId);
-      await sleep(PAUSE_MS);
+      io.setPosition(board, korrektur.id, korrektur.afterId);
+      await io.schlafe();
     }
   }
   for (const [n, { item, afterId }] of steps.entries()) {
-    console.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
+    io.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
     if (args.dry) continue;
     try {
-      setPosition(board, item.id, afterId);
+      io.setPosition(board, item.id, afterId);
     } catch (e) {
       const rest = steps.slice(n).map((x) => `#${x.item.number}`).join(", ");
       throw abbruch(`${abortMessage(e.message)}. Offen bleiben ${rest}`);
     }
-    await sleep(PAUSE_MS);
+    await io.schlafe();
   }
   if (missing.length > 0) throw abbruch(`Nicht im Board gefunden (auch nicht per GraphQL): ${missing.map((n) => `#${n}`).join(", ")}`);
 }
@@ -269,51 +304,79 @@ export async function fuehreUmzugAus(plan, io) {
   return plan.gemeldet.length;
 }
 
-async function umziehen(args, config) {
-  const [produkt, factory] = ["produkt", "factory"].map((r) => loadItems(boardFuerRolle(r)));
-  const plan = umzugsPlan(produkt, factory, config);
+export async function umziehen(args, config, io = ECHTE_PLACE_IO) {
+  const { repo } = args;
+  const [produkt, factory] = ["produkt", "factory"].map((r) => io.loadItems(boardFuerRolle(r), { repo }));
+  const plan = umzugsPlan(produkt, factory, config, repo);
   const u = plan.schritte.filter((s) => s.aktion === "umziehen").length;
-  if (plan.schritte.length === 0 && plan.gemeldet.length === 0) return console.log("Umzug: nichts zu tun (0 Items auf dem falschen Board).");
+  if (plan.schritte.length === 0 && plan.gemeldet.length === 0) return io.log("Umzug: nichts zu tun (0 Items auf dem falschen Board).");
   const gemeldet = await fuehreUmzugAus(plan, {
     dry: args.dry,
-    aufnehmen: (r, c) => addToBoardTodo(boardFuerRolle(r), c, { pauseMs: PAUSE_MS }),
-    positioniere: (r, i, a) => setPosition(boardFuerRolle(r), i, a),
-    entferne: (r, i) => entferneVomBoard(boardFuerRolle(r), i),
-    schlafe: () => sleep(PAUSE_MS),
-    log: console.log,
-    warn: console.error,
+    aufnehmen: (r, c) => io.addToBoardTodo(boardFuerRolle(r), c, { pauseMs: PAUSE_MS, repo }),
+    positioniere: (r, i, a) => io.setPosition(boardFuerRolle(r), i, a),
+    entferne: (r, i) => io.entferneVomBoard(boardFuerRolle(r), i),
+    schlafe: io.schlafe,
+    log: io.log,
+    warn: io.warn,
   });
-  console.log(`Umzug: ${u} umziehen, ${plan.schritte.length - u} entfernen, ${gemeldet} gemeldet${args.dry ? " (Trockenlauf)" : ""}.`);
+  io.log(`Umzug: ${u} umziehen, ${plan.schritte.length - u} entfernen, ${gemeldet} gemeldet${args.dry ? " (Trockenlauf)" : ""}.`);
   if (gemeldet > 0) throw abbruch(`${gemeldet} Item(s) nicht umgezogen (siehe Warnungen).`);
 }
 
-async function main(argv = process.argv.slice(2)) {
-  const args = parseArgs(argv);
+/**
+ * Token fürs Ziel-Repo (#97): ein fremdes Repo liest und schreibt mit `PROJECT_TOKEN` (`tokenFuerZiel`), das eigene mit dem Standard. Setzt `GH_TOKEN` in `env`,
+ * das jeder `gh`-Aufruf dieses Einzelprozesses erbt (Labels, Items, Aufnahme, Position); liefert den gesetzten Token oder `undefined`.
+ */
+export function setzeZielToken(repo, env) {
+  const token = tokenFuerZiel({ ziel: repo, eigenes: REPO, env });
+  if (token) env.GH_TOKEN = token;
+  return token;
+}
+
+/**
+ * Einstieg (#78 L13h). `deps` (Tests): `kontingent`, `ladeConfig`, `einsortieren`, `reportMissing`, `umziehen`, `mitWiederholung`, `beende` (Standard `process.exit`);
+ * die Verdrahtung gibt das Ziel-Repo (`--repo`, Standard das eigene) an jeden Modus weiter.
+ */
+export async function main(argv = process.argv.slice(2), deps = {}) {
+  const { env, kontingent, ladeConfig, einsortieren: einsortiere, reportMissing: meldeFehlende, umziehen: ziehUm, mitWiederholung: wiederhole, beende } = {
+    kontingent: () => mitKontingent("board-place"),
+    ladeConfig: ladeProjektConfig,
+    einsortieren,
+    reportMissing,
+    umziehen,
+    mitWiederholung,
+    beende: process.exit,
+    env: process.env,
+    ...deps,
+  };
+  const geparst = parseArgs(argv);
+  const args = geparst && { ...geparst, repo: geparst.repo ?? REPO }; // Standard: das eigene Repo
+  if (args) setzeZielToken(args.repo, env);
   if (!args) {
-    console.error("Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
-    process.exit(2);
+    console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
+    return beende(2);
   }
-  mitKontingent("board-place");
-  const config = ladeProjektConfig();
-  if (args.missing) return reportMissing();
+  kontingent();
+  const config = ladeConfig();
+  if (args.missing) return meldeFehlende(args.repo);
   if (args.umzug) {
     // Kein mitWiederholung um die Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert; der Lauf ist stattdessen idempotent.
     try {
-      return await umziehen(args, config);
+      return await ziehUm(args, config);
     } catch (e) {
       console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
-      process.exit(e.exitCode ?? 1);
+      return beende(e.exitCode ?? 1);
     }
   }
   try {
     // Wettlauf (#1628): ein frisch angelegtes Issue hat teils noch keinen GraphQL-Node; vorübergehende Fehler werden mit Pause wiederholt.
-    await mitWiederholung(
-      () => einsortieren(args, config),
+    await wiederhole(
+      () => einsortiere(args, config),
       { schlafe: sleep },
     );
   } catch (e) {
     console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
-    process.exit(e.exitCode ?? 1);
+    return beende(e.exitCode ?? 1);
   }
 }
 

@@ -1,5 +1,5 @@
 // Kein Shebang: dieses Skript wird ausschließlich über `node scripts/check-context-size.mjs`
-// (npm run check:contextsize) gestartet UND von test/context-size.test.ts importiert. Ein
+// (npm run check:contextsize) gestartet UND von test/context-size.test.ts (im Factory-Repo) importiert. Ein
 // `#!`-Token bricht sonst den Vitest/esbuild-Import (gleiche Falle wie bei check-size.mjs).
 /**
  * Kontextdatei-Wächter (#719) – Frühwarnung, dass AGENTS.md zu groß wird.
@@ -32,7 +32,7 @@
  *
  * Bewusst ein reines Node-Skript (nur Builtins + der Walk aus check-basis.mjs), analog zu
  * check-size.mjs.
- * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts importiert –
+ * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts (im Factory-Repo) importiert –
  * EINE Quelle der Wahrheit für Budget (hier) und Ausnahmen (`ausnahmen.kontext` der Projekt-Config).
  *
  * Ausführen mit:  npm run check:contextsize   (oder als Teil von: npm run verify)
@@ -53,11 +53,11 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  *  bei der Umstellung von Zeilen auf Zeichen (AGENTS.md 73.612, CLAUDE.md 18.068 Zeichen) +
  *  kleine Kopffreiheit. Das ist KEIN Aufweichen: das alte Zeilen-Budget hat die Größe nie
  *  gemessen. Im zweiten #1064-Slice wurde AGENTS.md auf ~24k Zeichen gekürzt
- *  (Langbegründung nach docs/agent-harness.md §3a) und das Budget auf 28.000 gezogen
+ *  (Langbegründung nach Factory-Seite docs/agent-harness.md §3a) und das Budget auf 28.000 gezogen
  *  (Ist + ~15 %, wie beim ersten Kalibrieren; Ratchet nach unten). Mit #1078 (Slice A1) sind
  *  die Nachschlage-Tabellen der CLAUDE.md on-demand nach docs/referenz/ gezogen; seit #1087 ist
  *  CLAUDE.md gelöscht (AGENTS.md wird nativ geladen) und ihr Eintrag entfallen – dass sie nicht
- *  zurückkehrt, bewacht test/harness/agents-md-native.test.ts.
+ *  zurückkehrt, bewacht (im Factory-Repo) test/harness/agents-md-native.test.ts.
  *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
 export const CONTEXT_BUDGETS = [
   { file: "AGENTS.md", budget: 28_000 },

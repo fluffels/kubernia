@@ -11,6 +11,7 @@ import { statSync } from "node:fs";
 import { homedir as osHomedir } from "node:os";
 import path from "node:path";
 import { ASSIGN_RE } from "./bash-parser.mjs";
+import { liegtUnter } from "./hook-io.mjs";
 import { SHELLS, WRAPPERS, baseName } from "./shell-tabellen.mjs";
 
 export { SHELLS, baseName };
@@ -99,6 +100,18 @@ export function makeCtx(cwd, deps) {
 export const real = (D) => [...D].filter((d) => d !== UNKNOWN);
 export const union = (...sets) => new Set(sets.flatMap((s) => [...s]));
 export const abs = (c, base, p) => c.P.resolve(base, fromMsysPath(p, c.platform));
+
+/**
+ * Liegt der statisch aufgelöste Pfad `p` nachweislich außerhalb des Session-Repos (`deps.repoRoot`, vom Entscheider gesetzt; fehlt er, gilt nichts als
+ * außerhalb)? Ein dort nicht existierendes Ziel kann weder Haupt-Checkout noch dessen Linked Worktree sein (#78 L1a): `git init <tmp> && git -C <tmp> commit`
+ * ist dann kein geschützter Ort. Rein lexikalisch (Symlinks/Junctions nicht aufgelöst): ein verlinkter Worktree außerhalb des Repo-Ordners zählt als außerhalb.
+ */
+export function ausserhalbRepo(c, p) {
+  const root = c.deps.repoRoot;
+  if (!root) return false;
+  const form = (x) => String(x).replace(/\\/g, "/");
+  return !liegtUnter(form(c.P.resolve(p)), form(c.P.resolve(root)), c.platform);
+}
 
 export function isDir(c, p) {
   try {

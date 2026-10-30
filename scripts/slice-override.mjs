@@ -34,6 +34,7 @@ export function commitZeilen(praefix, planer) {
     diffsizeOverride: `${praefix}Diffsize-Override`,
     diffcovOverride: `${praefix}Diffcov-Override`,
     lockfileOverride: `${praefix}Lockfile-Override`,
+    syncDringlich: `${praefix}Sync-Dringlich`,
   };
 }
 

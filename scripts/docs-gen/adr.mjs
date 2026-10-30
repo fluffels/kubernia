@@ -26,6 +26,25 @@ export function validIso(s) {
 
 export const german = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
 
+// Fortschreibungen als eigene Dateien (#1860, Kern #90): Namensform, Kopfzeile und Zeiger im ADR.
+const DATEI_NAME = /^(\d{4})-(\d+)-[a-z0-9-]+\.md$/;
+const DATEI_KOPF = /^# Fortschreibung #(\d+(?:\/#\d+)*) \(\d{4}-\d{2}-\d{2}\): \S/;
+
+/** Meldungen zu einer Fortschreibungs-Datei (Name, Kopfzeile, Zeiger im ADR). Pur, `adrs` = Dateinamen und Texte der ADRs. */
+export function fortschreibungsFehler(name, text, adrs) {
+  const m = DATEI_NAME.exec(name);
+  if (!m) return [`${name}: Name muss <NNNN>-<ticket>-<slug>.md sein`];
+  const [, adrNr, ticket] = m;
+  const fehler = [];
+  const adrName = Object.keys(adrs).find((n) => n.startsWith(`${adrNr}-`));
+  if (!adrName) return [`${name}: kein ADR ${adrNr}`];
+  const kopf = DATEI_KOPF.exec(text.split(/\r?\n/).find((l) => l.startsWith("# ")) ?? "");
+  if (!kopf) fehler.push(`${name}: erste Überschrift muss "# Fortschreibung #<nr> (JJJJ-MM-TT): <Titel>" lauten`);
+  else if (kopf[1].split("/#")[0] !== ticket) fehler.push(`${name}: Ticket der Kopfzeile (#${kopf[1].split("/#")[0]}) passt nicht zum Dateinamen (#${ticket})`);
+  if (!adrs[adrName].includes(`fortschreibungen/${name}`)) fehler.push(`${name}: ${adrName} enthält keinen Zeiger "fortschreibungen/${name}"`);
+  return fehler;
+}
+
 /** Kopf = alles von der H1 bis vor die erste `## `-Überschrift. */
 function head(text) {
   const i = text.search(/^## /m);

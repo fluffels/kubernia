@@ -1,0 +1,76 @@
+name: Factory-Update (Wochenlauf)
+
+# Meldet einmal pro Woche, wenn die Factory einen neueren Release-Tag hat als der Sync-Stand dieses Projekts (scripts/factory-update-check.mjs).
+# Bei einem Treffer entsteht ein Issue "🔄 Factory-Update" oder, wenn es offen ist, ein Kommentar darauf (Dedupe über den Titel wie in
+# dependabot-inbox.yml). Das Board übernimmt board-takt, darum kein PROJECT_TOKEN. Ohne Sync-Stand (Quelle selbst) tut der Lauf nichts; ist das
+# Factory-Repo nicht lesbar, warnt er und bleibt grün.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: factory-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  update:
+    name: "Factory-Update: neuer Release melden"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repo auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # labels.dependabotInbox (nicht labels.harness) ist das Inbox-Label: das Issue entsteht im eigenen Repo, ein Bezieher setzt
+      # labels.harness evtl. auf ein fremdes Board; pruefeInboxZiel (projekt-config-lib.mjs) sichert, dass es nicht dorthin führt.
+      - name: Label der Meldung aus der Projekt-Config lesen
+        id: label
+        run: |
+          if ! wert=$(node scripts/projekt-config.mjs labels.dependabotInbox); then
+            echo "::error::labels.dependabotInbox fehlt oder .factory/projekt.json ist ungültig (Fix: Schlüssel in .factory/projekt.json eintragen)"
+            exit 1
+          fi
+          echo "wert=$wert" >> "$GITHUB_OUTPUT"
+
+      - name: Neuen Release prüfen und melden
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MELDE_LABEL: ${{ steps.label.outputs.wert }}
+        run: |
+          set -uo pipefail
+          marker="🔄 Factory-Update"
+          json=$(node scripts/factory-update-check.mjs --json)
+          code=$?
+          if [ "$code" -eq 3 ]; then
+            echo "::warning::Factory-Repo nicht lesbar, Update-Prüfung übersprungen (Fix: Lesezugriff des Tokens auf das Factory-Repo prüfen)"
+            exit 0
+          fi
+          if [ "$code" -ne 0 ]; then
+            echo "::error::factory-update-check.mjs Exit $code (Fix: Ausgabe oben lesen)"
+            exit 1
+          fi
+          text=$(printf '%s' "$json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const u=JSON.parse(s).update;process.stdout.write(u?u.text:"")})')
+          if [ -z "$text" ]; then
+            echo "Kein neuer Factory-Release."
+            exit 0
+          fi
+          existing=$(gh issue list --repo "$REPO" --state open --label "$MELDE_LABEL" --limit 1000 \
+            --json number,title --jq "[.[] | select(.title | startswith(\"$marker\"))][0].number // empty")
+          if [ -n "$existing" ]; then
+            echo "Bestehende Meldung #$existing, ergänze per Kommentar."
+            gh issue comment "$existing" --repo "$REPO" --body "$text"
+          else
+            gh issue create --repo "$REPO" --title "$marker" --label "$MELDE_LABEL" \
+              --body "$(printf '%s\n\nAblauf: Factory-Repo auf den Tag auschecken, dann den Sync-Befehl oben mit dem Pfad dieses Checkouts fahren, Diff prüfen und per PR mergen.' "$text")"
+          fi

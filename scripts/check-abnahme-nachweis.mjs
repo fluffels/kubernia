@@ -30,6 +30,8 @@ import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nach
 import { ladeProjektConfig, spracheAus, trenneConfigArg, umgebungsWert, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+import { fileURLToPath } from "node:url";
 
 /** Schließ-Referenzen eines PR-Bodys: verschiedene Ticketnummern zu close/fix/resolve (alle Beugungen, Groß-/Kleinschreibung egal, optional `:`). Pur. */
 export function verknuepfteTickets(body) {
@@ -42,9 +44,10 @@ export function vertrauterMarker(kommentare, owner, zeilen) {
   return vertrauteAbnahmeMarker(kommentare, owner, zeilen).at(-1) ?? null;
 }
 
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 const menge = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).sort().join(",");
 
-/** Die Vorlage für die Fehlerausgabe (Format: docs/agent-harness.md §3a). */
+/** Die Vorlage für die Fehlerausgabe (Format: Factory-Seite docs/agent-harness.md §3a). */
 const vorlage = (zeilen) =>
   `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>`;
 
@@ -207,7 +210,8 @@ function main(argv = process.argv.slice(2)) {
   }
   console.error("✖ Abnahme-Nachweis fehlt oder ist ungültig (ADR 0022 F13):");
   for (const f of r.fehler) console.error(`  - ${f}`);
-  console.error("\nNach bestandener Holdout-Abnahme setzt der Umsetzer einen leeren Commit mit der Zeile (Format: docs/agent-harness.md §3a); Override: Schlüssel `abnahmeOverride` der Commit-Zeilen, `#<nr> <warum>`.");
+  const seite = factorySeiteIn(WURZEL, "docs/agent-harness.md", "3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd");
+  console.error(`\nNach bestandener Holdout-Abnahme setzt der Umsetzer einen leeren Commit mit der Zeile (Format: ${seite}); Override: Schlüssel \`abnahmeOverride\` der Commit-Zeilen, \`#<nr> <warum>\`.`);
   process.exit(1);
 }
 

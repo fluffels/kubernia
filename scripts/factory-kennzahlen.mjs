@@ -21,7 +21,7 @@ import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { REPO } from "./board-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { claimNummer, median } from "./mess-lib.mjs";
-import { PRODUKT_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, istHarnessCommit, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./produktquote-lib.mjs";
+import { PRODUKT_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, holeQuotenCommits, istHarnessCommit, quotenCommitLeser, quotenQuellen, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./produktquote-lib.mjs";
 import { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } from "./nachweis-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
@@ -320,7 +320,7 @@ function ladeHarnessIssues({ gh, repo, config, configFehler, seit }) {
  * Lädt die Rohdaten des Selbst-Audits mit drei gh-Aufrufen (Sammeltickets mit `--limit`, Commits von main seit deren letztem Abschluss und geschlossene Harness-Issues ab dann minus 1 Tag, paginiert;
  * keine Modell-Tokens). `gh` ist injizierbar. Ein Ladefehler wird zur Lücke mit Grund (`commitsLuecke`, bei den Harness-Issues `harnessLuecke`), nie zu leeren Daten.
  */
-export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = null, configFehler = null } = {}) {
+export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = null, configFehler = null, env = process.env } = {}) {
   let issues;
   try {
     issues = gh(["issue", "list", "--repo", repo, "--state", "all", "--search", "in:title \"gesammelt\"", "--json", "number,title,state,closedAt,assignees", "--limit", "200"]);
@@ -333,8 +333,12 @@ export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = nul
   const rest = { sammelAbschluss, sammelIssues: stand.sammelIssues, sammelInArbeit: stand.inArbeit };
   const harnessSeit = new Date(Date.parse(since) - TAG_MS).toISOString();
   try {
-    const seiten = gh(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${since}&per_page=100`]);
-    const commits = seiten.flat().filter((c) => !gueltig(c?.commit?.committer?.date) || Date.parse(c.commit.committer.date) <= Date.parse(bis));
+    // Nach einem Umzug des Factory-Boards (#78) zählen die Commits beider Repos; ein fremdes Repo liest der Projekt-Token.
+    const alle = holeQuotenCommits({
+      quellen: quotenQuellen({ config, repo }),
+      lies: quotenCommitLeser({ gh, repo, since, env }),
+    });
+    const commits = alle.filter((c) => !gueltig(c?.commit?.committer?.date) || Date.parse(c.commit.committer.date) <= Date.parse(bis));
     return { commits, ...rest, ...ladeHarnessIssues({ gh, repo, config, configFehler, seit: harnessSeit }) };
   } catch (err) {
     return { commits: null, commitsLuecke: `Commits von main nicht ladbar: ${fehlerText(err, 200)}`, ...rest };

@@ -209,7 +209,8 @@ export function pruefeMermaid(text, was = "Diagramm") {
   if (kanten > MERMAID_MAX_KANTEN) throw new Error(`${was}: ${kanten} Kanten, Mermaid rendert höchstens ${MERMAID_MAX_KANTEN}`);
 }
 
-const MARKER = /^(\s*)<!-- GEN:([a-z0-9][a-z0-9-]*) (START|END) -->\s*$/;
+/** Zeile eines `GEN:`-Markers (Gruppen: Einrückung, Name, START|END); Wächter-Tests nutzen sie, statt sie nachzubauen. */
+export const GEN_MARKER = /^(\s*)<!-- GEN:([a-z0-9][a-z0-9-]*) (START|END) -->\s*$/;
 
 /** Findet `GEN:`-Abschnitte; Zeilen in Code-Fences zählen nicht. Zeilen sind 0-basiert. */
 export function parseSections(text) {
@@ -220,7 +221,7 @@ export function parseSections(text) {
   const imFence = fenceMaske(lines);
   lines.forEach((line, i) => {
     if (imFence[i]) return;
-    const m = MARKER.exec(line);
+    const m = GEN_MARKER.exec(line);
     if (!m) {
       if (line.trimStart().startsWith("<!-- GEN:"))
         errors.push({ section: "?", message: `Zeile ${i + 1}: unlesbarer GEN-Marker "${line.trim()}"` });

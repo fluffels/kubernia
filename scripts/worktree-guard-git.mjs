@@ -9,7 +9,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { MAX_INTERPRETER } from "./hook-io.mjs";
-import { GIT_GLOBAL_MIT_WERT, KNOWN_SUBS, PROTECTED_SUBS, abs, ask, isDir, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
+import { GIT_GLOBAL_MIT_WERT, KNOWN_SUBS, PROTECTED_SUBS, abs, ask, ausserhalbRepo, isDir, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
 
 // Die vier Optionen mit eigener Auswertung (-C, -c, --git-dir, --work-tree) behandelt gitOption selbst; der Rest der Tabelle nimmt nur einen Wert.
 const VALUE_OPTS = [...GIT_GLOBAL_MIT_WERT].filter((o) => !["-C", "-c", "--git-dir", "--work-tree"].includes(o));
@@ -82,8 +82,9 @@ function folgeC(c, g, b, out, st) {
       continue;
     }
     const n = abs(c, cur, t);
-    if (t !== w.text || !isDir(c, n)) {
-      out.add(cur); // `~` oder nicht existierendes Ziel: zusätzlich Ausgangsort und Session-cwd
+    // `~` oder nicht existierendes Ziel: zusätzlich Ausgangsort und Session-cwd; ein fehlendes Ziel außerhalb des Repos ist kein geschützter Ort (#78 L1a)
+    if (t !== w.text || (!isDir(c, n) && !ausserhalbRepo(c, n))) {
+      out.add(cur);
       out.add(c.cwd);
     }
     cur = n;

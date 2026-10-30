@@ -6,7 +6,7 @@ name: Interne Bezüge im PR-Text
 #
 # Hinweis: Required-Check im Ruleset „main-schutz“ (Stand 2026-10-06, #1303). Der Jobname ist ASCII
 # und bleibt wortgleich: wer ihn ändert, zieht Ruleset und den Spiegel .github/ruleset-main-schutz.json
-# (Quelle des Shadowing-Wächters test/harness/required-check-shadowing.test.ts) nach.
+# (Quelle des Shadowing-Wächters test/harness/required-check-shadowing.test.ts, im Factory-Repo) nach.
 #
 # Design:
 #   - Trigger inkl. `edited`, damit auch ein nachträglich geänderter Titel/Body geprüft wird.
@@ -31,10 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Node einrichten
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
 

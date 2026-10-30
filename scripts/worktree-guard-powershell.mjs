@@ -23,7 +23,8 @@
  *    bekannte Variable das Kommando auf (`$g='git'; & $g commit`, `$b='bash'; & $b -c '…'`), eine nicht auflösbare wird bei
  *    `git … commit|push` im Statement fail-closed geblockt.
  *  - Interpreter-Umwege (`iex`, `Invoke-Expression`, `pwsh -c`, `cmd /c`, `bash -c`, `Start-Process`): grobe
- *    Regel gegen den aktuellen Ort, sobald im Statement `git … commit|push` vorkommt.
+ *    Regel gegen den aktuellen Ort, sobald im Statement `git … commit|push` vorkommt. Dasselbe für Skript-Laufzeiten (`node -e`, `python -c` …):
+ *    Text in Interpreter-Code wird nicht geparst (auch `console.log('git commit')` zählt dann als Aufruf), der Bash-Pfad verhält sich gleich (grobes Netz; dort für jedes Kommando außer reinen Text-Kommandos).
  *
  * Fail-closed in genau einem Fall: ein Ziel mit nicht auflösbarer Variable/Ausdruck (`-C $unbekannt`,
  * `cd (Join-Path …)`) bei commit/push wird geblockt, mit dem Hinweis, den Pfad literal zu schreiben. Sonst
@@ -46,6 +47,8 @@ export { parseHookInput };
 
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
 const INTERPRETER = new Set([...INTERPRETER_NAMEN.flatMap((n) => [n, `${n}.exe`]), "iex", "invoke-expression", "wsl", "start-process", "start", "invoke-command", "icm"]);
+// Skript-Laufzeiten: ihr Code-Text wird nicht geparst; wie im Bash-Pfad (grobes Netz) zählt ein Wortpaar git … commit|push darin als Aufruf (#97 L11m).
+const LAUFZEITEN = new Set(["node", "nodejs", "python", "python3", "py", "perl", "ruby", "deno", "bun", "php"].flatMap((n) => [n, `${n}.exe`]));
 const GESCHUETZT = new Set(["commit", "push"]);
 
 /** Ein Token: `value` ohne Anführungszeichen, `literal` = komplett aus '…' (keine Variablen-Ersetzung). */
@@ -372,7 +375,7 @@ function statement(k, stmt) {
     return null;
   }
   if (kopfTok && istGit(kopfWert)) return gitStatement(k, toks.slice(aufruf ? 2 : 1));
-  if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) return interpreterUmweg(k, stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
+  if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd)) || LAUFZEITEN.has(basename(cmd).toLowerCase())) return interpreterUmweg(k, stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
   return null;
 }
 

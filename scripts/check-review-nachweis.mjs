@@ -42,6 +42,8 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { trenneConfigArg } from "./projekt-config-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
 import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
@@ -52,10 +54,11 @@ export { parseNachweis };
 // Die Cap-Konstanten leben in nachweis-lib.mjs (auch das Abnahme-Gate nennt sie); hier bleibt der Export für Aufrufer und Tests.
 export { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE };
 
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
 export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
 
-/** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: docs/agent-harness.md §3a); Schlüssel und Planer aus `zeilen`. */
+/** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: Factory-Seite docs/agent-harness.md §3a); Schlüssel und Planer aus `zeilen`. */
 export const vorlage = (zeilen) =>
   `${zeilen.plan}: ${zeilen.planer}\n` +
   `${zeilen.review}: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
@@ -275,7 +278,7 @@ function main(argv = process.argv.slice(2)) {
   console.error("✖ Review-/Plan-Nachweis fehlt oder ist ungültig (#1270):");
   for (const f of r.fehler) console.error(`  - ${f}`);
   console.error(
-    `\nNach Konvergenz des Reviews einen leeren Nachweis-Commit setzen (Format: docs/agent-harness.md §3a), ` +
+    `\nNach Konvergenz des Reviews einen leeren Nachweis-Commit setzen (Format: ${factorySeiteIn(WURZEL, "docs/agent-harness.md", "3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd")}), ` +
       `beide Zeilen in einer Commit-Message:\nVorlage:\n${vorlage(zeilen).replace(/^/gm, "  ")}\n` +
       `Bewusste Ausnahme (z.B. Revert-PR) mit Pflicht-Begründung: ${zeilen.reviewOverride}: #<nr> <warum>`,
   );

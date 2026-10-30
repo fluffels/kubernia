@@ -5,6 +5,7 @@
  * Wächter `test/harness/gh-cli.test.ts` verbietet einen direkten `execFileSync("gh"` außerhalb dieser Datei.
  */
 import { execFileSync } from "node:child_process";
+import { gleichesRepo } from "./projekt-config-lib.mjs";
 
 /** Standard-Puffer: Seiten von `gh api --paginate` und Lauflisten sind groß. */
 export const GH_MAX_BUFFER = 256 * 1024 * 1024;
@@ -49,3 +50,28 @@ export function fehlerMeldung(err, { praefix = "", zusatz = "", max } = {}) {
 
 /** Wie `ghText`, die Ausgabe als JSON geparst. */
 export const ghJson = (args, opts = {}) => JSON.parse(ghText(args, opts));
+
+/**
+ * Pur (#76): erkennt einen Fehlschlag wegen fehlender Schreibrechte auf `repo` und liefert die klare Meldung, sonst `null`. Bekannte Muster:
+ * `HTTP 403`, `HTTP 404` (GitHub verbirgt ein Repo ohne Zugriff), `Resource not accessible by integration`, `Must have admin rights`.
+ * Grenze: andere Wortlauten (etwa bei einem anderen Fehlerformat von `gh`) erkennt sie nicht und gibt `null` zurück: der Aufrufer meldet dann den Rohtext.
+ */
+export function schreibrechtText(err, repo, art = "schreiben") {
+  const text = fehlerText(err);
+  if (!/HTTP (403|404)|Resource not accessible by integration|Must have admin rights/i.test(text)) return null;
+  const kurz = text.replace(/\s+/g, " ").slice(0, 200);
+  if (art === "lesen") return `kein Lesezugriff auf ${repo} (${kurz}): der Token braucht Lesezugriff auf die Issues im Ziel-Repo (Projekt-Token, \`PROJECT_TOKEN\`)`;
+  return `keine Schreibrechte auf ${repo} (${text.replace(/\s+/g, " ").slice(0, 200)}): der Token braucht Issues-Schreibrecht im Ziel-Repo; nichts im eigenen Repo angelegt`;
+}
+
+/**
+ * Pur (#78): der Token für Aufrufe gegen das Ziel-Repo `ziel`. Ein fremdes Repo (≠ `eigenes`) braucht `PROJECT_TOKEN` (der Actions-`github.token` gilt nur im eigenen Repo);
+ * gleiches Repo oder kein Token: `undefined`, dann gilt `GH_TOKEN`/der Standard.
+ */
+export const tokenFuerZiel = ({ ziel, eigenes, env }) => (!gleichesRepo(ziel, eigenes) && env.PROJECT_TOKEN ? env.PROJECT_TOKEN : undefined);
+
+/** Pur (#76): die Labels aus `labels`, die die Antwort eines Issue-POST nicht trägt (ein öffentliches Repo legt das Issue für Nicht-Mitarbeiter an und verwirft die Labels still). */
+export function fehlendeLabels(antwort, labels) {
+  const da = new Set((Array.isArray(antwort?.labels) ? antwort.labels : []).map((l) => (typeof l === "string" ? l : l?.name)));
+  return labels.filter((l) => !da.has(l));
+}

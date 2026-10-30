@@ -3,7 +3,7 @@
  * Holdout-Abnahme, Auswertung (ADR 0022 F13): ein Abnahme-Agent (`holdout-abnahme`) prüft das Ergebnis eines Tickets gegen dessen
  * Akzeptanzkriterien und schreibt je Kriterium ein Urteil in einen Bericht. Dieses Skript nummeriert die Kriterien, prüft den Bericht,
  * schreibt die Spur als PR-Kommentar und entscheidet über bestanden, Fix-Runde oder Hand-off. Format der Zeile und der Marker: nachweis-lib.mjs
- * (`formatAbnahme`, `formatAbnahmeMarker`), Beschreibung: docs/agent-harness.md §3a.
+ * (`formatAbnahme`, `formatAbnahmeMarker`), Beschreibung: Factory-Seite docs/agent-harness.md §3a.
  *
  *   node scripts/abnahme.mjs kriterien <nr>   (Kriterien mit Präfix `Nach dem Merge:` stehen als „(nach dem Merge, nicht prüfen)“ da)
  *   node scripts/abnahme.mjs auswerten <nr> --pr <pr> --bericht <datei> --worktree <pfad> --head <sha>

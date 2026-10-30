@@ -21,6 +21,11 @@
  *      existierende Datei/ein Verzeichnis.
  *   4. Tote Anker: jeder `#anker` (gleiche Datei oder auf eine .md) trifft eine
  *      real vorhandene Überschrift (GitHub-Slug-Regel).
+ *   7. Tote Test-Pfade (#97): jeder Backtick-Token `test/…` existiert (ADRs und Dateien mit
+ *      Datum im Namen ausgenommen; nackte Dateinamen und Markdown-Links prüft das nicht).
+ *      Im Bezieher (gültiger Sync-Stand, lesbares Manifest) prüft das Gate einen Verweis aus
+ *      verteiltem Factory-Besitz (Ganz-Datei- und Block-Einheiten, keine JSON-Schlüssel) nur,
+ *      wenn das Ziel selbst Besitz ist; Projekt-Text bleibt voll geprüft (#110).
  *
  * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-docmap.mjs/
  * check-size.mjs: läuft plattformübergreifend über `npm run check:docdrift` und
@@ -32,11 +37,14 @@
 
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions } from "./docs-gen/markdown.mjs";
+import { collectHeadingSlugs, leseConfigObjekt, linkStellen, linkZiel, parseNpmRunMentions } from "./docs-gen/markdown.mjs";
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
+import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
+import { istGanzeDatei, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
+import { liesSyncStand } from "./factory-sync-lib.mjs";
 
 // Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
 export { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
@@ -189,7 +197,75 @@ export function auditDocDrift(rootDir = ROOT) {
   // 5. verify-Ketten-Drift: dokumentierte typecheck→…→test-Sequenzen gegen echte Kette.
   const verifyChainViolations = auditVerifyChain(rootDir, mdFiles, content, pkg.scripts ?? {});
 
-  return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations };
+  return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations, fortschreibungsFehler: auditFortschreibungen(rootDir), testPfadFehler: auditTestPfade(rootDir, mdFiles, content) };
+}
+
+/** Manifest der Besitz-Einheiten (Vorbild check-factory-drift.mjs). */
+const BESITZ_MANIFEST = ".factory/besitz.json";
+
+/** Textspannen der verteilten Einheiten für `file`: Ganz-Datei = alles, Block = zwischen den Markern; JSON-Schlüssel entfallen. */
+function einheitSpannen(einheiten, file, text) {
+  const spannen = [];
+  for (const e of einheiten.filter((x) => x.pfad === file)) {
+    if (istGanzeDatei(e)) spannen.push([0, text.length]);
+    else if (e.block !== undefined) {
+      const a = text.indexOf(markerStart(e.block));
+      const b = text.indexOf(markerEnde(e.block));
+      if (a >= 0 && b >= 0) spannen.push([a, b]); // a > b: leere Spanne, weil Fenster `>= a && <= b`
+    }
+  }
+  return spannen;
+}
+
+/** Bezieher-Ausnahme (#110): `null` = volle Prüfung (Factory-Repo, kaputter Sync-Stand, fehlendes oder kaputtes Manifest; fail-closed), sonst `{ spannen(file, text), istZiel(pfad) }`. */
+function besitzAusnahme(rootDir) {
+  if (liesSyncStand(rootDir).zustand !== "ok") return null;
+  let einheiten;
+  try {
+    const manifest = JSON.parse(readFileSync(join(rootDir, ...BESITZ_MANIFEST.split("/")), "utf8"));
+    einheiten = manifest.eintraege.filter(wirdVerteilt); // kein Array: wirft, fail-closed
+  } catch {
+    return null;
+  }
+  const istZiel = (pfad) => einheiten.some((e) => (istGanzeDatei(e) && e.pfad === pfad) || e.pfad.startsWith(pfad.endsWith("/") ? pfad : `${pfad}/`));
+  return { spannen: (file, text) => einheitSpannen(einheiten, file, text), istZiel };
+}
+
+/** 7. Test-Pfade (#97): ein Backtick-Token `test/…` in der Doku muss existieren (Datei oder Ordner). Suffix `#…`/`:<zeile>` wird abgeschnitten, Platzhalter-Tokens (`<`, `*`, `{`) übersprungen. Ausgenommen: ADRs (Historie) und Dateien mit Datum im Namen. Im Bezieher (#110, `besitzAusnahme`) zählt ein Verweis aus verteilter Besitz-Einheit nur, wenn das Ziel selbst Besitz ist; Grenze: nur Ganz-Datei- und Block-Einheiten, JSON-Schlüssel-Einheiten nicht. Grenzen: der Testordner ist fest `test/`, der Datumsausschluss ist eine Heuristik (jedes Datum im Pfad), nackte Dateinamen und Markdown-Links prüft das nicht (Links: deadLinks). */
+function auditTestPfade(rootDir, mdFiles, content) {
+  const adrPrefix = `${adrOrdner(rootDir)}/`;
+  const ausnahme = besitzAusnahme(rootDir);
+  const fehler = [];
+  for (const f of mdFiles) {
+    if (f.startsWith(adrPrefix) || /\d{4}-\d{2}-\d{2}/.test(f)) continue;
+    const text = content.get(f);
+    const spannen = ausnahme ? ausnahme.spannen(f, text) : [];
+    for (const m of text.matchAll(/`(test\/[^`\s]*)`/g)) {
+      const pfad = m[1].replace(/[#:].*$/, "");
+      if (/[<*{]/.test(pfad) || existsSync(join(rootDir, pfad))) continue;
+      if (spannen.some(([a, b]) => m.index >= a && m.index <= b) && !ausnahme.istZiel(pfad)) continue;
+      fehler.push({ file: f, pfad });
+    }
+  }
+  return fehler;
+}
+
+/** ADR-Ordner aus scripts/docs-gen/config.json › adr.ordner (#97); ohne Config oder Eintrag `docs/adr`. Eine kaputte Config (kein JSON, kein Objekt) wirft eine Meldung (`leseConfigObjekt`). */
+function adrOrdner(rootDir) {
+  const cfg = "scripts/docs-gen/config.json";
+  const wert = existsSync(join(rootDir, cfg)) ? leseConfigObjekt(rootDir, cfg, "Doku-Generator-Config").adr?.ordner : undefined;
+  return typeof wert === "string" && wert !== "" ? wert : "docs/adr";
+}
+
+/** 6. ADR-Zeiger (#90): jede `*.md` unter docs/adr/fortschreibungen/ hat Namen, Kopfzeile und Zeiger im ADR; fehlt der Ordner, entfällt die Prüfung. */
+function auditFortschreibungen(rootDir) {
+  const adrDir = join(rootDir, adrOrdner(rootDir));
+  const unter = join(adrDir, "fortschreibungen");
+  if (!existsSync(unter)) return [];
+  const adrs = Object.fromEntries(readdirSync(adrDir).filter((n) => /^\d{4}-.*\.md$/.test(n)).map((n) => [n, readFileSync(join(adrDir, n), "utf8")]));
+  return readdirSync(unter)
+    .filter((n) => isMd(n) && n !== "README.md")
+    .flatMap((n) => fortschreibungsFehler(n, readFileSync(join(unter, n), "utf8"), adrs));
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────────
@@ -199,7 +275,14 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
 
-  const { mdFiles, deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations } = auditDocDrift();
+  let audit;
+  try {
+    audit = auditDocDrift();
+  } catch (e) {
+    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
+    process.exit(1);
+  }
+  const { mdFiles, deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations, fortschreibungsFehler: adrFehler, testPfadFehler } = audit;
 
   let bad = false;
   for (const c of deadCommands) {
@@ -229,6 +312,16 @@ function main() {
         `✖ Veraltete verify-Kette in ${v.file}${v.missing.length ? ` — fehlende Gates: ${v.missing.join(", ")}` : ""}${v.extra.length ? ` — überzählige Gates: ${v.extra.join(", ")}` : ""}. Auf den Verweis „package.json › scripts.verify“ umstellen oder die Kette angleichen.`,
       ),
     );
+  }
+
+  for (const f of adrFehler) {
+    bad = true;
+    console.error(red(`✖ ADR-Fortschreibung: ${f}. Fix: Zeiger auf die Datei im ADR ergänzen bzw. Name und Kopfzeile angleichen.`));
+  }
+
+  for (const t of testPfadFehler) {
+    bad = true;
+    console.error(red(`✖ Toter Test-Pfad: „${t.pfad}" in ${t.file} existiert nicht. Auf einen vorhandenen Wächter umzeigen oder den Testbezug streichen.`));
   }
 
   if (bad) {

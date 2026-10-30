@@ -1,6 +1,7 @@
 // Gemeinsame Bausteine der Mess-Skripte (token-baseline, subagent-laufzeit, hauptchat-zerlegung, kontext-treiber,
 // lauf-ergebnis): Median, Cache-Pausen-Schwellen, Ticketnummer und Ticketfilter stehen genau einmal hier, damit die
 // Skripte nicht auseinanderlaufen.
+import { repoSegment } from "./arbeitsplatz-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 
 /** Median einer Zahlenliste (gerade Anzahl: Mittel der beiden mittleren), nicht endliche Werte ignoriert, `null` bei leerer Liste. */
@@ -33,7 +34,7 @@ export function istNeuaufbau({ gapMs, pauseMs, call }) {
 
 
 /** Kern des Worktree-Pfads `/.claude/worktrees/<praefixe.worktree><nr>…` (Regex-Quelltext) zum Präfix aus der Projekt-Config: `bereinige` und `normPfad` nutzen dieselbe Regel. */
-const worktreeKern = (worktree) => String.raw`/\.claude/worktrees/${escapeRegex(worktree)}\d+[\w-]*`;
+const worktreeKern = (worktree) => String.raw`/\.claude/worktrees/${repoSegment(escapeRegex(worktree), "/")}${escapeRegex(worktree)}\d+[\w-]*`;
 
 /** Beide Schreibweisen einer Repo-Wurzel (`C:/x/y` und Git-Bash `/c/x/y`) als Regex-Alternativen. */
 function wurzelVarianten(wurzel) {

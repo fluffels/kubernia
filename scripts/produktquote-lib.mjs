@@ -6,7 +6,8 @@
  */
 import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
-import { zerlegeRepo } from "./projekt-config-lib.mjs";
+import { fehlerText, tokenFuerZiel } from "./gh-cli.mjs";
+import { gleichesRepo, repoDerRolle, zerlegeRepo } from "./projekt-config-lib.mjs";
 
 /** Produktquote (#1425): höchstens 1 Harness-Ticket auf so viele Produkt-Tickets. */
 export const PRODUKT_QUOTE = 3;
@@ -67,6 +68,8 @@ const istBot = (c) => /\[bot\]$/i.test(String(c?.author?.login ?? ""));
  * PR, die 11 mit einer Nummer sind Dependabot, keiner ist ohne; der Scope-Rückfall greift praktisch nie).
  */
 export function istHarnessCommit(commit, harnessIssues = null) {
+  if (commit?.quellRolle === "harness") return true;
+  if (commit?.quellRolle === "produkt") return false;
   const kopf = String(commit?.commit?.message ?? "").split(/\r?\n/, 1)[0];
   const refs = commitRefs(commit);
   if (harnessIssues && refs.length > 0) return refs.some((n) => harnessIssues.has(n));
@@ -85,7 +88,44 @@ export function commitRefs(commit) {
  */
 export function zaehleTaktMerges(commits, seit = null, sammelIssues = new Set()) {
   if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
-  return zaehleTicketMerges(commits.filter((c) => !commitRefs(c).some((n) => sammelIssues.has(n))), seit);
+  return zaehleTicketMerges(commits.filter((c) => c?.quellRolle === "produkt" || !commitRefs(c).some((n) => sammelIssues.has(n))), seit);
+}
+
+/**
+ * Pur (#78): die Repos, aus deren main Quote und Takt zählen. Führen Produkt- und Factory-Board verschiedene Repos (`boards[].repo`), sind es beide
+ * mit ihrer Rolle (`{ repo, rolle: "harness" | "produkt" }`: ein Commit aus dem Repo des Factory-Boards ist Harness, aus dem des Produkt-Boards
+ * Produkt; Ticketnummern sind nur je Repo eindeutig). Sonst das eigene Repo ohne Rolle (`rolle: null`, die Nummernregel `istHarnessCommit` gilt).
+ */
+export function quotenQuellen({ config, repo }) {
+  const eigen = { repo: config?.repo ?? repo };
+  const von = (rolle) => repoDerRolle(rolle, { ...config, repo: eigen.repo });
+  const factory = von("factory");
+  const produkt = von("produkt");
+  if (typeof factory === "string" && typeof produkt === "string" && !gleichesRepo(factory, produkt)) return [{ repo: factory, rolle: "harness" }, { repo: produkt, rolle: "produkt" }];
+  return [{ repo, rolle: null }];
+}
+
+/**
+ * Pur (#97): der `lies(repo)` für `holeQuotenCommits`: die Commits von main seit `since` über `gh api` (`gh(args, { token })`), je Repo mit dem Token des
+ * Ziels (`tokenFuerZiel`: ein fremdes Repo liest der Projekt-Token). `env` kommt vom Aufrufer (kein verstecktes `process.env`).
+ */
+export const quotenCommitLeser = ({ gh, repo, since, env }) => (r) =>
+  gh(["api", "--paginate", "--slurp", `repos/${r}/commits?sha=main&since=${since}&per_page=100`], { token: tokenFuerZiel({ ziel: r, eigenes: repo, env }) }).flat();
+
+/**
+ * Die Commits von main aller Quellen (`quotenQuellen`), je mit der Rolle ihres Repos als `quellRolle` gekennzeichnet. `lies(repo)` liefert die
+ * Commit-Liste eines Repos. Fail-closed: scheitert ein Repo, wirft sie mit dem Repo im Text, nie eine Teilmenge (die Quote wäre sonst falsch).
+ */
+export function holeQuotenCommits({ quellen, lies }) {
+  return quellen.flatMap(({ repo, rolle }) => {
+    let commits;
+    try {
+      commits = lies(repo);
+    } catch (err) {
+      throw new Error(`Commits von ${repo} nicht lesbar: ${fehlerText(err, 200)}`, { cause: err });
+    }
+    return rolle === null ? commits : commits.map((c) => ({ ...c, quellRolle: rolle }));
+  });
 }
 
 /**

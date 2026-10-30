@@ -38,6 +38,7 @@ const configStruktur = () => strukturAus(ladeProjektConfig());
  *  `rootDir` überschreibbar, damit der Test deterministisch dasselbe Repo misst;
  *  `struktur` ohne Angabe aus der Projekt-Config. */
 export function parseDeepDocMaps(rootDir = ROOT, struktur = configStruktur()) {
+  if (struktur.moduldoku === null) return new Set(); // Opt-out (`struktur.moduldoku: null`): keine Tiefendocs
   const docsDir = join(rootDir, ...struktur.moduldoku.split("/"));
   const muster = new RegExp("`(" + escapeRegex(struktur.quelle) + "/[^`]+\\.ts)`", "g");
   const covered = new Set();
@@ -70,6 +71,7 @@ export function collectSrcModules(rootDir = ROOT, quelle = configStruktur().quel
 
 /** Vergleicht Tiefendocs gegen Code. Gibt strukturierte Befunde zurück (leere Arrays = ok). */
 export function auditDocMap(rootDir = ROOT, struktur = configStruktur()) {
+  if (struktur.moduldoku === null) return { entfaellt: true, modules: [], ghosts: [], orphans: [], staleAllowlist: [] }; // Opt-out: das Gate entfällt
   const modules = collectSrcModules(rootDir, struktur.quelle);
   const moduleSet = new Set(modules);
   const allowed = new Set(ORPHAN_ALLOWLIST);
@@ -100,6 +102,10 @@ function main() {
   } catch (e) {
     console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);
+  }
+  if (struktur.moduldoku === null) {
+    console.log("check:docmap entfällt (struktur.moduldoku: null)");
+    return;
   }
   const { modules, ghosts, orphans, staleAllowlist } = auditDocMap(ROOT, struktur);
   if (modules.length === 0) {

@@ -38,6 +38,7 @@ import {
   union,
   ASSIGN_RE,
   baseName,
+  ausserhalbRepo,
 } from "./worktree-guard-tabellen.mjs";
 
 // ── Listen, Ketten, Pipelines ───────────────────────────────────────────────
@@ -151,6 +152,9 @@ function cdStatisch(c, text, D) {
     if (isDir(c, dir)) {
       S.add(dir);
       c.seen.add(dir);
+    } else if (ausserhalbRepo(c, dir)) {
+      S.add(dir); // fehlendes Ziel außerhalb des Repos (`mkdir x && cd x`): gelingt das cd, läuft der Nachfolger dort (#78 L1a); misslingt es, gilt F
+      F.add(el);
     } else {
       S.add(el);
       F.add(el); // fehlendes Ziel: konservativ, der Nachfolger läuft gegen die unveränderte Menge

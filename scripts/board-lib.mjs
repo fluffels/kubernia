@@ -9,7 +9,8 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { BOARD_ROLLEN, boardPfad, labelAus, ladeProjektConfig, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, gleichesRepo, ladeProjektConfig, repoAusUrl, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { brauchtRepo } from "./board-plan-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { AUFRUF_EXIT } from "./flag-lib.mjs";
 
@@ -37,12 +38,11 @@ export function boardFuerRolle(rolle) {
   return Object.freeze({ ...b });
 }
 
-/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Ohne Liste, ohne `config` oder ohne Schlüssel wirft sie. */
-export function boardRolleFuer(labels, config) {
-  if (!Array.isArray(labels)) throw new Error("boardRolleFuer braucht die Label-Liste des Issues\nFix: labels als Array übergeben (auch leer)");
-  const harness = labelAus(config, "harness");
-  return labels.some((l) => (typeof l === "string" ? l : l?.name) === harness) ? "factory" : "produkt";
-}
+/** Das Repo (`owner/name`), dessen Issues das Board der Rolle führt (`boards[].repo` der Config, sonst `config.repo`). Immer aus der Config, nie aus `GITHUB_REPOSITORY`. */
+export const zielRepo = (rolle) => boardRepo(boardFuerRolle(rolle), PROJEKT);
+
+// Die Trennregel (Rolle zu den Labels) liegt in projekt-config-lib (die CLI braucht sie ohne diesen Import); hier weiter exportiert.
+export { boardRolleFuer };
 
 /**
  * Pur: Fehlertext, wenn der `--after`-Anker nur auf dem anderen Board der Rolle steht (auf dem eigenen oder auf keinem Board: `null`).
@@ -90,7 +90,8 @@ export function seitenListen(produkt, factory, config) {
  * (auch leer) oder ohne Issue-Node-ID wird gemeldet (`gemeldet`) und nicht angefasst. `ende`: ID des letzten Items je Board, das der Lauf nicht
  * selbst entfernt (null = leer), der Anker für das erste umgezogene Item. Geschlossene Items bleiben als Historie. Eingaben bleiben unverändert.
  */
-export function umzugsPlan(produkt, factory, config) {
+export function umzugsPlan(produkt, factory, config, repo) {
+  brauchtRepo(repo, "umzugsPlan");
   const stehtAuf = { produkt: new Set(produkt.map((i) => i.number)), factory: new Set(factory.map((i) => i.number)) };
   const schritte = [];
   const gemeldet = [];
@@ -98,6 +99,11 @@ export function umzugsPlan(produkt, factory, config) {
     for (const i of liste) {
       const nach = boardRolleFuer(i.labels ?? [], config);
       if (i.state !== "open" || nach === von) continue;
+      const fremd = fremdesBoardText(nach, i.repo || repo, config);
+      if (fremd) {
+        gemeldet.push({ number: i.number, grund: `nicht umgezogen: ${fremd.split("\n")[0]}` });
+        continue;
+      }
       const kopf = { number: i.number, title: i.title ?? "", von, nach, quelleId: i.id };
       if (stehtAuf[nach].has(i.number)) schritte.push({ aktion: "entfernen", ...kopf });
       else if (i.status !== "Todo") gemeldet.push({ number: i.number, grund: `Status „${i.status === "" ? "leer" : i.status}“ statt Todo, nicht umgezogen` });
@@ -205,6 +211,10 @@ export const NOTFAELLE = [
   { art: "forum", marker: "Forum #", quelle: ".github/workflows/forum-inbox.yml" },
   // Der Titel entsteht in scripts/wiedervorlage.mjs (der Workflow ruft nur das Skript), darum steht der Marker dort.
   { art: "wiedervorlage", marker: "⏰ Wiedervorlage:", quelle: "scripts/wiedervorlage.mjs" },
+  // Der Titel entsteht in scripts/secret-inbox.mjs (wöchentliches Prüf-Ticket für die Security-Tabs, #92).
+  { art: "security-tabs", marker: "🔍 Security-Tabs prüfen", quelle: "scripts/secret-inbox.mjs" },
+  // Der Titel entsteht in scripts/tag-takt.mjs (Release-Tag setzen und syncen, #103).
+  { art: "tag", marker: "🏷️ Tag ", quelle: "scripts/tag-takt.mjs" },
 ];
 
 /** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */
@@ -463,7 +473,7 @@ export function normalizeItems(pages) {
       contentId: typeof i.content.node_id === "string" ? i.content.node_id : "",
       number: i.content.number,
       // Das Repo des Issues (`owner/name`, aus `repository_url`); leer, wenn die Antwort es nicht trägt: `nurRepo` lässt solche Items weg.
-      repo: /\/repos\/([^/]+\/[^/]+)$/.exec(String(i.content.repository_url ?? ""))?.[1] ?? "",
+      repo: repoAusUrl(i.content.repository_url),
       status: i.fields?.find((f) => f?.name === "Status")?.value?.name?.raw ?? "",
       title: typeof i.content.title === "string" ? i.content.title : "",
       assignees: Array.isArray(i.content.assignees) ? i.content.assignees.map((a) => a?.login).filter((l) => typeof l === "string") : [],
@@ -516,27 +526,6 @@ export function ankerNummerFuerPosition(items, n, ohneNr = null) {
   return afterId === null ? null : (items.find((i) => i.id === afterId)?.number ?? null);
 }
 
-/**
- * Aufnahme-Plan für Nummern, die weder die REST-Liste noch der GraphQL-Fallback im Board fand (#1428 Z37): ein frisch angelegtes Issue
- * stand nie im Board, `board-place` meldete nur „nicht gefunden“. `issues`: Nummer → REST-Antwort von `repos/<repo>/issues/<nr>` (oder
- * null/fehlend, wenn nicht ladbar). Aufgenommen werden nur offene Issues (keine PRs) mit `node_id`; der `--after`-Anker (`ankerNr`) nie
- * automatisch. Liefert `{ aufnehmen: [{ number, nodeId, title, rolle }], abgelehnt: [{ number, grund }] }`. Pur.
- */
-export function aufnahmePlan(fehlend, issues, { config, ankerNr = null } = {}) {
-  const aufnehmen = [];
-  const abgelehnt = [];
-  for (const nr of fehlend) {
-    const i = issues?.[nr] ?? null;
-    if (nr === ankerNr) abgelehnt.push({ number: nr, grund: "Anker wird nie automatisch aufgenommen" });
-    else if (!i || i.number !== nr) abgelehnt.push({ number: nr, grund: "Issue nicht ladbar oder unbekannt" });
-    else if (i.pull_request) abgelehnt.push({ number: nr, grund: "ist ein Pull Request" });
-    else if (i.state !== "open") abgelehnt.push({ number: nr, grund: "Issue ist geschlossen" });
-    else if (typeof i.node_id !== "string" || i.node_id === "") abgelehnt.push({ number: nr, grund: "Antwort ohne node_id" });
-    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? [], config) });
-  }
-  return { aufnehmen, abgelehnt };
-}
-
 /** Offene Issue-Nummern, die nicht im Board stehen (Abgleich, nur Bericht). Aufsteigend. */
 export function missingFromBoard(openNumbers, items) {
   const known = new Set(items.map((i) => i.number));
@@ -578,9 +567,17 @@ export async function mitWiederholung(
   }
 }
 
-/** Eine Listenabfrage über REST: alle Issue-Items des Boards in Board-Reihenfolge. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
-export function loadItems(board, opts = {}) {
-  return normalizeItems(loadItemPages(board, opts));
+/** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
+export const nurRepo = (items, repo) => items.filter((i) => i.repo !== "" && gleichesRepo(i.repo, repo));
+
+/**
+ * Eine Listenabfrage über REST: die Issue-Items des Boards in Board-Reihenfolge, nur die des Repos `opts.repo` (Nummern zweier Repos kollidieren
+ * auf einem Board, das Issues beider führt; `nurRepo`). `repo` ist Pflicht (kein stiller Standardwert). `opts.token` = anderer GH_TOKEN.
+ */
+export function loadItems(board, { repo, ...opts } = {}) {
+  brauchtBoard(board, "loadItems");
+  brauchtRepo(repo, "loadItems");
+  return nurRepo(normalizeItems(loadItemPages(board, opts)), repo);
 }
 
 /** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues; `normalizeItems` macht daraus die Items (auch für naechstes-ticket.mjs). */
@@ -590,13 +587,14 @@ export function loadItemPages(board, opts = {}) {
 }
 
 /** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */
-export function loadOpenIssuePages(repo = REPO) {
-  return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]));
+export function loadOpenIssuePages(repo, opts = {}) {
+  brauchtRepo(repo, "loadOpenIssuePages");
+  return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`], opts));
 }
 
 /** Nummern aller offenen Issues (REST; PRs herausgefiltert). */
-export function loadOpenIssueNumbers() {
-  return loadOpenIssuePages().flat().filter((i) => !i.pull_request).map((i) => i.number);
+export function loadOpenIssueNumbers(repo) {
+  return loadOpenIssuePages(repo).flat().filter((i) => !i.pull_request).map((i) => i.number);
 }
 
 /** Die Mutationen als Konstanten, damit ein Wächter-Test ihre Klammern prüfen kann (eine überzählige `}` machte den Aufruf einmal unbrauchbar). */
@@ -685,8 +683,9 @@ export function teilantwortAusStdout(stdout) {
  * `nummern` per GraphQL (`issue.projectItems`, gebündelte Aliase), gefiltert auf das eigene Board; null-Einträge für Issues, die
  * nicht im Board stehen.
  */
-export function itemsUeberIssues(board, nummern, opts = {}, repo = REPO) {
+export function itemsUeberIssues(board, nummern, opts = {}, repo) {
   brauchtBoard(board, "itemsUeberIssues");
+  brauchtRepo(repo, "itemsUeberIssues");
   return aliasAbfrage(nummern, repo).flatMap((b) => itemsAusAliasAntwort(board, graphqlTeilantwort(b.query, opts), b.nummern));
 }
 
@@ -737,7 +736,10 @@ const schlafeSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)
  */
 export function addToBoardTodo(board, nodeId, opts = {}) {
   brauchtBoard(board, "addToBoardTodo");
-  const { pauseMs = 0, schlafe = schlafeSync, ...ghOpts } = opts;
+  const { pauseMs = 0, schlafe = schlafeSync, repo, ...ghOpts } = opts;
+  brauchtRepo(repo, "addToBoardTodo");
+  const fremd = fremdesBoardText(board.rolle, repo, PROJEKT);
+  if (fremd) throw new Error(`addToBoardTodo: ${fremd}`);
   const item = graphql(MUTATION_ADD, { p: board.projectId, c: nodeId }, ghOpts);
   const itemId = item.data.addProjectV2ItemById.item.id;
   if (pauseMs > 0) schlafe(pauseMs);
