@@ -1,8 +1,8 @@
 {
   "version": 2,
   "quelle": {
-    "commit": "2adf5c9be333ad35eca341fbe766c6de1c10c076",
-    "tag": "v0.4.0",
+    "commit": "f9f17fd0bea89f273e710c27a14af4501c25a649",
+    "tag": "v0.4.1",
     "sauber": true,
     "repo": "fluffels/self-improving-agent-harness-and-factory"
   },
@@ -55,7 +55,7 @@
     "scripts/check-diffcoverage.mjs": "sha256:938e97cd283ea38b963d6be31cd97079a8ba45fabd0daa95cf31deb643092c8a",
     "scripts/check-diffsize.mjs": "sha256:4b425b932d03677b222f95c20560e813d64ccc64e4f200da1713c5c33a6d151f",
     "scripts/check-doc-tickets.mjs": "sha256:299133bba5f102d47973396c809d6b1a42592cc20e371abfdb0bc73aed035e48",
-    "scripts/check-docdrift.mjs": "sha256:8a04296968b38879e0be4da4a5c2721d06e865e50b2e27ba462d38636ce129d3",
+    "scripts/check-docdrift.mjs": "sha256:c65f8e80d61433ece619a6822ff5418294cfecd2ce80e5bb7668da1bc5b6bfdf",
     "scripts/check-docmap.mjs": "sha256:75f2e113a440edb3f1eebd7bad325c867174ae4b6fea45a2909bbe044da8dd3c",
     "scripts/check-factory-drift.mjs": "sha256:bdb7390ce43afc6ef6d2ae5b5939833130d7d085559be3a8c67f91e52e3586a4",
     "scripts/check-festgefahren.mjs": "sha256:273f9dbd7ce3bee7f2e12a88cda86cb1cbe4591c6a08859c3b5f1c179fe1f713",

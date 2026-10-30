@@ -23,6 +23,9 @@
  *      real vorhandene Überschrift (GitHub-Slug-Regel).
  *   7. Tote Test-Pfade (#97): jeder Backtick-Token `test/…` existiert (ADRs und Dateien mit
  *      Datum im Namen ausgenommen; nackte Dateinamen und Markdown-Links prüft das nicht).
+ *      Im Bezieher (gültiger Sync-Stand, lesbares Manifest) prüft das Gate einen Verweis aus
+ *      verteiltem Factory-Besitz (Ganz-Datei- und Block-Einheiten, keine JSON-Schlüssel) nur,
+ *      wenn das Ziel selbst Besitz ist; Projekt-Text bleibt voll geprüft (#110).
  *
  * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-docmap.mjs/
  * check-size.mjs: läuft plattformübergreifend über `npm run check:docdrift` und
@@ -40,6 +43,8 @@ import { collectHeadingSlugs, leseConfigObjekt, linkStellen, linkZiel, parseNpmR
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
+import { istGanzeDatei, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
+import { liesSyncStand } from "./factory-sync-lib.mjs";
 
 // Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
 export { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
@@ -195,15 +200,50 @@ export function auditDocDrift(rootDir = ROOT) {
   return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations, fortschreibungsFehler: auditFortschreibungen(rootDir), testPfadFehler: auditTestPfade(rootDir, mdFiles, content) };
 }
 
-/** 7. Test-Pfade (#97): ein Backtick-Token `test/…` in der Doku muss existieren (Datei oder Ordner). Suffix `#…`/`:<zeile>` wird abgeschnitten, Platzhalter-Tokens (`<`, `*`, `{`) übersprungen. Ausgenommen: ADRs (Historie) und Dateien mit Datum im Namen. Grenzen: der Testordner ist fest `test/`, der Datumsausschluss ist eine Heuristik (jedes Datum im Pfad), nackte Dateinamen und Markdown-Links prüft das nicht (Links: deadLinks). */
+/** Manifest der Besitz-Einheiten (Vorbild check-factory-drift.mjs). */
+const BESITZ_MANIFEST = ".factory/besitz.json";
+
+/** Textspannen der verteilten Einheiten für `file`: Ganz-Datei = alles, Block = zwischen den Markern; JSON-Schlüssel entfallen. */
+function einheitSpannen(einheiten, file, text) {
+  const spannen = [];
+  for (const e of einheiten.filter((x) => x.pfad === file)) {
+    if (istGanzeDatei(e)) spannen.push([0, text.length]);
+    else if (e.block !== undefined) {
+      const a = text.indexOf(markerStart(e.block));
+      const b = text.indexOf(markerEnde(e.block));
+      if (a >= 0 && b >= 0) spannen.push([a, b]); // a > b: leere Spanne, weil Fenster `>= a && <= b`
+    }
+  }
+  return spannen;
+}
+
+/** Bezieher-Ausnahme (#110): `null` = volle Prüfung (Factory-Repo, kaputter Sync-Stand, fehlendes oder kaputtes Manifest; fail-closed), sonst `{ spannen(file, text), istZiel(pfad) }`. */
+function besitzAusnahme(rootDir) {
+  if (liesSyncStand(rootDir).zustand !== "ok") return null;
+  let einheiten;
+  try {
+    const manifest = JSON.parse(readFileSync(join(rootDir, ...BESITZ_MANIFEST.split("/")), "utf8"));
+    einheiten = manifest.eintraege.filter(wirdVerteilt); // kein Array: wirft, fail-closed
+  } catch {
+    return null;
+  }
+  const istZiel = (pfad) => einheiten.some((e) => (istGanzeDatei(e) && e.pfad === pfad) || e.pfad.startsWith(pfad.endsWith("/") ? pfad : `${pfad}/`));
+  return { spannen: (file, text) => einheitSpannen(einheiten, file, text), istZiel };
+}
+
+/** 7. Test-Pfade (#97): ein Backtick-Token `test/…` in der Doku muss existieren (Datei oder Ordner). Suffix `#…`/`:<zeile>` wird abgeschnitten, Platzhalter-Tokens (`<`, `*`, `{`) übersprungen. Ausgenommen: ADRs (Historie) und Dateien mit Datum im Namen. Im Bezieher (#110, `besitzAusnahme`) zählt ein Verweis aus verteilter Besitz-Einheit nur, wenn das Ziel selbst Besitz ist; Grenze: nur Ganz-Datei- und Block-Einheiten, JSON-Schlüssel-Einheiten nicht. Grenzen: der Testordner ist fest `test/`, der Datumsausschluss ist eine Heuristik (jedes Datum im Pfad), nackte Dateinamen und Markdown-Links prüft das nicht (Links: deadLinks). */
 function auditTestPfade(rootDir, mdFiles, content) {
   const adrPrefix = `${adrOrdner(rootDir)}/`;
+  const ausnahme = besitzAusnahme(rootDir);
   const fehler = [];
   for (const f of mdFiles) {
     if (f.startsWith(adrPrefix) || /\d{4}-\d{2}-\d{2}/.test(f)) continue;
-    for (const m of content.get(f).matchAll(/`(test\/[^`\s]*)`/g)) {
+    const text = content.get(f);
+    const spannen = ausnahme ? ausnahme.spannen(f, text) : [];
+    for (const m of text.matchAll(/`(test\/[^`\s]*)`/g)) {
       const pfad = m[1].replace(/[#:].*$/, "");
       if (/[<*{]/.test(pfad) || existsSync(join(rootDir, pfad))) continue;
+      if (spannen.some(([a, b]) => m.index >= a && m.index <= b) && !ausnahme.istZiel(pfad)) continue;
       fehler.push({ file: f, pfad });
     }
   }
