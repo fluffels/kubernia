@@ -138,7 +138,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 
 ## Wo die TODOs leben
 
-Der Backlog sind **GitHub Issues** auf zwei **Project-Boards** (Trennregel: das Factory-Board führt die Issues des Factory-Repos, das Produkt-Board die von kubernia). Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei (#627). Befehl, Sonderfälle und Board-IDs: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)** (die SSOT der Auswahl-Mechanik).
+Der Backlog sind **GitHub Issues** auf zwei **Project-Boards** (Trennregel: das Factory-Board führt die Issues des Factory-Repos, das Produkt-Board die von kubernia). Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei (#627). Board-IDs und Projektwerte: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)**; Auswahl-Mechanik und Sonderfälle: [Factory-Seite](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/ticket-reihenfolge.md).
 
 **Ticket-Auswahl im Projekt:** `/kubernia` wählt mit `--bereich produkt` nur auf dem Produkt-Board, `/factory` läuft im Factory-Repo (hier meldet `--bereich agentic` das fremde Board). Soll und Kennzahl im Selbst-Audit, keine Auswahlregel: ein Factory-Merge erst nach 3 Produkt-Merges (Spielquote 1:3) seit dem letzten.
 

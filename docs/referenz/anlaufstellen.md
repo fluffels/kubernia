@@ -107,10 +107,10 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | Seite | Wann lesen |
 |---|---|
 | [CONTRIBUTING.md](../../CONTRIBUTING.md) | als menschliche Mitentwicklerin: Einstieg, One-Command-Setup `npm run setup`, IntelliJ-Run-Configs, Dependabot-Policy, [Im Container entwickeln](../../CONTRIBUTING.md#im-container-entwickeln-optional-ohne-lokales-node) (devcontainer / `docker compose up`, #388) |
-| [ticket-reihenfolge.md](../ticket-reihenfolge.md) | wenn du das nächste Ticket auswählst oder ein neues Issue im Board einsortierst |
-| [befehle.md](befehle.md) | wenn du wissen willst, welches `npm run`-Kommando was tut und welche Umgebungsvariable ein Werkzeug liest |
+| [ticket-reihenfolge.md](../ticket-reihenfolge.md) | wenn du die Projektwerte der Ticket-Auswahl (Produkt-Board, Spielquote, Board-IDs) oder die Board-Pflege dieses Projekts suchst; die Auswahl-Mechanik steht im Factory-Repo, siehe [Factory-Seiten](#factory-seiten-projektanteil-und-kern) |
+| [befehle.md](befehle.md) | wenn du wissen willst, welches `npm run`-Kommando was tut und welche Projekt-Umgebungsvariable es gibt; die `FACTORY_*`-Variablen stehen im Factory-Repo |
 | [schichtregeln.md](schichtregeln.md) | bevor du einen neuen Import setzt oder ein Modul verschiebst (Architektur-Wächter) |
-| [doku-vorlagen.md](doku-vorlagen.md) | wenn du eine Wiki-Seite anlegst: Kopfzeilen „fachlich geprüft am" bzw. Schnappschuss-Hinweis |
+| [Factory: doku-vorlagen.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/referenz/doku-vorlagen.md) | wenn du eine Wiki-Seite anlegst: Kopfzeilen „fachlich geprüft am" bzw. Schnappschuss-Hinweis (hier nur der Anker-Stub [doku-vorlagen.md](doku-vorlagen.md)) |
 
 ### Harness
 
@@ -119,17 +119,17 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [agent-harness.md](../agent-harness.md) | wenn du den Projektanteil des Agenten-Harness suchst (generierte Abschnitte, Projekt-Gates, Test-Harness, Forum-Eingang); das Kernwissen steht im Factory-Repo, siehe [Factory-Seiten](#factory-seiten-projektanteil-und-kern) |
 | [agent-harness-faq.md](../agent-harness-faq.md) | wenn du eine Projekt-Frage zum Harness hast (Deploybarkeit, Browser im Spiel, Architekturmodell, Perf-Smoke); die Harness-Fallen (Worktrees unter Windows, Hooks, Gates) stehen in der Kern-FAQ |
 | [lessons-learned.md](../lessons-learned.md) | wenn du als Außenstehende:r wissen willst, welche Muster der Bau des Harness gezeigt hat (datierte Belege, was geändert wurde, was offen ist) |
-| [harness-glossar.md](../harness-glossar.md) | wenn dir ein Harness-Begriff fehlt (Subagent, Lens, Leitplanke, Override, Sammelticket, Dark Factory) |
-| [sandbox-anbinden.md](../sandbox-anbinden.md) | wenn du den Harness mit Docker Sandboxes (`sbx`), einer eigenen Container-Sandbox oder der Cloud-Sitzung betreiben willst (Einrichtung, Eigenheiten) |
+| [harness-glossar.md](../harness-glossar.md) | wenn dir ein Projekt-Begriff des Harness fehlt (SBOM, Trace-Tag, Factory-Seite, Anker-Stub, Factory-Link); das Harness-Glossar steht im Factory-Repo |
+| [Factory: sandbox-anbinden.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/sandbox-anbinden.md) | wenn du den Harness mit Docker Sandboxes (`sbx`), einer eigenen Container-Sandbox oder der Cloud-Sitzung betreiben willst (hier nur der Stub [sandbox-anbinden.md](../sandbox-anbinden.md)) |
 | [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn du den Forum-Kanal für Fremdtext nachschlägst; Vertrauensmodell und OWASP-Abgleich stehen im Factory-Repo |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
-| [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
+| [Factory: harness-transfer.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen (hier nur der Stub [harness-transfer.md](../harness-transfer.md)) |
 | [factory/entscheidungsprotokoll.md](../factory/entscheidungsprotokoll.md) | wenn du vor einer Ermessens-Weiche oder einem Hand-off (`festgefahren`, Zusatzpass, Override) stehst und entscheiden willst, ob und womit du sie selbst klärst |
-| [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
+| [model-routing.md](../model-routing.md) | wenn du den Projektanteil des Modell-Routings suchst (Forum-Triage, Projekt-Default, Trace-Tag); Matrix, Messung und Budget-Pacing stehen im Factory-Repo |
 | [lens-gegenprobe-2026-10-09.md](../lens-gegenprobe-2026-10-09.md) | Momentaufnahme: Rohwerte und Rezept der Lens-Gegenprobe (Opus gegen Sonnet gegen Haiku je Brille); die Entscheidung steht in model-routing.md |
 | [lens-gegenprobe-2026-10-15.md](../lens-gegenprobe-2026-10-15.md) | Momentaufnahme: Gegenprobe `omitClaudeMd: true` für die Lens (Kontextdateien mit und ohne), Regel, Rohwerte und Entscheidung; gültig steht sie in model-routing.md |
 | [planer-gegenprobe-2026-10-16.md](../planer-gegenprobe-2026-10-16.md) | Momentaufnahme: Gegenprobe Opus `high` und Sonnet gegen Opus `xhigh` für den Planer, Regel, Rohwerte und Entscheidung; gültig steht sie in model-routing.md |
-| [langfuse-hook-patch.md](../langfuse-hook-patch.md) | wenn das Plugin `langfuse-observability` aktualisiert wird, der Hook-Patch geprüft oder portiert werden muss oder Langfuse Turns vermisst |
+| [Factory: langfuse-hook-patch.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/langfuse-hook-patch.md) | wenn das Plugin `langfuse-observability` aktualisiert wird, der Hook-Patch geprüft oder portiert werden muss oder Langfuse Turns vermisst (hier nur der Stub [langfuse-hook-patch.md](../langfuse-hook-patch.md)) |
 
 ### Betrieb, Assets, Tests
 
@@ -162,7 +162,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 
 <!-- factory-projekt:start -->
 
-Sieben Seiten dieses Repos stammen aus dem Factory-Repo. Je Seite (bei gemischten Seiten je Abschnitt) gilt genau ein Urteil: **Projekt** (bleibt hier, in `factory-projekt`-Blöcken oder als generierter Abschnitt) oder **Kern** (steht nur im Factory-Repo; hier höchstens ein Anker-Stub mit einer Zeile `Kern: [Titel](Factory-Link)`). Regel, Stub-Gründe und Ausnahmen: [Fortschreibung #1967](../adr/fortschreibungen/0022-1967-factory-seiten-projektanteil.md). Der Test `test/harness/factory-seiten-projekt.test.ts` hält die Liste und die gekürzten Seiten zusammen.
+Diese Seiten dieses Repos stammen ganz oder teilweise aus dem Factory-Repo, die übrigen Navigationsseiten bleiben Projekt. Je Seite (bei gemischten Seiten je Abschnitt) gilt genau ein Urteil: **Projekt** (bleibt hier, in `factory-projekt`-Blöcken oder als generierter Abschnitt) oder **Kern** (steht nur im Factory-Repo; hier höchstens ein Anker-Stub mit einer Zeile `Kern: [Titel](Factory-Link)`, eine ganze Seite als Stub trägt nur `# Titel` und eine `>`-Zeile mit dem Factory-Link). Regel, Stub-Gründe und Ausnahmen: [Fortschreibung #1967](../adr/fortschreibungen/0022-1967-factory-seiten-projektanteil.md), [Fortschreibung #1968](../adr/fortschreibungen/0022-1968-harness-doku-kern-restseiten.md). Der Test `test/harness/factory-seiten-projekt.test.ts` leitet die gekürzten Seiten aus dieser Tabelle ab und hält sie mit den Seiten zusammen, die einen Marker oder eine Kern-Zeile tragen.
 
 | Seite | Abschnitt | Urteil | Zielort |
 |---|---|---|---|
@@ -172,14 +172,20 @@ Sieben Seiten dieses Repos stammen aus dem Factory-Repo. Je Seite (bei gemischte
 | `docs/agent-harness-faq.md` | Deploybarkeit, Browser im Spiel, Architekturmodell, AGE-Werte, Perf-Smoke, Mermaid, Verwandte Dokumente | Projekt | bleibt hier: [agent-harness-faq.md](../agent-harness-faq.md) |
 | `docs/sicherheit-agenten.md` | Quellen, Vertrauensmodell, OWASP-Abgleich, Kanäle außer dem Forum, Grenzen | Kern | [Factory: sicherheit-agenten.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/sicherheit-agenten.md); hier Anker-Stubs |
 | `docs/sicherheit-agenten.md` | Kanal Forum samt Quarantäne-Muster | Projekt | bleibt hier: [sicherheit-agenten.md](../sicherheit-agenten.md#kanäle-für-fremdtext) |
-| `docs/model-routing.md` | alle Abschnitte außer der Forum-Triage-Zeile der Phasen-Matrix | Kern | [Factory: model-routing.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/model-routing.md); Kürzung in #1968 |
-| `docs/model-routing.md` | Forum-Triage (Block der Phasen-Matrix) | Projekt | bleibt hier: [model-routing.md](../model-routing.md) |
-| `docs/ticket-reihenfolge.md` | alle Abschnitte außer der Board-Pflege | Kern | [Factory: ticket-reihenfolge.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/ticket-reihenfolge.md); Kürzung in #1968 |
-| `docs/ticket-reihenfolge.md` | Board-Pflege durch den Agenten (nur kubernia) | Projekt | bleibt hier: [ticket-reihenfolge.md](../ticket-reihenfolge.md#board-pflege-durch-den-agenten-nur-kubernia) |
-| `docs/harness-glossar.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: harness-glossar.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/harness-glossar.md); Kürzung in #1968 |
-| `docs/harness-glossar.md` | Projekt-Blöcke (SBOM, Factory-Link-Begriffe, Anker-Stub, Projektanteil) | Projekt | bleibt hier: [harness-glossar.md](../harness-glossar.md) |
-| `docs/referenz/befehle.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: befehle.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/referenz/befehle.md); Kürzung in #1968 |
-| `docs/referenz/befehle.md` | Projekt-Blöcke (Erste Minute, Projekt-Befehle) | Projekt | bleibt hier: [befehle.md](befehle.md) |
+| `docs/model-routing.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: model-routing.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/model-routing.md) |
+| `docs/model-routing.md` | Forum-Triage, Projekt-Default (Phasen-Matrix), Trace-Tag in Zuordnung und Erfassung | Projekt | bleibt hier: [model-routing.md](../model-routing.md) |
+| `docs/ticket-reihenfolge.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: ticket-reihenfolge.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/ticket-reihenfolge.md); hier Anker-Stubs |
+| `docs/ticket-reihenfolge.md` | Board-Pflege durch den Agenten (nur kubernia), Spielquote und Bereich, Board-Literale | Projekt | bleibt hier: [ticket-reihenfolge.md](../ticket-reihenfolge.md#board-pflege-durch-den-agenten-nur-kubernia) |
+| `docs/harness-glossar.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: harness-glossar.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/harness-glossar.md); Kopf verlinkt das Factory-Glossar |
+| `docs/harness-glossar.md` | Projekt-Blöcke (SBOM, Trace-Tag, Factory-Link-Begriffe, Anker-Stub, Projektanteil) | Projekt | bleibt hier: [harness-glossar.md](../harness-glossar.md) |
+| `docs/referenz/befehle.md` | Umgebungsvariablen (`FACTORY_*`) | Kern | [Factory: befehle.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/referenz/befehle.md); hier der Abschnitt Umgebungsvariablen als Kern-Zeile |
+| `docs/referenz/befehle.md` | Projekt-Blöcke (Erste Minute, Alle Befehle, Projekt-Befehle, Projekt-Variablen) | Projekt | bleibt hier: [befehle.md](befehle.md) |
+| `docs/harness-transfer.md` | ganze Seite (Einführungspfad, Reifestufen, Werkzeug-Mapping, docs-gen, Form der Vorlage, Gliederung) | Kern | [Factory: harness-transfer.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/harness-transfer.md); hier Stub mit einem Anker-Stub |
+| `docs/sandbox-anbinden.md` | ganze Seite | Kern | [Factory: sandbox-anbinden.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/sandbox-anbinden.md); hier Stub ohne Anker |
+| `docs/langfuse-hook-patch.md` | ganze Seite | Kern | [Factory: langfuse-hook-patch.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/langfuse-hook-patch.md); hier Anker-Stubs |
+| `docs/referenz/doku-vorlagen.md` | ganze Seite | Kern | [Factory: doku-vorlagen.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/referenz/doku-vorlagen.md); hier ein Anker-Stub |
+| `docs/referenz/anlaufstellen.md` | Navigation dieses Repos samt Inventar | Projekt | bleibt hier: [anlaufstellen.md](anlaufstellen.md) |
+| `docs/referenz/repo-landkarte.md` | Navigation dieses Repos (Verzeichnisse und Dateien) | Projekt | bleibt hier: [repo-landkarte.md](repo-landkarte.md) |
 
 <!-- factory-projekt:ende -->
 
