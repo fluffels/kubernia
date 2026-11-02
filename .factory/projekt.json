@@ -163,6 +163,9 @@
       }
     }
   },
+  "factoryLinks": {
+    "ausnahmen": ["docs/adr/**", "docs/lessons-learned.md", "docs/*-gegenprobe-*.md"]
+  },
   "rulesetSpiegel": ".github/ruleset-main-schutz.json",
   "projektliterale": {
     "Stardew": "stardew",

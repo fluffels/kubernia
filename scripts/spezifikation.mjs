@@ -30,7 +30,8 @@ import { ZIEL, ladeSammelKontext, postZeilen, waehleSammelticket } from "./inbox
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
-import { configAusAufruf, istRepoForm, labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { configAusAufruf, labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { istRepoForm } from "./repo-form.mjs";
 import { fehlendeLabels, fehlerText, ghJson, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";

@@ -7,7 +7,8 @@
 import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { fehlerText, tokenFuerZiel } from "./gh-cli.mjs";
-import { gleichesRepo, repoDerRolle, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { repoDerRolle } from "./projekt-config-lib.mjs";
+import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 
 /** Produktquote (#1425): höchstens 1 Harness-Ticket auf so viele Produkt-Tickets. */
 export const PRODUKT_QUOTE = 3;

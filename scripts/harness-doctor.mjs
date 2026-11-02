@@ -14,10 +14,15 @@
  * Je Punkt eine Zeile mit drei möglichen Ausgängen: `OK <Punkt>`, `LÜCKE <Punkt>: <Befund> Fix: <Anweisung>` oder `NICHT PRÜFBAR <Punkt>: <Grund> Fix: <Anweisung>` (der
  * Zustand ist nicht belegbar: Endpunkt-Fehler oder fehlendes Feld, nie still grün). Exit 0 ohne Lücke und ohne nicht prüfbaren Punkt, 1 mit mindestens einem von beiden
  * (die Summenzeile zählt beide getrennt), 2 bei Aufruf-Fehler oder unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf).
+ * Die Dateipunkte `Root-Kontextdatei` und `Zeilenenden` (factory#94, harness-doctor-dateien.mjs) prüfen die Projektdateien des Beziehers (keine CLAUDE.md im Root, eol-Regeln und LF im Index), brauchen kein Token und laufen auch im Wochenlauf, nicht in `--einrichten`.
  * Die acht Sicherheitspunkte (Secret Scanning, Push Protection, Non-Provider-Patterns, Validity Checks, PVR, Dependabot Security Updates, Code-Scanning,
  * SHA-Pinning; factory#116, harness-doctor-sicherheit.mjs) stehen immer da; `--einrichten` ändert sie nie, nur `ANLEITUNG … Link: …`. Reines Node-Skript ohne Modell-Tokens; `gh` und
  * der Langfuse-Aufruf sind injizierbar (Tests laufen ohne Netz). Alles Projektspezifische kommt zur Laufzeit aus `.factory/projekt.json`
  * und den Workflows (`voraussetzungenAus`); der Wächter test/harness/harness-doctor-voraussetzungen.test.ts hält die Ableitung vollständig.
+ *
+ * Die Soll-Liste der Required Checks ist der Ruleset-Spiegel plus die `pflichtChecks` der verteilten Kern-Workflows in `.factory/besitz.json` (factory#117; ein Eintrag zählt nur, wenn seine Datei im Repo liegt);
+ * ein fehlender Name ist die Lücke `Required-Check <name>`. Hat das Ruleset gar keinen Required Check, folgt der Lücke `Ruleset` je Name eine eigene Zeile (`--einrichten`: je eine ANLEITUNG).
+ * Ist `.factory/besitz.json` nicht lesbar (fehlt, kein JSON, ungültiges `pflichtChecks`), steht `NICHT PRÜFBAR Kern-Pflicht-Checks` samt `HINWEIS` da (Exit 1): geprüft sind dann nur die Checks des Spiegels.
  *
  * Bekannte Grenzen: private Repos auf GitHub Free kennen keine Rulesets (ADR 0022), dort ist das fehlende Ruleset eine Lücke mit dieser
  * Erklärung; `allowed_actions: selected` gilt als erlaubt (welche Actions, prüft der Doctor nicht); geprüft werden nur Repo- und Org-Secrets
@@ -31,6 +36,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { kernEnvNamen, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { pruefeDateien } from "./harness-doctor-dateien.mjs";
 import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, ohneActionPins, pruefLauf } from "./harness-doctor-lib.mjs";
 
 // Die Prüf-API (Ableitung, Prüfpunkte, Vorlage) steht in der Lib; sie bleibt unter diesem Namen erreichbar.
@@ -135,7 +141,7 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   return anleitungen + (fatal ? 1 : 0) + fehler + geplant > 0 ? 1 : 0;
 }
 
-function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv }) {
+function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv, dateien }) {
   let namen;
   try {
     namen = kernEnv(SKRIPTE); // Dateien lesen nur hier am Rand, die Prüflogik bekommt die Namen
@@ -145,7 +151,7 @@ function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv }) {
   }
   let ergebnis;
   try {
-    ({ ergebnis } = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse, umgebung: { env, namen } }));
+    ({ ergebnis } = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse, umgebung: { env, namen }, dateien }));
   } catch (e) {
     err(konfigFehlerText(e));
     return AUFRUF_EXIT;
@@ -166,6 +172,7 @@ function ausgabe(ergebnis, out) {
     if (p.nichtPruefbar) nichtPruefbar++;
     else luecken++;
     out(`${p.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${p.punkt}: ${einzeilig(p.befund)} Fix: ${p.fix}`);
+    if (p.hinweis) out(`HINWEIS ${p.punkt}: ${p.hinweis}`);
   }
   out(luecken + nichtPruefbar ? `Harness-Doctor: ${luecken} Lücke(n), ${nichtPruefbar} nicht prüfbar` : "Harness-Doctor: keine Lücke, alles prüfbar");
   return luecken + nichtPruefbar ? 1 : 0;
@@ -173,7 +180,7 @@ function ausgabe(ergebnis, out) {
 
 export function main(
   argv = process.argv.slice(2),
-  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen } = {},
+  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen, dateien = pruefeDateien } = {},
 ) {
   const { werte, fehler } = flagsLesen(argv, { pruefen: { type: "boolean" }, einrichten: { type: "boolean" }, "dry-run": { type: "boolean" }, config: { type: "string" } });
   const aufrufFehler = fehler?.text ?? (Number(werte.pruefen === true) + Number(werte.einrichten === true) !== 1 ? "Genau einen Modus angeben: --pruefen oder --einrichten" : null)
@@ -182,7 +189,7 @@ export function main(
     err(`${aufrufFehler}\n${USAGE}`);
     return AUFRUF_EXIT;
   }
-  return werte.einrichten ? einrichten({ werte, rootDir, gh, spawn, out, err }) : pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv });
+  return werte.einrichten ? einrichten({ werte, rootDir, gh, spawn, out, err }) : pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv, dateien });
 }
 
 if (istDirektaufruf(import.meta.url)) process.exitCode = main();

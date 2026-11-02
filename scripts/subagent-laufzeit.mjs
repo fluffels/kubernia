@@ -17,7 +17,7 @@
  * aufgezeichnete Usage: Output-Tokens im Transkript stehen auf dem Stand von `message_start`, die Output-Kosten sind unterschätzt, Kinder-Läufe zählen nicht mit) und Zahl der parallel laufenden Läufe desselben Typs. Für Lens-Läufe (#1582) zusätzlich: Beschreibung, `brille`, `runde`, `deltaArt` (`null` ohne Delta-Patch-Pfad im Prompt (gelabelt oder `<praefixe.worktree><nr>-r<n>-delta.patch`), `merge`, `fix`), `promptZeichen`, `ersterCall` und `patch` (Zugriffe auf den vollen und den Delta-Patch, siehe patch-zugriff.mjs). Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
- * Aufzeichnungsbasis: Die Tabelle nennt je Gruppe `Kosten geschätzt ($, Median)` und die `Output-Quote` (aufgezeichneter / geschätzter Output, `outputQuote`, `null` ohne geschätzten Output). Weichen die Quoten
+ * Aufzeichnungsbasis: Die Tabelle nennt je Gruppe `Kosten geschätzt ($, Ø)` und die `Output-Quote` (aufgezeichneter / geschätzter Output, `outputQuote`, `null` ohne geschätzten Output). Weichen die Quoten
  * von alt und neu (mit `--schnitt`) oder die Spanne der Tagesquoten (nur Tage und Seiten mit mindestens `BASIS_MIN_N` = 5 Läufen) um mehr als `BASIS_SPRUNG` (0,2) ab, hat die Output-Aufzeichnung im Transkript gewechselt: `aggregat.basisWarnung` (auch in `--json`, sonst `null`)
  * und eine Zeile „Hinweis Aufzeichnungsbasis“ unter der Tabelle sagen, dass aufgezeichnete Kosten über diese Gruppen nicht vergleichbar sind; verglichen wird dann nur geschätzt.
  *
@@ -38,6 +38,10 @@ const summeOderNull = (werte) => {
   const da = werte.filter((x) => x !== null);
   return da.length ? da.reduce((s, x) => s + x, 0) : null;
 };
+const schnittOderNull = (werte) => {
+  const da = werte.filter((x) => x !== null);
+  return da.length ? da.reduce((s, x) => s + x, 0) / da.length : null;
+};
 const stat = (laeufe) => {
   const s = statRoh(laeufe);
   // Anteil des aufgezeichneten am geschätzten Output (`null` ohne geschätzten Output).
@@ -57,6 +61,8 @@ const statRoh = (laeufe) => ({
   // Mit dem aus dem Kontext-Zuwachs geschätzten Output (#1568); `kosten` bleibt der aufgezeichnete Wert.
   kostenGeschaetzt: median(laeufe.map((l) => l.kostenGeschaetzt ?? null).filter((x) => x !== null)),
   kostenGeschaetztSumme: summeOderNull(laeufe.map((l) => l.kostenGeschaetzt ?? null)),
+  // Ø = Σ geschätzt / Zahl der bepreisten Läufe (nicht der Median, factory#114).
+  kostenGeschaetztSchnitt: schnittOderNull(laeufe.map((l) => l.kostenGeschaetzt ?? null)),
   output: laeufe.reduce((n, l) => n + (l.output ?? 0), 0),
   outputGeschaetzt: laeufe.reduce((n, l) => n + (l.outputGeschaetzt ?? 0), 0),
   ohnePreis: laeufe.filter((l) => l.kosten === null).length,
@@ -176,8 +182,8 @@ const f2 = (x) => (x === null ? "-" : x.toFixed(2));
 /** Markdown: Aggregat-Tabelle und Läufe. */
 export function renderMarkdown(r) {
   const out = [`Subagent-Typ \`${r.agent}\`: ${r.laeufe.length} Läufe (${r.aggregat.offen} offen, nicht in den Medianen)`, ""];
-  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | Σ Kosten geschätzt ($) | ohne Preis | Kosten geschätzt ($, Median) | Output-Quote | s/Req (Modell) | parallel | max. Kontext | längster (min) | Tickets |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
-  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${f2(s.kostenGeschaetztSumme ?? null)} | ${s.ohnePreis} | ${f2(s.kostenGeschaetzt ?? null)} | ${s.outputQuote === null || s.outputQuote === undefined ? "-" : prozent(s.outputQuote)} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} | ${s.tickets} |`);
+  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | Kosten ($, Median) | Σ Kosten ($) | Σ Kosten geschätzt ($) | ohne Preis | Kosten geschätzt ($, Ø) | Output-Quote | s/Req (Modell) | parallel | max. Kontext | längster (min) | Tickets |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
+  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f2(s.kosten)} | ${f2(s.kostenSumme)} | ${f2(s.kostenGeschaetztSumme ?? null)} | ${s.ohnePreis} | ${f2(s.kostenGeschaetztSchnitt ?? null)} | ${s.outputQuote === null || s.outputQuote === undefined ? "-" : prozent(s.outputQuote)} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} | ${s.tickets} |`);
   z("alle gemessenen", r.aggregat.gesamt);
   z("ohne Sammeltickets", r.aggregat.ohneSammel);
   z("Sammeltickets", r.aggregat.sammel);

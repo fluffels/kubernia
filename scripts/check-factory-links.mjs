@@ -1,92 +1,42 @@
-// Factory-Link-Wächter (ADR 0022 F10, #1966): Links ins Factory-Repo stehen auf dem Sync-Tag und zeigen auf Pfade und Anker, die es dort gibt.
+// Factory-Link-Wächter (ADR 0022 F10, factory#130; Kern): Links ins Factory-Repo stehen auf dem Sync-Tag und zeigen auf Pfade und Anker, die es dort gibt.
 // `node scripts/check-factory-links.mjs [--wurzel <pfad>]` prüft hermetisch (kein Git, kein Netz): Doku-Links gegen den Index `.factory/factory-links.json`,
-// der selbst zu `.factory/sync-stand.json` › `quelle` passen muss. `--schreiben --quelle <klon>` schreibt nach einem Sync auf einen neuen Tag
+// der selbst zu `STAND_PFAD` (`.factory/sync-stand.json`) › `quelle` passen muss. `--schreiben --quelle <klon>` schreibt nach einem Sync auf einen neuen Tag
 // die Refs um und erzeugt den Index aus dem Tag der Quelle (Klon des Factory-Repos): Befund ⇒ nichts geschrieben, Exit 1.
+// Ohne Sync-Stand (das Factory-Repo selbst, ein Projekt ohne Sync) gibt es nichts zu prüfen: Exit 0. Mit Sync-Stand ohne `quelle.tag` ist es rot.
 // Exit 0 grün, 1 Befund, 2 Aufruf.
+//
+// Projektwerte: das Factory-Repo und die URL-Form kommen aus `factory-seite.mjs` (Bau und Zerlegung), die Ausnahmen aus der Projekt-Config
+// (`factoryLinks.ausnahmen`, Pfad-Globs mit * ? **; ohne Schlüssel keine), Code-Maske, Link-Stellen und Schnappschuss-Marker aus `docs-gen/markdown.mjs`.
 //
 // Scan-Umfang (geschlossene Liste), Faktenquelle ist dieser Kopfkommentar:
 //   erfasst:        Inline-Link und Bild `[t](url)` (auch `[t](<url>)`) und Autolink `<url>`, jeweils nach dem Maskieren von Code-Fences und Inline-Code;
-//                   die URL `https://github.com/<repo>/(blob|tree)/<ref>/<pfad>[#anker]` mit `<repo>` aus `.factory/projekt.json` (Board mit Rolle `factory`).
+//                   die URL `https://github.com/<repo>/(blob|tree)/<ref>/<pfad>[#anker]` mit dem Factory-Repo aus `factoryRepo` (`quelle.repo` des Sync-Stands,
+//                   sonst das Board mit Rolle `factory`).
 //   nicht erfasst:  nackte URLs im Text, Referenz-Links (`[t][r]`, `[r]: url`), Links auf `/issues` und `/pull`, die Repo-Wurzel.
-//   ausgenommen:    Dateien `AUSNAHMEN` (ADRs, Lessons Learned, Gegenproben), Schnappschuss-Blöcke, Besitz-Einheiten (`sync-stand.einheiten`: ganze `*.md`-
-//                   Dateien und Blöcke `datei#id` zwischen den Besitz-Markern; JSON-Schlüssel-Einheiten `#/…` tragen keine Doku-Links).
-//   rot (`form`):   jede andere URL auf dieses Repo (z.B. `/commit/<sha>`, `/blob/<ref>` ohne Pfad), damit kein Link ungeprüft bleibt.
-// Bekannte Grenzen: der Index unterscheidet blob und tree nicht; Anker nur bei `blob` auf `*.md` (GitHub-Slugs); `codeMaskiert` ist eine Kopie aus
-// `docs-gen/markdown.mjs` (nicht exportiert dort).
+//   ausgenommen:    Dateien, die ein Glob aus `factoryLinks.ausnahmen` trifft (historische Seiten wie ADRs), Schnappschuss-Blöcke, Besitz-Einheiten
+//                   (`sync-stand.einheiten`: ganze `*.md`-Dateien und Blöcke `datei#id` zwischen den Besitz-Markern; JSON-Schlüssel-Einheiten `#/…` tragen
+//                   keine Doku-Links). Marker innerhalb von Code (Fence, Inline-Code) öffnen keinen Block.
+//   rot (`form`):   jede andere URL auf dieses Repo (z.B. ein Commit-Link, oder eine Blob-URL ohne Pfad), damit kein Link ungeprüft bleibt.
+// Bekannte Grenzen: der Index unterscheidet blob und tree nicht; Anker nur bei `blob` auf `*.md` (GitHub-Slugs).
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown } from "./check-basis.mjs";
 import { markerEnde, markerStart } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { collectHeadingSlugs, fenceMaske } from "./docs-gen/markdown.mjs";
+import { SCHNAPPSCHUSS_ENDE, SCHNAPPSCHUSS_START, codeMaskiert, collectHeadingSlugs, externeLinkStellen } from "./docs-gen/markdown.mjs";
+import { factoryRepo, factoryUrlTeile } from "./factory-seite.mjs";
 import { leserVomCommit } from "./factory-sync-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-
-// ── PROJEKTWERTE (hier steht das Projektspezifische; der Rest sind reine, parametrisierte Funktionen) ──
-/** Dateien ohne Prüfung: ADRs und datierte Schnappschüsse nennen bewusst den damaligen Stand (Brain-Regel: historisch, nie umschreiben). */
-export const AUSNAHMEN = [
-  (pfad) => pfad.startsWith("docs/adr/"),
-  (pfad) => pfad === "docs/lessons-learned.md",
-  (pfad) => /^docs\/[^/]*-gegenprobe-[^/]*\.md$/.test(pfad),
-];
-/** Marker eines Schnappschuss-Blocks (Glossar „Schnappschuss-Block“). */
-export const SCHNAPPSCHUSS_START = "<!-- schnappschuss:start -->";
-export const SCHNAPPSCHUSS_ENDE = "<!-- schnappschuss:ende -->";
-// ── Ende PROJEKTWERTE ──
+import { globRegex } from "./pfad-glob.mjs";
+import { PROJEKT_CONFIG, factoryLinkAusnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { STAND_PFAD, liesSyncStand } from "./sync-stand-lib.mjs";
 
 const INDEX_PFAD = ".factory/factory-links.json";
-const STAND_PFAD = ".factory/sync-stand.json";
-const CONFIG_PFAD = ".factory/projekt.json";
 const SCHREIB_WEG = "Weg: `npm run check:factorylinks -- --schreiben --quelle <klon des Factory-Repos>`";
-
-/** Kopie von `codeMaskiert` aus docs-gen/markdown.mjs (dort nicht exportiert): Code-Fences und Inline-Code längentreu zu Leerzeichen. */
-function codeMaskiert(md) {
-  const zeilen = md.split("\n");
-  const maske = fenceMaske(zeilen.map((z) => z.replace(/\r$/, "")));
-  return zeilen
-    .map((z, i) => (maske[i] ? z.replace(/[^\r]/g, " ") : z.replace(/`[^`\n]*`/g, (s) => " ".repeat(s.length))))
-    .join("\n");
-}
-
-const dekodiert = (s) => {
-  try {
-    return decodeURIComponent(s);
-  } catch {
-    return s;
-  }
-};
-
-/** Ordnet eine URL zu: `null` (nicht dieses Repo oder bewusst nicht erfasst) oder `{ form, ref, pfad, anker, refOffset }` (`form` blob|tree|fremd). */
-function klassifiziere(url, repo) {
-  const basis = `https://github.com/${repo}`;
-  if (url.slice(0, basis.length).toLowerCase() !== basis.toLowerCase()) return null;
-  const rest = url.slice(basis.length);
-  if (rest !== "" && !/^[/?#]/.test(rest)) return null; // anderes Repo mit gleichem Namensanfang
-  if (/^\/?$/.test(rest) || /^[?#]/.test(rest) || /^\/(?:issues|pull)(?:[/?#]|$)/.test(rest)) return null;
-  const m = /^\/(blob|tree)\/([^/?#]+)\/([^?#]+)(?:#(.*))?$/.exec(rest);
-  if (!m) return { form: "fremd", ref: "", pfad: "", anker: "", refOffset: 0 };
-  return { form: m[1], ref: m[2], pfad: dekodiert(m[3]), anker: dekodiert(m[4] ?? ""), refOffset: basis.length + m[1].length + 2 };
-}
 
 /** Zeile (1-basiert) einer Position im Text. */
 const zeileVon = (md, pos) => md.slice(0, pos).split("\n").length;
-
-/** Alle URL-Kandidaten (Inline-Link/Bild und Autolink) mit Position im maskierten, längentreuen Text. */
-function urlKandidaten(maskiert) {
-  const out = [];
-  const spannen = [];
-  for (const m of maskiert.matchAll(/!?\[[^\]]*\]\(\s*(?:<([^>\n]*)>|([^)\s]+))(?:\s+"[^"]*")?\s*\)/dg)) {
-    const [start, ende] = m.indices[1] ?? m.indices[2];
-    out.push({ start, ende });
-    spannen.push([m.index, m.index + m[0].length]);
-  }
-  for (const m of maskiert.matchAll(/<(https?:\/\/[^>\s]+)>/dg)) {
-    if (spannen.some(([a, b]) => m.index >= a && m.index < b)) continue; // `[t](<url>)` ist schon erfasst
-    out.push({ start: m.indices[1][0], ende: m.indices[1][1] });
-  }
-  return out.sort((a, b) => a.start - b.start);
-}
 
 /**
  * Pur: die Factory-Links (blob, tree, fremd) eines Markdown-Textes für das Repo `repo` (`owner/name`, Groß-/Kleinschreibung egal).
@@ -94,19 +44,17 @@ function urlKandidaten(maskiert) {
  */
 export function factoryLinkStellen(md, repo) {
   const stellen = [];
-  for (const { start, ende } of urlKandidaten(codeMaskiert(md))) {
-    const url = md.slice(start, ende);
-    const k = klassifiziere(url, repo);
+  for (const { start, ende, url } of externeLinkStellen(md)) {
+    const k = factoryUrlTeile(url, repo);
     if (k) stellen.push({ start, ende, zeile: zeileVon(md, start), url, form: k.form, ref: k.ref, pfad: k.pfad, anker: k.anker, refStart: start + k.refOffset });
   }
   return stellen;
 }
 
-export const istAusgenommen = (pfad) => AUSNAHMEN.some((f) => f(pfad));
-
-/** Zeilen (0-basiert) im Schnappschuss-Block und in den Besitz-Blöcken `ids` dieser Datei. */
-function maskierteZeilen(zeilen, ids) {
+/** Zeilen (0-basiert) im Schnappschuss-Block und in den Besitz-Blöcken `ids` dieser Datei; Marker in Code zählen nicht. */
+function maskierteZeilen(text, ids) {
   const aus = new Set();
+  const zeilen = codeMaskiert(text).split("\n");
   const bloecke = [[SCHNAPPSCHUSS_START, SCHNAPPSCHUSS_ENDE], ...ids.map((id) => [markerStart(id), markerEnde(id)])];
   for (const [start, ende] of bloecke) {
     let offen = false;
@@ -133,14 +81,15 @@ function einheitenAufteilen(einheiten) {
   return { ganz, bloecke };
 }
 
-/** Alle erfassten Links im Umfang: `{ datei, ...stelle }`, sortiert nach Datei und Position. */
-export function sammleLinks(rootDir, { repo, einheiten = [] }) {
+/** Alle erfassten Links im Umfang: `{ datei, ...stelle }`, sortiert nach Datei und Position. `ausnahmen` sind Pfad-Globs (`factoryLinks.ausnahmen`). */
+export function sammleLinks(rootDir, { repo, einheiten = [], ausnahmen = [] }) {
   const { ganz, bloecke } = einheitenAufteilen(einheiten);
+  const ausgenommen = ausnahmen.map(globRegex);
   const links = [];
   for (const datei of collectMarkdown(rootDir)) {
-    if (istAusgenommen(datei) || ganz.has(datei)) continue;
+    if (ausgenommen.some((re) => re.test(datei)) || ganz.has(datei)) continue;
     const text = readFileSync(join(rootDir, ...datei.split("/")), "utf8");
-    const aus = maskierteZeilen(text.split("\n"), bloecke.get(datei) ?? []);
+    const aus = maskierteZeilen(text, bloecke.get(datei) ?? []);
     for (const s of factoryLinkStellen(text, repo)) if (!aus.has(s.zeile - 1)) links.push({ datei, ...s });
   }
   return links;
@@ -149,13 +98,13 @@ export function sammleLinks(rootDir, { repo, einheiten = [] }) {
 const befund = (art, text, l) => ({ art, datei: l?.datei, zeile: l?.zeile, text });
 const paarSchluessel = (pfad, anker) => `${pfad}\0${anker}`;
 
-/** Sync-Stand und Index gegeneinander und gegen die Config: `index-fehlt`, `sync-stand`, `index-stand`. */
+/** Sync-Stand und Index gegeneinander und gegen das Factory-Repo: `index-fehlt`, `sync-stand`, `index-stand`. */
 function standBefunde({ index, sync, repo }) {
   const quelle = sync?.quelle;
-  if (!quelle?.tag || !quelle?.commit) return [befund("sync-stand", `${STAND_PFAD} fehlt oder hat keine quelle.tag/quelle.commit (Sync von einem Tag)`)];
+  if (!quelle?.tag || !quelle?.commit) return [befund("sync-stand", `${STAND_PFAD} hat keine quelle.tag/quelle.commit (Sync von einem Tag)`)];
   if (!index) return [befund("index-fehlt", `${INDEX_PFAD} fehlt oder ist kein JSON. ${SCHREIB_WEG}`)];
   const out = [];
-  if (index.repo !== repo) out.push(befund("index-stand", `${INDEX_PFAD}: repo ${index.repo} ≠ ${repo} aus ${CONFIG_PFAD}. ${SCHREIB_WEG}`));
+  if (index.repo !== repo) out.push(befund("index-stand", `${INDEX_PFAD}: repo ${index.repo} ≠ Factory-Repo ${repo}. ${SCHREIB_WEG}`));
   if (index.tag !== quelle.tag) out.push(befund("index-stand", `${INDEX_PFAD}: tag ${index.tag} ≠ Sync-Tag ${quelle.tag}. ${SCHREIB_WEG}`));
   if (index.commit !== quelle.commit) out.push(befund("index-stand", `${INDEX_PFAD}: commit ${index.commit} ≠ ${quelle.commit} aus ${STAND_PFAD}. ${SCHREIB_WEG}`));
   return out;
@@ -169,7 +118,7 @@ function linkBefunde({ links, index, sync }) {
   const out = [];
   for (const l of links) {
     if (l.form === "fremd") {
-      out.push(befund("form", `${l.url}: keine geprüfte Form (erwartet /blob|tree/<ref>/<pfad>[#anker])`, l));
+      out.push(befund("form", `${l.url}: keine geprüfte Form (erwartet blob oder tree, Ref, Pfad, optional Anker)`, l));
       continue;
     }
     benutzt.add(paarSchluessel(l.pfad, l.anker));
@@ -199,16 +148,33 @@ const liesJson = (rootDir, rel) => {
   }
 };
 
-/** Das Factory-Repo aus der Projekt-Config (Board mit Rolle `factory`) oder `null`. */
-const factoryRepo = (config) => config?.boards?.find((b) => b.rolle === "factory")?.repo ?? null;
+/**
+ * Die Voraussetzungen eines Laufs in fester Reihenfolge: `{ nichtsZuPruefen: true }` (kein Sync-Stand), `{ befunde }` (Sync-Stand kaputt, Config-Block
+ * `factoryLinks` kaputt oder Factory-Repo nicht bestimmbar) oder `{ sync, repo, ausnahmen }`. Erst der Sync-Stand, dann die Config: ohne Sync gibt es nichts zu
+ * prüfen, auch bei kaputtem Schlüssel (die Config prüfen andere Gates).
+ */
+function vorbedingungen(w) {
+  const { zustand, stand } = liesSyncStand(w);
+  if (zustand === "fehlt") return { nichtsZuPruefen: true };
+  if (zustand === "kaputt") return { befunde: [befund("sync-stand", `${STAND_PFAD} ist kein JSON-Objekt`)] };
+  let ausnahmen;
+  try {
+    ausnahmen = factoryLinkAusnahmenAus(ladeProjektConfig({ rootDir: w, pruefen: false }));
+  } catch (e) {
+    return { befunde: [befund("config", e instanceof Error ? e.message : String(e))] };
+  }
+  const repo = factoryRepo(w);
+  if (!repo) return { befunde: [befund("projekt", `weder quelle.repo im Sync-Stand noch repo am Board mit Rolle factory in ${PROJEKT_CONFIG}`)] };
+  return { sync: stand, repo, ausnahmen };
+}
 
-/** Prüfmodus auf einem Projektbaum: `{ befunde, links }`; ohne Factory-Board in der Config ein Befund (`projekt`). */
+/** Prüfmodus auf einem Projektbaum: `{ befunde, links }` oder `{ nichtsZuPruefen: true }` ohne Sync-Stand. */
 export function auditFactoryLinks(rootDir) {
-  const repo = factoryRepo(liesJson(rootDir, CONFIG_PFAD));
-  if (!repo) return { befunde: [befund("projekt", `${CONFIG_PFAD}: kein Board mit Rolle factory`)], links: [] };
-  const sync = liesJson(rootDir, STAND_PFAD);
-  const links = sammleLinks(rootDir, { repo, einheiten: Object.keys(sync?.einheiten ?? {}) });
-  return { befunde: pruefeIndex({ links, index: liesJson(rootDir, INDEX_PFAD), sync, repo }), links };
+  const v = vorbedingungen(rootDir);
+  if (v.nichtsZuPruefen) return { nichtsZuPruefen: true, befunde: [], links: [] };
+  if (v.befunde) return { befunde: v.befunde, links: [] };
+  const links = sammleLinks(rootDir, { repo: v.repo, einheiten: Object.keys(v.sync.einheiten ?? {}), ausnahmen: v.ausnahmen });
+  return { befunde: pruefeIndex({ links, index: liesJson(rootDir, INDEX_PFAD), sync: v.sync, repo: v.repo }), links };
 }
 
 /** Pfad und Anker eines Links am Tag der Quelle: `pfad-tot` oder `anker-tot` als Befund, sonst `null`. */
@@ -243,22 +209,23 @@ function indexText({ repo, tag, commit }, links) {
 
 /**
  * Schreibmodus: prüft die Links gegen den Tag in `quelle` (Klon des Factory-Repos) und schreibt nur ohne Befund Refs und Index.
- * Rückgabe `{ befunde, geschrieben }`; zusätzliche Befund-Arten `quelle`, `tag-commit`, `pfad-tot`, `anker-tot`, `form`.
+ * Rückgabe `{ befunde, geschrieben }`; zusätzliche Befund-Arten `quelle`, `tag-commit`, `pfad-tot`, `anker-tot`, `form`. Ohne Sync-Stand gibt es keinen Tag: Befund `sync-stand`.
  */
 export function schreibeFactoryLinks(rootDir, quelle) {
-  const repo = factoryRepo(liesJson(rootDir, CONFIG_PFAD));
-  const sync = liesJson(rootDir, STAND_PFAD);
-  if (!repo) return { befunde: [befund("projekt", `${CONFIG_PFAD}: kein Board mit Rolle factory`)], geschrieben: 0 };
-  if (!sync?.quelle?.tag || !sync.quelle.commit) return { befunde: [befund("sync-stand", `${STAND_PFAD} fehlt oder hat keine quelle.tag/quelle.commit`)], geschrieben: 0 };
+  const v = vorbedingungen(rootDir);
+  if (v.nichtsZuPruefen) return { befunde: [befund("sync-stand", `${STAND_PFAD} fehlt: ohne Sync-Stand gibt es keinen Tag, auf den geschrieben werden könnte`)], geschrieben: 0 };
+  if (v.befunde) return { befunde: v.befunde, geschrieben: 0 };
+  const { sync, repo } = v;
+  if (!sync.quelle?.tag || !sync.quelle.commit) return { befunde: [befund("sync-stand", `${STAND_PFAD} hat keine quelle.tag/quelle.commit`)], geschrieben: 0 };
   const { tag, commit } = sync.quelle;
   const leser = leserVomCommit(quelle, tag);
   if (leser.fehler) return { befunde: [befund("quelle", `Tag ${tag} in ${quelle}: ${leser.fehler}`)], geschrieben: 0 };
   if (leser.commit !== commit) return { befunde: [befund("tag-commit", `Tag ${tag} zeigt auf ${leser.commit}, ${STAND_PFAD} nennt ${commit}`)], geschrieben: 0 };
-  const links = sammleLinks(rootDir, { repo, einheiten: Object.keys(sync.einheiten ?? {}) });
+  const links = sammleLinks(rootDir, { repo, einheiten: Object.keys(sync.einheiten ?? {}), ausnahmen: v.ausnahmen });
   const echte = links.filter((l) => l.form !== "fremd");
   leser.vorladen(echte.filter((l) => l.anker !== "" && l.form === "blob" && l.pfad.endsWith(".md")).map((l) => l.pfad));
   const befunde = [
-    ...links.filter((l) => l.form === "fremd").map((l) => befund("form", `${l.url}: keine geprüfte Form (erwartet /blob|tree/<ref>/<pfad>[#anker])`, l)),
+    ...links.filter((l) => l.form === "fremd").map((l) => befund("form", `${l.url}: keine geprüfte Form (erwartet blob oder tree, Ref, Pfad, optional Anker)`, l)),
     ...echte.map((l) => zielBefund(l, leser)).filter(Boolean),
   ];
   if (befunde.length > 0) return { befunde, geschrieben: 0 };
@@ -268,10 +235,23 @@ export function schreibeFactoryLinks(rootDir, quelle) {
 }
 
 const AUFRUF = "Aufruf: node scripts/check-factory-links.mjs [--wurzel <pfad>] | --schreiben --quelle <klon>";
+const AUSNAHMEN_HINWEIS = `  Hinweis: historische Dateien nimmt \`factoryLinks.ausnahmen\` (Pfad-Globs) in ${PROJEKT_CONFIG} aus.`;
 
 function meldeBefunde(name, befunde, err) {
   err(`${name}: ${befunde.length} Befund(e)`);
   for (const b of befunde) err(`  ✖ ${b.datei ? `${b.datei}:${b.zeile}: ` : ""}[${b.art}] ${b.text}`);
+  if (befunde.some((b) => b.art === "ref")) err(AUSNAHMEN_HINWEIS);
+}
+
+function schreibModus(w, quelle, { out, err }) {
+  const r = schreibeFactoryLinks(w, quelle);
+  if (r.befunde.length > 0) {
+    meldeBefunde("check-factory-links", r.befunde, err);
+    err("  Nichts geschrieben.");
+    return 1;
+  }
+  out(`check-factory-links: ${r.geschrieben} Factory-Links auf ${r.ziele} Ziele am Tag ${r.tag} geschrieben (Refs und Index)`);
+  return 0;
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */
@@ -285,17 +265,12 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
     return AUFRUF_EXIT;
   }
   const w = werte.wurzel ?? wurzel;
-  if (werte.schreiben) {
-    const r = schreibeFactoryLinks(w, werte.quelle);
-    if (r.befunde.length > 0) {
-      meldeBefunde("check-factory-links", r.befunde, err);
-      err("  Nichts geschrieben.");
-      return 1;
-    }
-    out(`check-factory-links: ${r.geschrieben} Factory-Links auf ${r.ziele} Ziele am Tag ${r.tag} geschrieben (Refs und Index)`);
+  if (werte.schreiben) return schreibModus(w, werte.quelle, { out, err });
+  const { befunde, links, nichtsZuPruefen } = auditFactoryLinks(w);
+  if (nichtsZuPruefen) {
+    out(`check-factory-links: kein Sync-Stand (${STAND_PFAD}), nichts zu prüfen`);
     return 0;
   }
-  const { befunde, links } = auditFactoryLinks(w);
   if (befunde.length > 0) {
     meldeBefunde("check-factory-links", befunde, err);
     return 1;

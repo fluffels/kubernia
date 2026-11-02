@@ -83,6 +83,15 @@ export function pfadSicher(pfad) {
   return pfad.split("/").every((s) => s !== "" && s !== "." && s !== "..");
 }
 
+/** Fehler des optionalen Felds `pflichtChecks` einer Einheit (leer = gültig oder nicht gesetzt): nur an ganzen Workflow-Dateien, eine nicht leere Liste nicht leerer Texte (die Job-Namen, die ein Bezieher als Required Check braucht, factory#117). */
+export function pflichtChecksFehler(e) {
+  if (e.pflichtChecks === undefined) return [];
+  if (!istGanzeDatei(e) || !/^\.github\/workflows\/[^/]+\.ya?ml$/.test(e.pfad)) return ["pflichtChecks nur an einer ganzen Workflow-Datei (.github/workflows/<name>.yml)"];
+  const l = e.pflichtChecks;
+  if (!Array.isArray(l) || l.length === 0 || l.some((n) => typeof n !== "string" || n.trim() === "")) return ["pflichtChecks muss eine nicht leere Liste nicht leerer Texte sein"];
+  return [];
+}
+
 /** Manifest-Fehler (leer = gültig). `lies` liefert den Dateitext oder `null`. */
 export function pruefeManifest(m, lies) {
   const out = [];
@@ -101,6 +110,7 @@ export function pruefeManifest(m, lies) {
     if (!RINGE.includes(e.ring)) out.push(`${id}: unbekannter Ring '${e.ring}'`);
     if (e.quelle.trim() === "") out.push(`${id}: quelle fehlt`);
     if (e.block !== undefined && e.schluessel !== undefined) out.push(`${id}: block und schluessel zugleich`);
+    out.push(...pflichtChecksFehler(e).map((f) => `${id}: ${f}`));
     if (istGanzeDatei(e)) ganze.add(e.pfad);
     else teile.add(e.pfad);
     const text = lies(e.pfad);

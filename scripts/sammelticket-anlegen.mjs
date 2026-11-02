@@ -44,7 +44,8 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
-import { boardRolleFuer, labelAus, ladeProjektConfig, spracheAus, zerlegeRepo, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { boardRolleFuer, labelAus, ladeProjektConfig, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };

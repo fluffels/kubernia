@@ -33,9 +33,10 @@ export const GRENZE_PRIVAT = " (private Repos auf GitHub Free kennen keine Rules
 
 const gut = (punkt, hinweis) => ({ punkt, ok: true, ...(hinweis ? { hinweis } : {}) });
 const luecke = (punkt, befund, fix) => ({ punkt, ok: false, befund, fix, link: LINK_SICHERHEIT[punkt] });
-const nichtPruefbar = (punkt, grund, fix = FIX_FELD) => ({ punkt, ok: false, nichtPruefbar: true, befund: grund, fix, link: LINK_SICHERHEIT[punkt] });
+/** Ein nicht prüfbarer Punkt: `ok: false` ohne belegte Lücke (der Zustand ist unbekannt); `link` hat Vorrang vor dem Sicherheits-Link des Punkts. */
+export const nichtPruefbar = (punkt, grund, fix = FIX_FELD, link = LINK_SICHERHEIT[punkt]) => ({ punkt, ok: false, nichtPruefbar: true, befund: grund, fix, link });
 /** Nicht prüfbar, weil die Quelle selbst fehlschlug; `quelle.fix` (etwa „erst den Token-Punkt beheben“) hat Vorrang. */
-const ausFehler = (punkt, was, quelle) => nichtPruefbar(punkt, `${was} nicht lesbar (${quelle.fehler})`, quelle.fix ?? FIX_FEHLER);
+export const ausFehler = (punkt, was, quelle, link) => nichtPruefbar(punkt, `${was} nicht lesbar (${quelle.fehler})`, quelle.fix ?? FIX_FEHLER, link);
 
 /** Die fünf Punkte aus `security_and_analysis`: Schlüssel und Klickpfad der Lücke. */
 const SECURITY_AND_ANALYSIS = {
@@ -46,8 +47,11 @@ const SECURITY_AND_ANALYSIS = {
   "Dependabot Security Updates": ["dependabot_security_updates", "Settings › Advanced Security: Dependabot security updates aktivieren"],
 };
 
-function analysePunkt(punkt, repo) {
-  const [schluessel, fix] = SECURITY_AND_ANALYSIS[punkt];
+/** Die fünf Punkte aus `security_and_analysis`; ein Punkt ohne Zuordnung ist nicht prüfbar statt ein Wurf. */
+export function analysePunkt(punkt, repo) {
+  const zuordnung = SECURITY_AND_ANALYSIS[punkt];
+  if (zuordnung === undefined) return nichtPruefbar(punkt, `${punkt}: keine Prüfung zugeordnet`);
+  const [schluessel, fix] = zuordnung;
   if (repo.fehler !== undefined) return ausFehler(punkt, "Repo-Einstellungen", repo);
   const sa = repo.wert?.security_and_analysis;
   if (sa === null || typeof sa !== "object") return nichtPruefbar(punkt, "security_and_analysis fehlt in der Antwort (sichtbar nur mit Admin-Recht)", FIX_FEHLER);
@@ -70,7 +74,8 @@ function codeScanningPunkt(regeln, { spiegel, branch, privat }) {
   const punkt = "Code-Scanning";
   const grenze = privat ? GRENZE_PRIVAT : "";
   if (regeln.fehler !== undefined) return ausFehler(punkt, `Regeln auf ${branch}`, regeln);
-  const live = (regeln.wert ?? []).filter((r) => r.type === "code_scanning").flatMap((r) => (r.parameters?.code_scanning_tools ?? []).map((w) => w.tool));
+  if (!Array.isArray(regeln.wert)) return nichtPruefbar(punkt, `Regeln auf ${branch}: Antwort ist keine Liste`);
+  const live = regeln.wert.filter((r) => r.type === "code_scanning").flatMap((r) => (r.parameters?.code_scanning_tools ?? []).map((w) => w.tool));
   const soll = (spiegel?.codeScanning ?? []).map((e) => e.tool);
   const rs = spiegel?.name ? `Ruleset "${spiegel.name}"` : "das Ruleset";
   const fehlend = soll.filter((w) => !live.includes(w));

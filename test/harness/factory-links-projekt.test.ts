@@ -16,10 +16,8 @@ import * as raw from "../../scripts/check-factory-links.mjs";
 interface Stelle { start: number; ende: number; zeile: number; url: string; form: string; ref: string; pfad: string; anker: string; refStart: number }
 interface Befund { art: string; datei?: string; zeile?: number; text: string }
 const lib = raw as unknown as {
-  SCHNAPPSCHUSS_START: string;
-  SCHNAPPSCHUSS_ENDE: string;
   factoryLinkStellen(md: string, repo: string): Stelle[];
-  sammleLinks(root: string, o: { repo: string; einheiten?: string[] }): (Stelle & { datei: string })[];
+  sammleLinks(root: string, o: { repo: string; einheiten?: string[]; ausnahmen?: string[] }): (Stelle & { datei: string })[];
   pruefeIndex(o: { links: unknown[]; index: unknown; sync: unknown; repo: string }): Befund[];
   auditFactoryLinks(root: string): { befunde: Befund[]; links: unknown[] };
   schreibeFactoryLinks(root: string, quelle: string): { befunde: Befund[]; geschrieben: number };
@@ -27,6 +25,8 @@ const lib = raw as unknown as {
 };
 
 const WURZEL = fileURLToPath(new URL("../..", import.meta.url));
+/** Die Ausnahmen der echten Projekt-Config (`factoryLinks.ausnahmen`): historische Seiten, die den damaligen Stand nennen. */
+const AUSNAHMEN = (JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8")) as { factoryLinks: { ausnahmen: string[] } }).factoryLinks.ausnahmen;
 const REPO = "o/f";
 const u = (ref: string, pfad: string, anker = "", form = "blob") => `https://github.com/${REPO}/${form}/${ref}/${pfad}${anker ? `#${anker}` : ""}`;
 const run = (argv: string[], wurzel: string) => {
@@ -86,22 +86,31 @@ describe("sammleLinks: Ausnahmen (AK4)", () => {
       "docs/adr/x.md": eintrag,
       "docs/lessons-learned.md": eintrag,
       "docs/a-gegenprobe-b.md": eintrag,
-      "docs/s.md": `${lib.SCHNAPPSCHUSS_START}\n${eintrag}\n${lib.SCHNAPPSCHUSS_ENDE}\n${eintrag}`,
+      "docs/s.md": `${ENTFERNT_START}\n${eintrag}\n${ENTFERNT_ENDE}\n${eintrag}`,
       "AGENTS.md": "<!-- factory-besitz:start kern -->\n" + eintrag + "\n<!-- factory-besitz:ende kern -->\n" + eintrag,
       "docs/ganz.md": eintrag,
     });
 
   test("ADRs, Lessons Learned, Gegenproben, Schnappschuss-Block, Besitz-Block und Besitz-Datei bleiben unerfasst; der Rest zählt", () => {
-    const links = lib.sammleLinks(root(), { repo: REPO, einheiten: ["AGENTS.md#kern", "docs/ganz.md", ".claude/settings.json#/hooks"] });
+    const links = lib.sammleLinks(root(), { repo: REPO, einheiten: ["AGENTS.md#kern", "docs/ganz.md", ".claude/settings.json#/hooks"], ausnahmen: AUSNAHMEN });
     assert.deepEqual(links.map((l) => `${l.datei}:${l.zeile}`).sort(), ["AGENTS.md:4", "docs/s.md:4", "docs/x.md:1"]);
   });
   test("derselbe Link direkt nach dem Block-Ende wird erfasst (Gegenprobe)", () => {
     const links = lib.sammleLinks(root(), { repo: REPO, einheiten: ["AGENTS.md#kern"] });
     assert.ok(links.some((l) => l.datei === "AGENTS.md" && l.zeile === 4));
   });
-  test("die Schnappschuss-Marker sind dieselben wie die des Reste-Wächters", () => {
-    assert.equal(lib.SCHNAPPSCHUSS_START, ENTFERNT_START);
-    assert.equal(lib.SCHNAPPSCHUSS_ENDE, ENTFERNT_ENDE);
+  test("ADR-Unterordner und Gegenproben in Unterordnern: die Globs der Projekt-Config treffen genau die historischen Seiten", () => {
+    const eintrag = `[a](${u("v1", "a.md")})`;
+    const root = fixture({
+      "docs/adr/fortschreibungen/x.md": eintrag,
+      "docs/adr/x.md": eintrag,
+      "docs/lessons-learned.md": eintrag,
+      "docs/a-gegenprobe-b.md": eintrag,
+      "docs/modul/a-gegenprobe-b.md": eintrag,
+      "docs/adr-neu.md": eintrag,
+    });
+    const links = lib.sammleLinks(root, { repo: REPO, ausnahmen: AUSNAHMEN });
+    assert.deepEqual(links.map((l) => l.datei).sort(), ["docs/adr-neu.md", "docs/modul/a-gegenprobe-b.md"]);
   });
 });
 
@@ -152,24 +161,23 @@ describe("Prüfmodus (AK1, AK3)", () => {
   test("rot: Index-Repo ungleich Config-Repo", () => {
     assert.deepEqual(arten(projekt(tagLinks("v1"), JSON.stringify({ repo: "x/y", tag: "v1", commit: "c1", ziele: { "a.md": ["kopf"], "test/h": [""] } }))), ["index-stand"]);
   });
-  test("rot: Sync-Stand ohne Commit (Tag gesetzt) und fehlende Sync-Stand-Datei", () => {
+  test("rot: Sync-Stand ohne Commit (Tag gesetzt); ohne Sync-Stand-Datei gibt es nichts zu prüfen (Kern, factory#130)", () => {
     assert.deepEqual(arten(projekt(tagLinks("v1"), gut(), { tag: "v1", commit: "" })), ["sync-stand"]);
     const ohneStand = fixture({
       ".factory/projekt.json": JSON.stringify({ boards: [{ rolle: "factory", repo: REPO }] }),
       ".factory/factory-links.json": gut(),
       "docs/x.md": tagLinks("v1"),
     });
-    assert.deepEqual(arten(ohneStand), ["sync-stand"]);
+    assert.equal(lib.auditFactoryLinks(ohneStand).nichtsZuPruefen, true);
+    assert.equal(run([], ohneStand).code, 0);
   });
   test("rot: Index ist kein JSON", () => {
     assert.deepEqual(arten(projekt(tagLinks("v1"), "{kaputt")), ["index-fehlt"]);
   });
-  test("rot: kein Board mit Rolle factory in der Projekt-Config", () => {
+  test("kein Board mit Rolle factory und kein Sync-Stand: nichts zu prüfen (Kern, factory#130)", () => {
     const root = fixture({ ".factory/projekt.json": JSON.stringify({ boards: [{ rolle: "produkt", repo: REPO }] }), "docs/x.md": tagLinks("v1") });
-    assert.deepEqual(arten(root), ["projekt"]);
-    const r = run([], root);
-    assert.equal(r.code, 1);
-    assert.match(r.err, /\[projekt\]/);
+    assert.equal(lib.auditFactoryLinks(root).nichtsZuPruefen, true);
+    assert.equal(run([], root).code, 0);
   });
   test("--wurzel wählt den Projektbaum", () => {
     const root = projekt(tagLinks("v1"), gut());
@@ -287,10 +295,10 @@ describe("Schreibmodus e2e mit temporärem Git-Repo als Quelle (AK2, AK3)", () =
     assert.equal(lies(root, "docs/x.md"), doku);
     assert.equal(existiert(root, ".factory/factory-links.json"), false);
   });
-  test("kein Board mit Rolle factory und fehlender Sync-Stand: rot, nichts geschrieben", () => {
+  test("fehlender Sync-Stand: rot, nichts geschrieben (auch ohne Board mit Rolle factory)", () => {
     const k = klon();
     const ohneBoard = fixture({ ".factory/projekt.json": JSON.stringify({ boards: [] }), "docs/x.md": `[a](${u("v1", "a.md")})\n` });
-    assert.match(run(["--schreiben", "--quelle", k.dir], ohneBoard).err, /\[projekt\]/);
+    assert.match(run(["--schreiben", "--quelle", k.dir], ohneBoard).err, /\[sync-stand\]/);
     const ohneStand = fixture({ ".factory/projekt.json": JSON.stringify({ boards: [{ rolle: "factory", repo: REPO }] }), "docs/x.md": `[a](${u("v1", "a.md")})\n` });
     const r = run(["--schreiben", "--quelle", k.dir], ohneStand);
     assert.equal(r.code, 1);

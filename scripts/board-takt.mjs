@@ -20,7 +20,8 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
-import { gleichesRepo, labelAus, ladeProjektConfig, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { gleichesRepo } from "./repo-form.mjs";
 import {
   REPO,
   SAMMELTICKET_TITEL,

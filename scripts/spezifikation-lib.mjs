@@ -16,9 +16,7 @@
  */
 
 import { fenceMaske } from "./docs-gen/markdown.mjs";
-import { REPO_FORM, istRepoForm } from "./repo-form.mjs";
-
-export { REPO_FORM, istRepoForm };
+import { istRepoForm } from "./repo-form.mjs";
 
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 
@@ -57,7 +55,7 @@ export function spracheMaengel(sp) {
   return maengel;
 }
 
-/** Maskiert jedes Zeichen außer Buchstaben und Ziffern als `\u{…}` (gültig im Unicode-Modus; die Lib bleibt importfrei). */
+/** Maskiert jedes Zeichen außer Buchstaben und Ziffern als `\u{…}` (gültig im Unicode-Modus; die Lib importiert nur `markdown.mjs` und `repo-form.mjs`). */
 const maskiere = (s) => s.replace(/[^\p{L}\p{N}]/gu, (c) => `\\u{${c.codePointAt(0).toString(16)}}`);
 /** Text als Regex-Quelle: Zeichen maskiert, Leerraum beliebig lang (auch Zeilenumbruch). */
 const textMuster = (s) => s.trim().split(/\s+/).map(maskiere).join("\\s+");

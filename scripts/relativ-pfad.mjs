@@ -1,4 +1,4 @@
-// Blatt-Modul ohne Importe (#101): die Prüfung eines repo-relativen POSIX-Pfads. `arbeitsplatz-lib` führt sie weiter, `projekt-config-lib` importiert direkt.
+// Blatt-Modul ohne Importe (#101): die Prüfung eines repo-relativen POSIX-Pfads. `arbeitsplatz-lib` und `projekt-config-lib` importieren direkt (kein Re-Export, factory#114).
 
 /** Pur: ein relativer POSIX-Pfad (`src`, `docs/module`): kein absoluter Pfad, kein Laufwerk, keine `.`/`..`-Segmente, kein Backslash, kein End- oder Doppel-Slash. */
 export function istRelativPosix(pfad) {

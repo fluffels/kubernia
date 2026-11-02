@@ -66,7 +66,8 @@ import {
 import { aufnahmePlan, brauchtRepo } from "./board-plan-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { tokenFuerZiel } from "./gh-cli.mjs";
-import { fremdesBoardText, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { fremdesBoardText, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istRepoForm } from "./repo-form.mjs";
 
 export { NOTFALL_ARTEN };
 
