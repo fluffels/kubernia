@@ -11,7 +11,7 @@
  * hart beim Laden – genau wie eine unbekannte Sammlung in der Check-DSL. Bewusst nur
  * STRUKTURELL (richtige JSON-Art je Feld; einzige benannte Ausnahme: Invarianten, deren
  * Bruch den Round-Trip `get -o yaml` → `apply` bricht, z.B. die TLS-Regel der Gateway-
- * Listener), NICHT die tiefe Ressourcen-Semantik: die
+ * Listener in `gateways` und `applyEffects.gateway`), NICHT die tiefe Ressourcen-Semantik: die
  * Eingabe-Schreibweisen sind laut `Scenario`-Doku absichtlich locker, `reset()`/
  * `mergeScenario()` normalisieren sie, und die Sim-Semantik prüft der Sim selbst. Ein
  * neues Scenario-Feld braucht so eine bewusste Allowlist-Zeile (fail-fast-Weiche),
@@ -54,22 +54,22 @@ const scObjOrNull: ScenarioFieldCheck = (v, p) => {
 /** `gateways`: Array von Gateways; je Listener gilt die TLS-Invariante des Manifest-Mappers
  *  (HTTPS/TLS braucht `tlsSecret`, HTTP/TCP/UDP darf keins tragen), sonst bricht der Round-Trip
  *  `get -o yaml` → `apply` (#1686). */
+const scGateway: ScenarioFieldCheck = (g, gp) => {
+  const listeners = asRecord(g, gp).listeners;
+  scArray(listeners, `${gp}.listeners`);
+  for (const [li, l] of (listeners as unknown[]).entries()) {
+    const lp = `${gp}.listeners[${li}]`;
+    const rec = asRecord(l, lp);
+    const protocol = asNonEmptyString(rec.protocol, `${lp}.protocol`);
+    const hasSecret = rec.tlsSecret !== undefined;
+    if (hasSecret) asNonEmptyString(rec.tlsSecret, `${lp}.tlsSecret`);
+    const verstoss = tlsRuleViolation(protocol, hasSecret);
+    if (verstoss) fail(lp, `${protocol}: tlsSecret ${verstoss}`);
+  }
+};
 const scGateways: ScenarioFieldCheck = (v, p) => {
   scArray(v, p);
-  for (const [gi, g] of (v as unknown[]).entries()) {
-    const gp = `${p}[${gi}]`;
-    const listeners = asRecord(g, gp).listeners;
-    scArray(listeners, `${gp}.listeners`);
-    for (const [li, l] of (listeners as unknown[]).entries()) {
-      const lp = `${gp}.listeners[${li}]`;
-      const rec = asRecord(l, lp);
-      const protocol = asNonEmptyString(rec.protocol, `${lp}.protocol`);
-      const hasSecret = rec.tlsSecret !== undefined;
-      if (hasSecret) asNonEmptyString(rec.tlsSecret, `${lp}.tlsSecret`);
-      const verstoss = tlsRuleViolation(protocol, hasSecret);
-      if (verstoss) fail(lp, `${protocol}: tlsSecret ${verstoss}`);
-    }
-  }
+  for (const [gi, g] of (v as unknown[]).entries()) scGateway(g, `${p}[${gi}]`);
 };
 /** `files`: Record<string,string> – die simulierten Datei-Inhalte (per `cat` lesbar). */
 const scStringRecord: ScenarioFieldCheck = (v, p) => {
@@ -78,6 +78,9 @@ const scStringRecord: ScenarioFieldCheck = (v, p) => {
     if (typeof o[k] !== "string") fail(`${p}["${k}"]`, "String erwartet");
   }
 };
+/** Tiefere Invarianten je `applyEffect`-Schlüssel (#1751): ein neuer Eintrag ist eine Zeile. `gateway`
+ *  trägt dieselbe TLS-Regel wie `gateways`. */
+const APPLY_EFFECT_CHECKS: Partial<Record<keyof ApplyEffect, ScenarioFieldCheck>> = { gateway: scGateway };
 /** `applyEffects`: Record<dateiname, ApplyEffect>; jeder Effekt-Schlüssel gegen die Allowlist. */
 const scApplyEffects: ScenarioFieldCheck = (v, p) => {
   const o = asRecord(v, p);
@@ -87,6 +90,7 @@ const scApplyEffects: ScenarioFieldCheck = (v, p) => {
       if (!APPLY_EFFECT_KEYS.has(ek)) {
         fail(`${p}["${file}"].${ek}`, `unbekannter applyEffect-Schlüssel „${ek}" (nicht in der ApplyEffect-Allowlist)`);
       }
+      APPLY_EFFECT_CHECKS[ek as keyof ApplyEffect]?.(eff[ek], `${p}["${file}"].${ek}`);
     }
   }
 };

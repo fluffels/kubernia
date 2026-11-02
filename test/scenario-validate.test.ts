@@ -147,6 +147,32 @@ test("reviveScenario: Gateway-Struktur: Element kein Objekt, listeners kein Arra
 test("reviveScenario: null als Gateway- oder Listener-Element und ein leeres tlsSecret werden sauber abgelehnt", () => {
   assert.throws(() => reviveScenario({ gateways: [null] }, "x"), /gateways\[0\].*Objekt erwartet/);
   assert.throws(() => reviveScenario({ gateways: [gw([null])] }, "x"), /listeners\[0\].*Objekt erwartet/);
-  assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 443, protocol: "HTTPS", tlsSecret: "" }])] }, "x"), ContentValidationError);
-  assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 443, protocol: "HTTPS", tlsSecret: null }])] }, "x"), ContentValidationError);
+  assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 443, protocol: "HTTPS", tlsSecret: "" }])] }, "x"), /gateways\[0\]\.listeners\[0\]\.tlsSecret/);
+  assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 443, protocol: "HTTPS", tlsSecret: null }])] }, "x"), /gateways\[0\]\.listeners\[0\]\.tlsSecret/);
+});
+
+test("reviveScenario: tlsSecret als Zahl wird mit Pfad …tlsSecret abgelehnt", () => {
+  assert.throws(() => reviveScenario({ gateways: [gw([{ name: "a", port: 443, protocol: "HTTPS", tlsSecret: 42 }])] }, "x"), /gateways\[0\]\.listeners\[0\]\.tlsSecret/);
+});
+
+/* ---------- applyEffects.gateway: dieselbe TLS-Invariante (#1751) ---------- */
+
+const effGw = (listeners: unknown): unknown => ({ applyEffects: { "gw.yaml": { gateway: gw(listeners) } } });
+const effPfad = /applyEffects\["gw\.yaml"\]\.gateway\.listeners\[0\]/;
+
+test("reviveScenario: applyEffects.gateway: HTTPS ohne tlsSecret wird abgelehnt", () => {
+  assert.throws(() => reviveScenario(effGw([{ name: "h", port: 443, protocol: "HTTPS" }]), "x"), /applyEffects\["gw\.yaml"\]\.gateway\.listeners\[0\].*tlsSecret/);
+});
+
+test("reviveScenario: applyEffects.gateway: tlsSecret als Zahl oder HTTP mit tlsSecret wird abgelehnt", () => {
+  assert.throws(() => reviveScenario(effGw([{ name: "h", port: 443, protocol: "HTTPS", tlsSecret: 42 }]), "x"), /applyEffects\["gw\.yaml"\]\.gateway\.listeners\[0\]\.tlsSecret/);
+  assert.throws(() => reviveScenario(effGw([{ name: "h", port: 80, protocol: "HTTP", tlsSecret: "s" }]), "x"), effPfad);
+});
+
+test("reviveScenario: applyEffects.gateway: gültige Listener passen unverändert durch", () => {
+  const raw = effGw([
+    { name: "https", port: 443, protocol: "HTTPS", tlsSecret: "s" },
+    { name: "http", port: 80, protocol: "HTTP" },
+  ]);
+  assert.deepEqual(reviveScenario(raw, "x"), raw);
 });

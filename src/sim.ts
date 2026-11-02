@@ -137,10 +137,10 @@ function buildRole(r: RoleSpec, created: number): RoleRes {
   return { name: r.name, cluster: !!r.cluster, rules: r.rules.map(rule => ({ verbs: rule.verbs.slice(), resources: rule.resources.slice() })), created };
 }
 function buildRoleBinding(b: RoleBindingSpec, created: number): RoleBindingRes {
-  return { name: b.name, cluster: !!b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => Object.assign({}, s)), created };
+  return { name: b.name, cluster: !!b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => structuredClone(s)), created };
 }
 function buildRelease(r: ReleaseSpec): Release {
-  return { name: r.name, chart: r.chart, revision: r.revision, depName: r.depName, history: (r.history || []).map(h => Object.assign({}, h)) };
+  return { name: r.name, chart: r.chart, revision: r.revision, depName: r.depName, history: (r.history || []).map(h => structuredClone(h)) };
 }
 function buildChart(c: ChartSpec): Chart {
   return { name: c.name, version: c.version || "0.1.0", packaged: !!c.packaged };
@@ -314,7 +314,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
     _resetDocker(sc: Scenario) {
       this.docker = {
         pulled: (sc.dockerImages || []).slice(),
-        containers: (sc.dockerContainers || []).map(c => Object.assign({}, c)),
+        containers: (sc.dockerContainers || []).map(c => structuredClone(c)),
       };
     }
 
@@ -322,7 +322,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
       // „bare metal" (#460): ein leerer/zerstörter Cluster startet OHNE Nodes – sonst der
       // klassische 3-Knoten-Default. Explizit vorgegebene `nodes` gewinnen in beiden Fällen.
       // #596 (Zwilling zu #577): über die Node-Aggregat-SSOT `provisionNode` statt rohem
-      // `Object.assign({}, n)` – füllt fehlende Pflichtfelder (status/roles/version) mit den
+      // flachem Kopieren – füllt fehlende Pflichtfelder (status/roles/version) mit den
       // Cluster-Defaults, statt einen Teil-Spec als strukturell illegalen ClusterNode zu
       // übernehmen (sonst bricht deriveControlPlane gleich unten an `roles === undefined`).
       this.nodes = [];
@@ -338,10 +338,10 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
     }
 
     _resetConfig(sc: Scenario) {
-      this.secrets = (sc.secrets || []).map(s => Object.assign({}, s));
-      this.configMaps = (sc.configMaps || []).map(c => Object.assign({}, c));
-      this.files = Object.assign({}, sc.files || {});
-      this.applyEffects = sc.applyEffects || {}; // dateiname -> Wirkung von kubectl apply -f
+      this.secrets = (sc.secrets || []).map(s => structuredClone(s));
+      this.configMaps = (sc.configMaps || []).map(c => structuredClone(c));
+      this.files = structuredClone(sc.files ?? {});
+      this.applyEffects = structuredClone(sc.applyEffects ?? {}); // dateiname -> Wirkung von kubectl apply -f
     }
 
     _resetStorage(sc: Scenario) {
@@ -407,14 +407,14 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
         branches: (sc.gitBranches || ["main"]).slice(),
         staged: (sc.gitStaged || []).slice(),
         committed: (sc.gitCommitted || []).slice(),
-        commits: (sc.gitCommits || []).map(c => Object.assign({}, c)),
+        commits: (sc.gitCommits || []).map(c => structuredClone(c)),
         pushed: !!sc.gitPushed,
         remoteAhead: sc.gitRemoteAhead || 0,
         fetched: !!sc.gitFetched,
         // Aus einem gespeicherten Stand kommen pending/aktiver Konflikt direkt zurück
         // (gitConflict trägt hier das gespeicherte pendingConflict, nicht das Quest-„Scharfstellen“).
-        conflict: sc.gitActiveConflict ? Object.assign({}, sc.gitActiveConflict) : null,
-        pendingConflict: sc.gitConflict ? Object.assign({}, sc.gitConflict) : null,
+        conflict: sc.gitActiveConflict ? structuredClone(sc.gitActiveConflict) : null,
+        pendingConflict: sc.gitConflict ? structuredClone(sc.gitConflict) : null,
       };
     }
 
@@ -422,16 +422,16 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
       this.ci = {
         pipelines: (sc.ciPipelines || []).map(p => ({
           id: p.id, ref: p.ref, status: p.status, created: p.created,
-          stages: (p.stages || []).map(s => Object.assign({}, s)),
+          stages: (p.stages || []).map(s => structuredClone(s)),
         })),
-        deploy: sc.ciDeploy ? Object.assign({}, sc.ciDeploy) : null, // {name, image, replicas}, den die deploy-Stage ausrollt
+        deploy: sc.ciDeploy ? structuredClone(sc.ciDeploy) : null, // {name, image, replicas}, den die deploy-Stage ausrollt
       };
     }
 
     _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean, template?: PodTemplateSpec & RolloutHistorySpec): Deployment {
       // #507: Namensprüfung zentral an der Fabrik – jeder Anlege-Weg läuft hier durch.
       const d: Deployment = {
-        name: resourceName(name), image, replicas, created: this.clock, pods: [], broken: broken ? Object.assign({}, broken) : null,
+        name: resourceName(name), image, replicas, created: this.clock, pods: [], broken: broken ? structuredClone(broken) : null,
         envFrom: { configMaps: (envFrom?.configMaps || []).slice(), secrets: (envFrom?.secrets || []).slice() },
         cpuHeavy: !!cpuHeavy,
       };
@@ -592,7 +592,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
     mergeScenario(sc: Scenario | null | undefined) {
       if (!sc) return;
       Object.assign(this.files, sc.files || {});
-      Object.assign(this.applyEffects, sc.applyEffects || {});
+      Object.assign(this.applyEffects, structuredClone(sc.applyEffects ?? {}));
       applyBootstrapScenario(this, sc); // Aufbau-Bogen (#461): Sturm/bare-metal + Control-Plane-Lage
       this._mergeNodes(sc);
       // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
@@ -683,7 +683,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
         }
       }
       for (const cm of sc.configMaps || []) {
-        if (!this.configMaps.some(x => x.name === cm.name)) this.configMaps.push(Object.assign({}, cm));
+        if (!this.configMaps.some(x => x.name === cm.name)) this.configMaps.push(structuredClone(cm));
       }
     }
 
@@ -694,7 +694,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
       }
       // charts kommen jetzt aus BUILDER_RESOURCE_REGISTRY (#864).
       // (services/ingresses/networkPolicies laufen über die Resource-Registry #499.)
-      if (sc.ciDeploy) this.ci.deploy = Object.assign({}, sc.ciDeploy);
+      if (sc.ciDeploy) this.ci.deploy = structuredClone(sc.ciDeploy);
     }
 
     _mergeGit(sc: Scenario) {
@@ -726,19 +726,19 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
     snapshot() {
       return {
         dockerImages: this.docker.pulled.slice(),
-        dockerContainers: this.docker.containers.map(c => Object.assign({}, c)),
+        dockerContainers: this.docker.containers.map(c => structuredClone(c)),
         nodes: this.nodes.map(nodeSnapshot),
-        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, ...snapshotPodTemplate(d), ...snapshotRolloutHistory(d) })), // Template-Felder (Ephemeral #240, Limits/securityContext #1300, SA): überleben den Reload; `evicted` wird beim Laden neu abgeleitet
+        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? structuredClone(d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, ...snapshotPodTemplate(d), ...snapshotRolloutHistory(d) })), // Template-Felder (Ephemeral #240, Limits/securityContext #1300, SA): überleben den Reload; `evicted` wird beim Laden neu abgeleitet
         // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
         // Resource-Registry serialisieren (#499) – tiefer Klon, gespiegelt zu reset/mergeScenario.
         ...snapshotSimple(this),
         // storageClasses/pvs/volumeSnapshots/charts/argoApps über die Builder-Registry (#864).
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...Object.fromEntries(BUILDER_RESOURCE_REGISTRY.map(({ key, snap }) => [key, ((rawBuilderList(this, key) ?? []) as any[]).map((x: any) => snap ? snap(x) : Object.assign({}, x))])),
+        ...Object.fromEntries(BUILDER_RESOURCE_REGISTRY.map(({ key, snap }) => [key, ((rawBuilderList(this, key) ?? []) as any[]).map((x: any) => snap ? snap(x) : structuredClone(x))])),
         secrets: this.secrets.map(s => ({ name: s.name, keys: s.keys.slice(), type: s.type })),
         configMaps: this.configMaps.map(c => ({ name: c.name, keys: c.keys.slice() })),
-        files: Object.assign({}, this.files),
-        applyEffects: JSON.parse(JSON.stringify(this.applyEffects)),
+        files: structuredClone(this.files),
+        applyEffects: structuredClone(this.applyEffects),
         // Speicher (#122): PVCs gebunden serialisieren (volume + status), damit ein Reload
         // sie NICHT neu provisioniert; StatefulSets nur als Spezifikation – ihre Pods (stabile
         // Namen) und bereits vorhandene PVCs baut reset() deterministisch wieder auf.
@@ -752,12 +752,12 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
         // ohnehin wieder an – nur die selbst erstellten serialisieren.
         serviceAccounts: this.serviceAccounts.filter(s => s.name !== "default").map(s => s.name),
         roles: this.roles.map(r => ({ name: r.name, cluster: r.cluster, rules: r.rules.map(rule => ({ verbs: rule.verbs.slice(), resources: rule.resources.slice() })) })),
-        roleBindings: this.roleBindings.map(b => ({ name: b.name, cluster: b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => Object.assign({}, s)) })),
+        roleBindings: this.roleBindings.map(b => ({ name: b.name, cluster: b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => structuredClone(s)) })),
         podSecurity: this.podSecurity,
         helmRepos: this.helmRepos.map(r => ({ name: r.name, url: r.url })),
         releases: this.releases.map(r => ({
           name: r.name, chart: r.chart, revision: r.revision, depName: r.depName,
-          history: r.history.map(h => Object.assign({}, h)),
+          history: r.history.map(h => structuredClone(h)),
         })),
         tfResources: this.tf.resources.map(r => ({ addr: r.addr, desc: r.desc, provider: r.provider })),
         tfInitialized: this.tf.initialized,
@@ -773,19 +773,19 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
         gitBranches: this.git.branches.slice(),
         gitStaged: this.git.staged.slice(),
         gitCommitted: this.git.committed.slice(),
-        gitCommits: this.git.commits.map(c => Object.assign({}, c)),
+        gitCommits: this.git.commits.map(c => structuredClone(c)),
         gitPushed: this.git.pushed,
         gitRemoteAhead: this.git.remoteAhead,
         gitFetched: this.git.fetched,
         // pendingConflict landet im gitConflict-Feld; _armGitConflict greift beim
         // Wieder-Einmischen nicht (Branch existiert bereits) -> kein Doppel-Scharfstellen.
-        gitConflict: this.git.pendingConflict ? Object.assign({}, this.git.pendingConflict) : null,
-        gitActiveConflict: this.git.conflict ? Object.assign({}, this.git.conflict) : null,
+        gitConflict: this.git.pendingConflict ? structuredClone(this.git.pendingConflict) : null,
+        gitActiveConflict: this.git.conflict ? structuredClone(this.git.conflict) : null,
         ciPipelines: this.ci.pipelines.map(p => ({
           id: p.id, ref: p.ref, status: p.status, created: p.created,
-          stages: p.stages.map(s => Object.assign({}, s)),
+          stages: p.stages.map(s => structuredClone(s)),
         })),
-        ciDeploy: this.ci.deploy ? Object.assign({}, this.ci.deploy) : null,
+        ciDeploy: this.ci.deploy ? structuredClone(this.ci.deploy) : null,
         // Control-Plane-Bootstrap (#460): friert die Aufbau-Lage ein (up/Token/Node), damit ein
         // halb aufgebauter Cluster den Reload überlebt. Die schon angeschlossenen Knoten trägt
         // `nodes` (oben) – `bareMetal` braucht der Snapshot daher nicht.
