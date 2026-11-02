@@ -17,9 +17,8 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { istRelativPosix } from "./relativ-pfad.mjs";
+import { globMaengel } from "./pfad-glob.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
-
-export { gleichesRepo, istRepoForm, zerlegeRepo };
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -323,6 +322,22 @@ export function gatesAus(config) {
   return { nichtInVerify: wert.nichtInVerify ?? [] };
 }
 
+/** Pur: prüft den Block `factoryLinks` (Form): nur `ausnahmen`, eine Liste von Pfad-Globs (`scripts/pfad-glob.mjs`). */
+function pruefeFactoryLinks(f) {
+  if (!istObjekt(f)) return ["factoryLinks muss ein Objekt mit der Liste ausnahmen sein"];
+  const fehler = Object.keys(f).filter((k) => k !== "ausnahmen").map((k) => `factoryLinks.${k} ist kein bekannter Schlüssel (erlaubt: ausnahmen)`);
+  return f.ausnahmen === undefined ? fehler : [...fehler, ...globMaengel(f.ausnahmen, "factoryLinks.ausnahmen")];
+}
+
+/** Pur: die Dateien, die der Factory-Link-Wächter nicht prüft (`factoryLinks.ausnahmen`, Pfad-Globs); ohne Schlüssel leer. Wirft mit Fix-Zeile bei kaputter Form. */
+export function factoryLinkAusnahmenAus(config) {
+  const wert = config?.factoryLinks;
+  if (wert === undefined) return [];
+  const fehler = pruefeFactoryLinks(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block factoryLinks (ausnahmen: Liste von Pfad-Globs mit * ? **) in ${PROJEKT_CONFIG} korrigieren`);
+  return wert.ausnahmen ?? [];
+}
+
 /** Pur: der Namensteil von `repo` der Config (`owner/name` → `name`); wirft wie `zerlegeRepo`. */
 export const repoName = (config) => zerlegeRepo(config?.repo).name;
 
@@ -500,6 +515,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.bereiche !== undefined) fehler.push(...pruefeBereiche(wert.bereiche));
   if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
   if (wert.gates !== undefined) fehler.push(...pruefeGates(wert.gates));
+  if (wert.factoryLinks !== undefined) fehler.push(...pruefeFactoryLinks(wert.factoryLinks));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
   if (wert.arbeitsplatz !== undefined) fehler.push(...arbeitsplatzMaengel(wert.arbeitsplatz, { worktreePraefix: wert.praefixe?.worktree }));

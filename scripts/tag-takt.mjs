@@ -273,14 +273,14 @@ export function lauf({ io, trocken = false }) {
 
 const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
 
-/** Einstieg. `deps` (Tests): `start`, `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `ladeManifest`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), ladeManifest = () => JSON.parse(readFileSync(MANIFEST, "utf8")) } = {}) {
+/** Einstieg. `deps` (Tests): `start`, `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `env` (Standard `process.env`; liefert `PROJECT_TOKEN`), `ladeManifest`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), env = process.env, ladeManifest = () => JSON.parse(readFileSync(MANIFEST, "utf8")) } = {}) {
   const s = await start(argv, { skript: "tag-takt", praefix: "Tag-Takt: Projekt-Config nicht lesbar: ", log, err });
   if (s.code !== undefined) return s.code;
   const { config, libs } = s;
   const { REPO, ladeSammelKontext, vertrauteIssues, frischeOffeneIssues } = libs;
   const { ziel, zielOpt } = zielZugang(libs);
-  const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness") });
+  const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness"), env });
   const io = {
     log,
     istBezieher: () => liesSyncStand(wurzel).zustand !== "fehlt",
@@ -298,7 +298,7 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     frischeOffene: () => frischeOffeneIssues({ repo: ziel, anzahl: 50, mitBoard: false }, zielOpt),
     dringlichKey: commitZeilenAus(config).syncDringlich,
     jetzt: () => new Date(),
-    projectToken: process.env.PROJECT_TOKEN,
+    projectToken: env.PROJECT_TOKEN,
     legeIssueAn: aktion.legeIssueAn,
     sortiereEin: (nr, art) => {
       try {

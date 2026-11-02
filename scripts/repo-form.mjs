@@ -1,5 +1,4 @@
-// Blatt-Modul ohne Importe (#101): die Form `owner/name` eines Repos, ihre Prüfung und Zerlegung. Einzige Quelle; `projekt-config-lib` und
-// `spezifikation-lib` führen sie weiter, `gh-cli`, `inbox-lib`, `sync-stand-lib` und `claims-pruefen` importieren direkt (kein Zyklus über die Config-Lib).
+// Blatt-Modul ohne Importe (#101): die Form `owner/name` eines Repos, ihre Prüfung und Zerlegung. Einzige Quelle; alle Abnehmer importieren direkt (kein Re-Export, factory#114; kein Zyklus über die Config-Lib).
 
 /** Die Form `owner/name` eines Repos (SSOT): GitHub-Zeichen `[\w.-]` je Teil, genau ein Schrägstrich. Streng, weil Owner/Name ungeprüft in GraphQL-Texte gehen. */
 export const REPO_FORM = /^([\w.-]+)\/([\w.-]+)$/;
@@ -10,7 +9,7 @@ export const istRepoForm = (repo) => typeof repo === "string" && REPO_FORM.test(
 /** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
 export function zerlegeRepo(repo) {
   const m = typeof repo === "string" ? REPO_FORM.exec(repo) : null;
-  if (!m) throw new Error("repo fehlt oder hat nicht die Form owner/name\nFix: repo als owner/name angeben (in der Projekt-Config der Schlüssel repo in .factory/projekt.json)");
+  if (!m) throw new Error("repo fehlt oder hat nicht die Form owner/name\nFix: repo als owner/name angeben (in der Projekt-Config, Schlüssel repo)");
   return { owner: m[1], name: m[2] };
 }
 

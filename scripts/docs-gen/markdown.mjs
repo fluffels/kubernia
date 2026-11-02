@@ -262,13 +262,22 @@ export function stripFencedCode(md) {
 
 /** Maskiert Code-Fences und Inline-Code längentreu (Leerzeichen statt Inhalt, Zeilenumbrüche
  *  bleiben): Positionen im maskierten Text gelten unverändert im Original. */
-function codeMaskiert(md) {
+export function codeMaskiert(md) {
   const zeilen = md.split("\n");
   const maske = fenceMaske(zeilen.map((z) => z.replace(/\r$/, "")));
   return zeilen
     .map((z, i) => (maske[i] ? z.replace(/[^\r]/g, " ") : z.replace(/`[^`\n]*`/g, (s) => " ".repeat(s.length))))
     .join("\n");
 }
+
+/** Marker eines Schnappschuss-Blocks: datierter Text, der die damaligen Namen bewusst trägt (Glossar „Schnappschuss-Block“); die Wächter für entfernte Pfade und Factory-Links überspringen ihn. */
+export const SCHNAPPSCHUSS_START = "<!-- schnappschuss:start -->";
+export const SCHNAPPSCHUSS_ENDE = "<!-- schnappschuss:ende -->";
+
+/** Externes Link-Ziel (Protokoll wie http: oder mailto:, oder protokoll-relativ //): die Trennlinie zwischen `linkStellen` (intern) und `externeLinkStellen`. */
+const EXTERN_ZIEL = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+/** Inline-Link und Bild `[t](ziel)` bzw. `[t](<ziel>)` mit optionalem "Titel". */
+const INLINE_LINK = /(!?)\[([^\]]*)\]\(\s*(?:<([^>\n]*)>|([^)\s]+))(?:\s+"[^"]*")?\s*\)/dg;
 
 /** Interne Markdown-Links (inkl. Bilder) mit Position im Original: { start, ende, text, bild,
  *  target, path, anchor }. `start`/`ende` begrenzen den ganzen Link `[text](ziel)`, `text` ist die
@@ -278,9 +287,9 @@ export function linkStellen(md) {
   const clean = codeMaskiert(md);
   const out = [];
   // [text](target) oder ![alt](target), Ziel bis Leerzeichen/Klammer, optionaler "Titel"
-  for (const m of clean.matchAll(/(!?)\[([^\]]*)\]\(\s*(?:<([^>\n]*)>|([^)\s]+))(?:\s+"[^"]*")?\s*\)/g)) {
+  for (const m of clean.matchAll(INLINE_LINK)) {
     const target = m[3] ?? m[4]; // `<ziel mit Leerzeichen>` (CommonMark) ohne Klammern
-    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)) continue; // http:, mailto:, //cdn …
+    if (EXTERN_ZIEL.test(target)) continue; // http:, mailto:, //cdn … (→ externeLinkStellen)
     const hashAt = target.indexOf("#");
     const path = hashAt < 0 ? target : target.slice(0, hashAt);
     const anchor = hashAt < 0 ? "" : target.slice(hashAt + 1);
@@ -289,6 +298,28 @@ export function linkStellen(md) {
     out.push({ start, ende: start + m[0].length, text: md.slice(textStart, textStart + m[2].length), bild: m[1] === "!", target, path, anchor });
   }
   return out;
+}
+
+/** Externe Link-Stellen mit Position im Original: { start, ende, url }. Anders als bei `linkStellen` ist die Spanne die URL selbst (ohne `<>`,
+ *  Beschriftung und Titel), damit Aufrufer sie an Ort und Stelle umschreiben können. Erfasst: Inline-Link und Bild mit externem Ziel
+ *  (die Gegenmenge zu `linkStellen`, jeder Inline-Link steht in genau einer von beiden) und Autolink `<http(s)://…>`; `[t](<url>)` zählt einmal.
+ *  Code-Fences und Inline-Code zählen nicht. Sortiert nach Position. */
+export function externeLinkStellen(md) {
+  const clean = codeMaskiert(md);
+  const out = [];
+  const spannen = [];
+  for (const m of clean.matchAll(INLINE_LINK)) {
+    if (!EXTERN_ZIEL.test(m[3] ?? m[4])) continue;
+    const [start, ende] = m.indices[3] ?? m.indices[4];
+    out.push({ start, ende, url: md.slice(start, ende) });
+    spannen.push([m.index, m.index + m[0].length]);
+  }
+  for (const m of clean.matchAll(/<(https?:\/\/[^>\s]+)>/dg)) {
+    if (spannen.some(([a, b]) => m.index >= a && m.index < b)) continue; // `[t](<url>)` ist schon erfasst
+    const [start, ende] = m.indices[1];
+    out.push({ start, ende, url: md.slice(start, ende) });
+  }
+  return out.sort((x, y) => x.start - y.start);
 }
 
 /** Löst den Link-Pfad `pfad` einer Datei `datei` (repo-relativer POSIX-Pfad) auf einen repo-relativen

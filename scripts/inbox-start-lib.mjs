@@ -40,10 +40,10 @@ export const zielZugang = (libs) => ({ ziel: libs.ZIEL ?? libs.REPO, zielOpt: { 
 
 /**
  * Die Ticket-Aktionen der Inboxen, alle gegen das Ziel-Repo (`zielZugang`): `holeBody(nr)`, `legeIssueAn(titel, body)` (Rückgabe: Nummer; mit `label` nur, wenn gesetzt),
- * `aktualisiere(nr, body, titel?)` (`-f title=` nur mit Titel), `kommentiere(nr, text)`, `schliesse(nr, kommentar)` und `platziere(nr, art)` (wirft; `platziereOben` bekommt `PROJECT_TOKEN` und das Ziel-Repo, wenn es nicht
+ * `aktualisiere(nr, body, titel?)` (`-f title=` nur mit Titel), `kommentiere(nr, text)`, `schliesse(nr, kommentar)` und `platziere(nr, art)` (wirft; `platziereOben` bekommt `env.PROJECT_TOKEN` (`env` ist Test-Naht, Standard `process.env`) und das Ziel-Repo, wenn es nicht
  * das eigene ist). `gh` ist `{ text(args, opt), json(args, opt) }` (Test-Naht). Pur bis auf diese Aufrufe.
  */
-export function zielAktionen({ gh, libs, label }) {
+export function zielAktionen({ gh, libs, label, env = process.env }) {
   const { ziel, zielOpt } = zielZugang(libs);
   return {
     ziel,
@@ -52,7 +52,7 @@ export function zielAktionen({ gh, libs, label }) {
     aktualisiere: (nr, body, titel) => gh.text(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, ...(titel === undefined ? [] : ["-f", `title=${titel}`]), "-f", `body=${body}`], zielOpt),
     kommentiere: (nr, text) => gh.text(["api", `repos/${ziel}/issues/${nr}/comments`, "-f", `body=${text}`], zielOpt),
     schliesse: (nr, kommentar) => gh.text(["issue", "close", String(nr), "--repo", ziel, "--reason", "completed", "--comment", kommentar], zielOpt),
-    platziere: (nr, art) => libs.platziereOben(nr, art, process.env.PROJECT_TOKEN, ziel === libs.REPO ? undefined : ziel),
+    platziere: (nr, art) => libs.platziereOben(nr, art, env.PROJECT_TOKEN, ziel === libs.REPO ? undefined : ziel),
   };
 }
 

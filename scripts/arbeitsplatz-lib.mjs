@@ -17,7 +17,6 @@
 import { isAbsolute, posix, resolve } from "node:path";
 import { istRelativPosix } from "./relativ-pfad.mjs";
 
-export { istRelativPosix };
 
 /** Zeichenklasse eines Repo-Namens (Regex-Quelltext): beginnt alphanumerisch, danach Buchstaben, Ziffern, `.`, `_`, `-`; kein Schrägstrich, kein Leerraum. */
 export const REPO_NAME_QUELLE = "[A-Za-z0-9][A-Za-z0-9._-]*";

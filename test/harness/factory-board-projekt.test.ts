@@ -7,19 +7,23 @@ import assert from "node:assert/strict";
 import { describe, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawRepo from "../../scripts/repo-form.mjs";
 
 type Board = { rolle: string; repo?: string };
-const lib = raw as unknown as { ladeProjektConfig(): { repo: string; boards: Board[] }; boardRepo(b: Board, c: unknown): string; gleichesRepo(a: unknown, b: unknown): boolean };
+const repoForm = rawRepo as unknown as { gleichesRepo(a: unknown, b: unknown): boolean };
+const gleichesRepo = (a: unknown, b: unknown) => repoForm.gleichesRepo(a, b);
+const lib = raw as unknown as { ladeProjektConfig(): { repo: string; boards: Board[] }; boardRepo(b: Board, c: unknown): string };
 
 describe("Boards und Repos (#1883)", () => {
   const config = lib.ladeProjektConfig();
   const board = (rolle: string) => config.boards.find((b) => b.rolle === rolle) as Board;
 
   test("das Produkt-Board führt die Issues dieses Repos", () => {
-    assert.ok(lib.gleichesRepo(lib.boardRepo(board("produkt"), config), config.repo));
+    assert.ok(gleichesRepo(lib.boardRepo(board("produkt"), config), config.repo));
   });
   test("das Factory-Board führt die Issues eines anderen Repos (ein eigenes `repo` ist gesetzt)", () => {
     assert.equal(typeof board("factory").repo, "string");
-    assert.ok(!lib.gleichesRepo(lib.boardRepo(board("factory"), config), config.repo));
+    assert.ok(!gleichesRepo(lib.boardRepo(board("factory"), config), config.repo));
   });
 });

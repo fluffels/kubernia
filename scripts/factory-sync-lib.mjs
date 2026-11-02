@@ -2,9 +2,7 @@
 // `factory-sync.mjs` und `factory-export.mjs` (zwei Einstiegsskripte) daraus teilen statt voneinander zu importieren (#1398).
 import { execFileSync } from "node:child_process";
 import { ergaenzungAusText, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
-import { liesSyncStand, quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 
-export { liesSyncStand, quelleRepoAusText, STAND_PFAD, syncStandAusText };
 import {
   ergaenzungsAnzahlVon,
   ergaenzungsBefundeVon,

@@ -1,5 +1,5 @@
 // Blatt-Modul (#101): Format und Leser des Sync-Stands `.factory/sync-stand.json`. Nur Node-Builtins und `repo-form.mjs` (kein Zyklus über die Config-Lib);
-// `factory-sync-lib` führt die Namen weiter (Bezieher-Skripte importieren von dort), Leser-Skripte importieren direkt.
+// alle Abnehmer importieren direkt (kein Re-Export, factory#114).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { istRepoForm } from "./repo-form.mjs";

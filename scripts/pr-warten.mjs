@@ -43,7 +43,8 @@ const stempel = (e) => (String(e?.status ?? "").toUpperCase() === "COMPLETED" ? 
 
 /**
  * Je (workflowName, name) nur der jüngste CheckRun, StatusContexts je context: ein Rerun überschreibt den früheren Lauf
- * (ein alter CANCELLED neben einem neueren SUCCESS desselben Workflows ist kein Rot). Ein alleinstehender CANCELLED bleibt rot. Pur.
+ * (ein alter CANCELLED neben einem neueren SUCCESS desselben Workflows ist kein Rot). Ein alleinstehender CANCELLED bleibt rot
+ * (zur Concurrency-Ablösung durch einen noch laufenden Geschwister-Check siehe `abgeloest`). Pur.
  */
 export function juengste(rollup) {
   const je = new Map();
@@ -58,14 +59,29 @@ export function juengste(rollup) {
 }
 
 /**
- * `gh pr view --json ${FELDER}` → `{ exit, zeilen }`. Exit 2 heißt: noch offen, weiter warten.
+ * Ein CANCELLED-CheckRun, dessen Workflow noch einen nicht abgeschlossenen CheckRun im Rollup hat, wird gerade abgelöst
+ * (Concurrency bricht den alten Lauf ab, der neue läuft: factory#114): offen statt rot. Sind alle Geschwister fertig
+ * (oder gibt es keine), bleibt er rot (fail-closed). Pur.
+ */
+function abgeloest(e, rollup) {
+  if (e?.__typename === "StatusContext" || e?.context) return false;
+  if (String(e?.conclusion ?? "").toUpperCase() !== "CANCELLED") return false;
+  return rollup.some((o) => o !== e && !(o?.__typename === "StatusContext" || o?.context) && (o?.workflowName ?? "") === (e?.workflowName ?? "") && String(o?.status ?? "").toUpperCase() !== "COMPLETED");
+}
+
+/**
+ * `gh pr view --json ${FELDER}` →`{ exit, zeilen }`. Exit 2 heißt: noch offen, weiter warten.
  * `pflicht`: Namen der Pflicht-Checks (exakt); nur sie gaten, ein rotes anderes Check wird ein `HINWEIS`. Fehlt die Liste
  * oder ist sie leer, gatet jedes Check (fail-closed).
  */
 export function bewerte(pr, pflicht = null) {
   if (pr?.state === "MERGED") return { exit: 0, zeilen: [`MERGED ${String(pr.mergeCommit?.oid ?? "").slice(0, 7)}`.trim()] };
   if (pr?.state === "CLOSED") return { exit: 3, zeilen: ["GESCHLOSSEN"] };
-  const alle = juengste(pr?.statusCheckRollup).map(eintrag);
+  const neueste = juengste(pr?.statusCheckRollup);
+  const alle = neueste.map((e) => {
+    const c = eintrag(e);
+    return c.art === "rot" && abgeloest(e, neueste) ? { ...c, art: "offen" } : c;
+  });
   // Nicht-Pflicht-Checks sperren den Merge nicht: sie zählen weder zu rot noch zu grün noch zu wartend.
   const gatet = Array.isArray(pflicht) && pflicht.length ? new Set(pflicht) : null;
   const checks = gatet ? alle.filter((c) => gatet.has(c.name)) : alle;

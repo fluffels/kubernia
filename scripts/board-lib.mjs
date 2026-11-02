@@ -9,7 +9,8 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, gleichesRepo, ladeProjektConfig, repoAusUrl, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, ladeProjektConfig, repoAusUrl } from "./projekt-config-lib.mjs";
+import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 import { brauchtRepo } from "./board-plan-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { AUFRUF_EXIT } from "./flag-lib.mjs";

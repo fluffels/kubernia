@@ -3,16 +3,44 @@
  * (`docs/agent-harness.md` & Co.) nicht selbst; eine Meldung mit lokalem Pfad liefe dort ins Leere. Darum: mit Sync-Stand
  * (`.factory/sync-stand.json` › `quelle.tag`) und Factory-Repo (`quelle.repo` des Sync-Stands, sonst ein ausdrücklich gesetztes `repo` des Boards mit Rolle
  * `factory`; nie ein Rückfall aufs eigene Repo, das trüge die Factory-Tags nicht) ein GitHub-Link auf den gesyncten Tag, sonst der lokale Pfad
- * (Upstream selbst, fehlende, kaputte oder nicht bestimmbare Daten). Die Link-Wächter-Erweiterung
- * (Link statt Pfad prüfen) steht in #93; der Wächter `test/harness/factory-seite.test.ts` prüft die Literal-Aufrufe von `factorySeiteIn`.
+ * (Upstream selbst, fehlende, kaputte oder nicht bestimmbare Daten). Bau (`factorySeite`) und Zerlegung (`factoryUrlTeile`) dieser URL-Form stehen nur
+ * hier; der Link-Wächter `check-factory-links.mjs` (factory#130) prüft die gebauten Links. Der Wächter `test/harness/factory-seite.test.ts` prüft die Literal-Aufrufe von `factorySeiteIn`.
  */
 import { liesSyncStand } from "./sync-stand-lib.mjs";
-import { boardDerRolle, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { boardDerRolle, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istRepoForm } from "./repo-form.mjs";
+
+/** Pur: die Basis-URL eines Repos (`owner/name`) auf GitHub. */
+export const repoBasis = (repo) => `https://github.com/${repo}`;
 
 /** Pur: `https://github.com/<repo>/blob/<tag>/<pfad>#<anker>` mit `repo` und `tag`, sonst `<pfad>#<anker>`; ohne Anker ohne `#`. */
 export function factorySeite({ pfad, anker, repo, tag }) {
   const ziel = anker ? `${pfad}#${anker}` : pfad;
-  return repo && tag ? `https://github.com/${repo}/blob/${tag}/${ziel}` : ziel;
+  return repo && tag ? `${repoBasis(repo)}/blob/${tag}/${ziel}` : ziel;
+}
+
+const dekodiert = (s) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+
+/**
+ * Pur: ordnet eine URL zu (die Umkehrung von `factorySeite`): `null` (nicht dieses Repo, oder bewusst nicht erfasst: Repo-Wurzel, `/issues`, `/pull`, `/pulls`) oder
+ * `{ form, ref, pfad, anker, refOffset }`; `form` ist `blob`, `tree` oder `fremd` (jede andere URL auf dieses Repo). Pfad und Anker sind dekodiert,
+ * `refOffset` ist die Position des Refs in der URL. Groß-/Kleinschreibung des Repos ist egal.
+ */
+export function factoryUrlTeile(url, repo) {
+  const basis = repoBasis(repo);
+  if (url.slice(0, basis.length).toLowerCase() !== basis.toLowerCase()) return null;
+  const rest = url.slice(basis.length);
+  if (rest !== "" && !/^[/?#]/.test(rest)) return null; // anderes Repo mit gleichem Namensanfang
+  if (/^\/?$/.test(rest) || /^[?#]/.test(rest) || /^\/(?:issues|pulls?)(?:[/?#]|$)/.test(rest)) return null;
+  const m = /^\/(blob|tree)\/([^/?#]+)\/([^?#]+)(?:#(.*))?$/.exec(rest);
+  if (!m) return { form: "fremd", ref: "", pfad: "", anker: "", refOffset: 0 };
+  return { form: m[1], ref: m[2], pfad: dekodiert(m[3]), anker: dekodiert(m[4] ?? ""), refOffset: basis.length + m[1].length + 2 };
 }
 
 /** Liest `quelle.tag` des Sync-Stands; `undefined` bei fehlender oder kaputter Datei. */
