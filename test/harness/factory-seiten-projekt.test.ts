@@ -241,6 +241,8 @@ describe("scanSeiten, gekuerzteSeiten, gegenstueckBefund, Umgebungsvariablen", (
     assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/docs/xamd)"));
     assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](x.md)"));
     assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/sub/docs/x.md)"), "Pfad mit Vorspann zählt nicht");
+    assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/docs/x.md.bak)"), "Pfad mit Nachspann zählt nicht");
+    assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/docs/x.mdx)"), "längere Endung zählt nicht");
   });
   const kopf = "# Titel\n\n## Anderes\n\nProsa.\n\n";
   const umgebung = (inhalt: string): string => `${kopf}## Umgebungsvariablen\n\n${inhalt}\n## Danach\n\nProsa.\n`;
