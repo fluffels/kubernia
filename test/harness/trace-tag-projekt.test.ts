@@ -32,6 +32,12 @@ const abschnitt = (md: string, kopf: RegExp): string => {
 /** Der Beleg-Ablauf in model-routing.md nennt den Trace-Tag. */
 const belegAblaufNenntTag = (modelRouting: string): boolean => abschnitt(modelRouting, /^### Langfuse-Erfassung belegen \(#1293\)/).includes(TAG);
 
+/** Der Projektwert-Block unter „Zuordnung in Langfuse“ nennt den Trace-Tag und die Settings-Variable, die ihn setzt. */
+const zuordnungNenntTag = (modelRouting: string): boolean => {
+  const a = abschnitt(modelRouting, /^### Zuordnung in Langfuse \(#1266\)/);
+  return a.includes(`\`${TAG}\``) && a.includes("CC_LANGFUSE_TRACE_TAGS");
+};
+
 /** `.claude/settings.json` trägt den Trace-Tag in `CC_LANGFUSE_TRACE_TAGS` (kommagetrennt). */
 const settingsTraegtTag = (settingsJson: string): boolean => {
   const s = JSON.parse(settingsJson) as { env?: Record<string, string> };
@@ -51,6 +57,15 @@ describe("Trace-Tag des Projekts (#1906)", () => {
     assert.ok(!belegAblaufNenntTag(mr.replaceAll(TAG, "anderes-projekt")));
     assert.ok(!belegAblaufNenntTag("### Langfuse-Erfassung belegen (#1293)\n\nnur Text"));
     assert.ok(!belegAblaufNenntTag(""));
+  });
+
+  test("model-routing.md: der Projektwert unter Zuordnung in Langfuse nennt Trace-Tag und Settings-Variable", () => {
+    const mr = read("docs/model-routing.md");
+    assert.ok(zuordnungNenntTag(mr));
+    assert.ok(!zuordnungNenntTag(mr.replaceAll(`\`${TAG}\``, "`anderes-projekt`")));
+    assert.ok(!zuordnungNenntTag(mr.replaceAll("CC_LANGFUSE_TRACE_TAGS", "ANDERE_VARIABLE")));
+    assert.ok(!zuordnungNenntTag("### Zuordnung in Langfuse (#1266)\n\nnur Text"));
+    assert.ok(!zuordnungNenntTag(""));
   });
 
   test("settings.json: CC_LANGFUSE_TRACE_TAGS enthält den Trace-Tag", () => {
