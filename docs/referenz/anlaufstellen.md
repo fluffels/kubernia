@@ -174,7 +174,8 @@ Sieben Seiten dieses Repos stammen aus dem Factory-Repo. Je Seite (bei gemischte
 | `docs/sicherheit-agenten.md` | Kanal Forum samt Quarantäne-Muster | Projekt | bleibt hier: [sicherheit-agenten.md](../sicherheit-agenten.md#kanäle-für-fremdtext) |
 | `docs/model-routing.md` | alle Abschnitte außer der Forum-Triage-Zeile der Phasen-Matrix | Kern | [Factory: model-routing.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.5.0/docs/model-routing.md); Kürzung in #1968 |
 | `docs/model-routing.md` | Forum-Triage (Block der Phasen-Matrix) | Projekt | bleibt hier: [model-routing.md](../model-routing.md) |
-| `docs/ticket-reihenfolge.md` | ganze Seite | Kern | [Factory: ticket-reihenfolge.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.5.0/docs/ticket-reihenfolge.md); Kürzung in #1968 |
+| `docs/ticket-reihenfolge.md` | alle Abschnitte außer der Board-Pflege | Kern | [Factory: ticket-reihenfolge.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.5.0/docs/ticket-reihenfolge.md); Kürzung in #1968 |
+| `docs/ticket-reihenfolge.md` | Board-Pflege durch den Agenten (nur kubernia) | Projekt | bleibt hier: [ticket-reihenfolge.md](../ticket-reihenfolge.md#board-pflege-durch-den-agenten-nur-kubernia) |
 | `docs/harness-glossar.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: harness-glossar.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.5.0/docs/harness-glossar.md); Kürzung in #1968 |
 | `docs/harness-glossar.md` | Projekt-Blöcke (SBOM, Factory-Link-Begriffe, Anker-Stub, Projektanteil) | Projekt | bleibt hier: [harness-glossar.md](../harness-glossar.md) |
 | `docs/referenz/befehle.md` | alle Abschnitte außer den Projekt-Blöcken | Kern | [Factory: befehle.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.5.0/docs/referenz/befehle.md); Kürzung in #1968 |

@@ -209,15 +209,17 @@ Der Workflow [`harness-doctor.yml`](../.github/workflows/harness-doctor.yml) ruf
 
 Core und GraphQL haben je 5000 Punkte pro Stunde, geteilt von allen Agenten und Workflows desselben Tokens. `board-place`, `naechstes-ticket`, `sammelticket-anlegen` und `board-takt` (nur mit `PROJECT_TOKEN`) rufen am Anfang `mitKontingent` aus [`scripts/kontingent-lib.mjs`](../scripts/kontingent-lib.mjs) auf: unter 10 % Rest brechen sie lokal mit Exit 5 und der Reset-Zeit ab (unter GitHub Actions nur `::warning::`, damit `main` nicht rot wird); ist `gh api rate_limit` nicht lesbar, läuft der Lauf weiter. Beim Beenden schreibt jedes Skript eine JSONL-Zeile mit dem Verbrauch (Delta der `used`-Werte; enthält den Verbrauch paralleler Agenten) nach `<Temp>/<Repo-Name>-gh-kosten.jsonl` (Override `FACTORY_GH_KOSTEN_LOG`), unter Actions als `::notice title=gh-Kosten`. `node scripts/gh-kontingent.mjs` zeigt den Stand, `--bericht` aggregiert das Log je Skript. Der Zähler von `rate_limit` hinkt hinter den Aufrufen her: ein einzelner Lauf kann 0 zeigen, belastbar ist die Summe vieler Läufe. Das CI-Warten läuft mit `--interval 30` (Standard 10 s). Board- und Issue-Listen laufen über REST (siehe oben). Gemessen werden nur diese vier Skripte; direkte `gh`-Aufrufe der Agenten erfasst Langfuse als Bash-Observations. Die vorab geprüften Arten sind je Skript wählbar (`arten`: `naechstes-ticket` prüft nur `core`).
 
+<!-- factory-projekt:start -->
 ## Board-Pflege durch den Agenten (nur kubernia)
 
 Die Kurzfassung steht in [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben); hier die volle Regel.
 
 - **GitHub ist die Single Source of Truth für den Stand:** Erledigtes sofort dort schließen (mit Ergebnis-Kommentar), Board-Status aktuell halten.
 - **Selbst Issues verwalten** ohne Rückfrage: schließen, kommentieren, labeln, neue Tickets schreiben, wenn etwas auffällt. **Neue Tickets ohne Assignee** (sonst sperren sie fälschlich) nur über `node scripts/spezifikation.mjs anlegen` (Abhängigkeit als Zeile „blockiert durch #X“, `--blocker <nr>`; `gh issue create` ist gesperrt; [Reparaturweg](#reparaturweg)).
-- **Neue Issues sofort ins Board einsortieren** (das Skript tut es; Befehle und Notfall-Marker: [Sammelticket-Mechanik](#sammelticket-mechanik)). Nur Notfälle, Wiedervorlagen und das Wochen-Status-Ticket ganz oben; alles andere nach Priorität, **nie vor das ungeclaimte Sammelticket**, **nie ans Ende**.
+- **Neue Issues sofort ins Board einsortieren** (das Skript tut es; Befehle und Notfall-Marker: [Sammelticket-Mechanik](#sammelticket-mechanik)). Nur Notfälle, Wiedervorlagen und das Wochen-Status-Ticket ganz oben; alles andere nach Priorität, **nie vor das ungeclaimte Sammelticket**, **nie einfach ans Ende**.
 - **Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen.** Nicht in einer Session umsetzbar ⇒ in session-große Kindertickets zerlegen (ohne Assignee, `area:`-Label, im Board einsortiert), Übersichts-Kommentar mit Reihenfolge im Epic, Epic schließen (nicht löschen), kein Worktree.
 - **🤖 Dependabot-Sammel-Ticket „Dependabot-PRs auflösen" → mergen statt implementieren.** PRs einzeln bei grüner CI mergen, rote reparieren, **nie blind** ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+<!-- factory-projekt:ende -->
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 
