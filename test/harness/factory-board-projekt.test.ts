@@ -8,9 +8,11 @@ import { describe, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { gleichesRepo } from "../../scripts/repo-form.mjs";
+import * as rawRepo from "../../scripts/repo-form.mjs";
 
 type Board = { rolle: string; repo?: string };
+const repoForm = rawRepo as unknown as { gleichesRepo(a: unknown, b: unknown): boolean };
+const gleichesRepo = (a: unknown, b: unknown) => repoForm.gleichesRepo(a, b);
 const lib = raw as unknown as { ladeProjektConfig(): { repo: string; boards: Board[] }; boardRepo(b: Board, c: unknown): string };
 
 describe("Boards und Repos (#1883)", () => {
