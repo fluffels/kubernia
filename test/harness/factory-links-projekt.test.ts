@@ -19,7 +19,7 @@ const lib = raw as unknown as {
   factoryLinkStellen(md: string, repo: string): Stelle[];
   sammleLinks(root: string, o: { repo: string; einheiten?: string[]; ausnahmen?: string[] }): (Stelle & { datei: string })[];
   pruefeIndex(o: { links: unknown[]; index: unknown; sync: unknown; repo: string }): Befund[];
-  auditFactoryLinks(root: string): { befunde: Befund[]; links: unknown[] };
+  auditFactoryLinks(root: string): { befunde: Befund[]; links: unknown[]; nichtsZuPruefen?: boolean };
   schreibeFactoryLinks(root: string, quelle: string): { befunde: Befund[]; geschrieben: number };
   cli(argv: string[], o: { wurzel: string; out: (s: string) => void; err: (s: string) => void }): number;
 };
