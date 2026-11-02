@@ -229,6 +229,22 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
 const git = (dir, args, opts = {}) =>
   execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: opts.timeout ?? 8_000 }).trim();
 
+/** Snippet des frischen Prozesses: lädt die Config von `dir` mit dem dortigen (neuen) Validator; bei Grund Exit 1 und der Grund auf stderr. */
+const FRISCH_SNIPPET = [
+  'import { pathToFileURL } from "node:url";',
+  'import { join } from "node:path";',
+  'const { namenOderGrund } = await import(pathToFileURL(join(process.argv[1], "scripts/ticket-namen.mjs")).href);',
+  'const { grund } = namenOderGrund("haupt-sync");',
+  "if (grund) { console.error(grund); process.exit(1); }",
+].join("\n");
+
+/** Default der Naht `deps.pruefeFrisch(dir)`: `{ grund }` (leer = ok). Ein nicht startbarer Prozess zählt als Grund (fail-closed). */
+export function pruefeFrischEcht(dir, spawn = spawnSyncEcht) {
+  const r = spawn(process.execPath, ["--input-type=module", "-e", FRISCH_SNIPPET, dir], { encoding: "utf8", timeout: 15_000, windowsHide: true });
+  if (r.error) return { grund: `frische Config-Prüfung nicht startbar (${String(r.error.message).slice(0, 100)})` };
+  return r.status === 0 ? { grund: "" } : { grund: String(r.stderr || `frische Config-Prüfung scheiterte (Exit ${r.status})`).trim() };
+}
+
 /** Die ganze Ablaufkette gegen ein echtes Repo in `dir` (nur CLI). Wirft nie; Fehler landen in `notiz`. */
 export function fuehreSyncAus(dir, deps = {}) {
   const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: "", branch: "", sauber: undefined };
@@ -249,10 +265,13 @@ export function fuehreSyncAus(dir, deps = {}) {
     if (e.aktion === "pull") {
       git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
       ergebnis.gepullt = true;
+      const geaendert = git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean);
+      ergebnis.harness = ordneHarnessAenderungen(geaendert);
       // Ohne nutzbare Config bleibt der Fast-Forward (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
-      const { grund } = namenOderGrund("haupt-sync", deps);
+      // Der Prozess lädt die Config mit dem alten Validator; berührt der Pull scripts/ oder .factory/, entscheidet nur die frische Prüfung (neue Config, neuer Validator), die alte würde fälschlich rot melden.
+      const beruehrt = geaendert.some((d) => d.startsWith("scripts/") || d.startsWith(".factory/"));
+      const { grund } = beruehrt ? ((deps.pruefeFrisch ?? pruefeFrischEcht)(dir) ?? { grund: "frische Config-Prüfung ohne Ergebnis" }) : namenOderGrund("haupt-sync", deps);
       if (grund) ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}${grund}`;
-      ergebnis.harness = ordneHarnessAenderungen(git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean));
     }
   } catch (e) {
     ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}Fehler (${String(e.message).split("\n")[0].slice(0, 100)}), nichts verändert`;

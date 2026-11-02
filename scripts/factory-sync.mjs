@@ -9,13 +9,12 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, quelleRepoAusText, STAND_PFAD, syncStandAusText, wendeTeileAn } from "./factory-sync-lib.mjs";
 
 // Teile der Bibliothek, die die Tests über dieses Modul kennen (das Export-Werkzeug importiert aus der Bibliothek).
 export { leserVomCommit, liesErgaenzung, pruefeErgebnis, STAND_PFAD, wendeTeileAn };
 
-export const MANIFEST_PFAD = ".factory/besitz.json";
 export const PROJEKT_PFAD = PROJEKT_CONFIG;
 
 const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;

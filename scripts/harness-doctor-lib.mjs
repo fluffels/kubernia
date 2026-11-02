@@ -9,14 +9,15 @@ import { fehlerText } from "./gh-cli.mjs";
 import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
+import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
 const LINK = {
-  ruleset: "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository",
+  ruleset: LINK_RULESET,
   secrets: "https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets",
   variablen: "https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-variables",
   projektFelder: "https://docs.github.com/en/issues/planning-and-tracking-with-projects/understanding-fields/about-single-select-fields",
-  actions: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository",
+  actions: LINK_ACTIONS,
   token: "https://cli.github.com/manual/gh_auth_refresh",
   admin: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/repository-access-and-collaboration/inviting-collaborators-to-a-personal-repository",
 };
@@ -62,6 +63,8 @@ export const WOCHENLAUF_WORKFLOW = [
   "    runs-on: ubuntu-latest",
   "    steps:",
   "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+  "        with:",
+  "          persist-credentials: false",
   "      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0",
   "        with:",
   "          node-version-file: .nvmrc",
@@ -145,26 +148,28 @@ function pruefeToken(gh) {
   return { ergebnis: [gut("Token-Scope")] };
 }
 
-function pruefeRepo(gh, repo) {
+/** Liest eine Quelle für die Prüfpunkte: `{ wert }` oder `{ fehler }` (erste Fehlerzeile); wirft nie. */
+const hole = (lesen) => {
   try {
-    const r = json(gh, ["api", `repos/${repo}`]);
-    const admin = r.permissions?.admin === true ? gut("Admin-Recht") : luecke("Admin-Recht", `das Konto hat kein Admin-Recht an ${repo}`, `dem Konto Admin-Recht an ${repo} geben (Einstellungen, Collaborators)`, LINK.admin);
-    return { repo: r, ergebnis: [admin] };
+    return { wert: lesen() };
   } catch (e) {
-    return { repo: {}, ergebnis: [luecke("Admin-Recht", `Repo ${repo} nicht lesbar (${erste(e)})`, "gh auth status prüfen und das Konto mit Zugriff auf das Repo anmelden", LINK.admin)] };
+    return { fehler: erste(e) };
   }
+};
+
+function pruefeRepo(repo, quelle) {
+  if (quelle.fehler !== undefined) return { repo: {}, ergebnis: [luecke("Admin-Recht", `Repo ${repo} nicht lesbar (${quelle.fehler})`, "gh auth status prüfen und das Konto mit Zugriff auf das Repo anmelden", LINK.admin)] };
+  const admin = quelle.wert?.permissions?.admin === true ? gut("Admin-Recht") : luecke("Admin-Recht", `das Konto hat kein Admin-Recht an ${repo}`, `dem Konto Admin-Recht an ${repo} geben (Einstellungen, Collaborators)`, LINK.admin);
+  return { repo: quelle.wert ?? {}, ergebnis: [admin] };
 }
 
-function pruefeActions(gh, repo) {
-  try {
-    const a = json(gh, ["api", `repos/${repo}/actions/permissions`]);
-    if (a.enabled !== true || a.allowed_actions === "local_only") {
-      return luecke("Actions", "Actions sind im Repo nicht erlaubt", `gh api -X PUT repos/${repo}/actions/permissions -F enabled=true -f allowed_actions=all`, LINK.actions);
-    }
-    return gut("Actions");
-  } catch (e) {
-    return luecke("Actions", `Actions-Einstellung nicht lesbar (${erste(e)})`, "Admin-Recht und Token prüfen", LINK.actions);
+function pruefeActions(repo, quelle) {
+  if (quelle.fehler !== undefined) return luecke("Actions", `Actions-Einstellung nicht lesbar (${quelle.fehler})`, "Admin-Recht und Token prüfen", LINK.actions);
+  const a = quelle.wert ?? {};
+  if (a.enabled !== true || a.allowed_actions === "local_only") {
+    return luecke("Actions", "Actions sind im Repo nicht erlaubt", `gh api -X PUT repos/${repo}/actions/permissions -F enabled=true -f allowed_actions=all`, LINK.actions);
   }
+  return gut("Actions");
 }
 
 function pruefeGeheimnisse(gh, repo, art, namen) {
@@ -220,26 +225,19 @@ function pruefeBoard(gh, board, i) {
   return probleme.length ? probleme.map(l) : [gut(name)];
 }
 
-function pruefeRuleset(gh, repo, repoInfo, spiegel) {
+function pruefeRuleset(regelnQuelle, repoInfo, spiegel) {
   const branch = repoInfo.default_branch ?? "main";
   const privat = repoInfo.private === true;
-  const grenze = privat ? " (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)" : "";
+  const grenze = privat ? GRENZE_PRIVAT : "";
   const fixAnlegen = privat ? "Repo öffentlich machen oder einen Plan mit Rulesets wählen, dann das Ruleset anlegen" : `Ruleset auf ${branch} mit Required status checks anlegen`;
-  let regeln;
-  try {
-    regeln = seiten(gh, `repos/${repo}/rules/branches/${branch}?per_page=100`);
-  } catch (e) {
-    return [luecke("Ruleset", `Regeln auf ${branch} nicht lesbar (${erste(e)})${grenze}`, fixAnlegen, LINK.ruleset)];
-  }
+  if (regelnQuelle.fehler !== undefined) return [luecke("Ruleset", `Regeln auf ${branch} nicht lesbar (${regelnQuelle.fehler})${grenze}`, fixAnlegen, LINK.ruleset)];
+  const regeln = regelnQuelle.wert;
   const kontexte = regeln.filter((r) => r.type === "required_status_checks").flatMap((r) => (r.parameters?.required_status_checks ?? []).map((c) => c.context));
   if (kontexte.length === 0) return [luecke("Ruleset", `kein Required status check auf ${branch}${grenze}`, fixAnlegen, LINK.ruleset)];
   const noetig = spiegel?.requiredChecks ?? [];
   const rs = spiegel?.name ? `Ruleset "${spiegel.name}"` : "das Ruleset";
   const fehlend = fehlen(noetig, kontexte).map((c) => luecke(`Required-Check ${c}`, `Required-Check "${c}" fehlt auf ${branch}`, `"${c}" in ${rs} unter Required status checks ergänzen`, LINK.ruleset));
-  const werkzeuge = regeln.filter((r) => r.type === "code_scanning").flatMap((r) => (r.parameters?.code_scanning_tools ?? []).map((w) => w.tool));
-  const csFehlend = fehlen((spiegel?.codeScanning ?? []).map((e) => e.tool), werkzeuge).map((w) => luecke(`Code-Scanning ${w}`, `Code-Scanning "${w}" fehlt auf ${branch}`, `Regel in ${rs} ergänzen (Pre-Flight)`, LINK.ruleset));
-  const alle = [...fehlend, ...csFehlend];
-  return alle.length ? alle : [gut("Ruleset")];
+  return fehlend.length ? fehlend : [gut("Ruleset")];
 }
 
 /**
@@ -266,20 +264,30 @@ export function pruefeAltnamen({ env, config, namen }) {
   return luecken.length ? luecken : [gut("Umgebungsvariablen")];
 }
 
-/** Führt alle Prüfpunkte aus: `[{ punkt, ok, befund?, fix?, hinweis? }]`. Wirft nie. */
+/** Führt alle Prüfpunkte aus: `[{ punkt, ok, befund?, fix?, hinweis?, nichtPruefbar? }]` (`nichtPruefbar`: ok false, aber keine belegte Lücke). Wirft nie. */
 export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebung = null }) {
   const repo = config.repo;
   const ergebnis = [];
   const token = pruefeToken(gh);
   ergebnis.push(...token.ergebnis);
   if (!token.fatal) {
-    const r = pruefeRepo(gh, repo);
-    ergebnis.push(...r.ergebnis, pruefeActions(gh, repo));
+    const quellen = {
+      repo: hole(() => json(gh, ["api", `repos/${repo}`])),
+      actions: hole(() => json(gh, ["api", `repos/${repo}/actions/permissions`])),
+    };
+    const r = pruefeRepo(repo, quellen.repo);
+    ergebnis.push(...r.ergebnis, pruefeActions(repo, quellen.actions));
     if (voraussetzungen.secrets.length) ergebnis.push(...pruefeGeheimnisse(gh, repo, "secrets", voraussetzungen.secrets));
     if (voraussetzungen.variablen.length) ergebnis.push(...pruefeGeheimnisse(gh, repo, "variables", voraussetzungen.variablen));
     ergebnis.push(...pruefeLabels(gh, repo, voraussetzungen.labels));
     voraussetzungen.boards.forEach((b, i) => ergebnis.push(...pruefeBoard(gh, b, i)));
-    ergebnis.push(...pruefeRuleset(gh, repo, r.repo, spiegel));
+    const branch = r.repo.default_branch ?? "main";
+    const regeln = hole(() => seiten(gh, `repos/${repo}/rules/branches/${branch}?per_page=100`));
+    ergebnis.push(...pruefeRuleset(regeln, r.repo, spiegel));
+    ergebnis.push(...pruefeSicherheit({ ...quellen, regeln, pvr: hole(() => json(gh, ["api", `repos/${repo}/private-vulnerability-reporting`])), spiegel, branch, privat: r.repo.private === true }));
+  } else {
+    const aus = { fehler: "gh nicht angemeldet oder ohne Zugriff", fix: "erst den Token-Punkt beheben" };
+    ergebnis.push(...pruefeSicherheit({ repo: aus, actions: aus, regeln: aus, pvr: aus, spiegel }));
   }
   ergebnis.push(...pruefeSprache(config)); // liest nur die Config, braucht kein Token
   if (langfuse) {

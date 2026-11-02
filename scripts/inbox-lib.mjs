@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { ghJson, ghText, tokenFuerZiel } from "./gh-cli.mjs";
 import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes, zielRepo } from "./board-lib.mjs";
 import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
-import { zerlegeRepo } from "./projekt-config-lib.mjs";
+import { zerlegeRepo } from "./repo-form.mjs";
 
 /** Das Ziel-Repo der Harness-Befunde (#76): das Repo, dessen Issues das Factory-Board führt (`boards[].repo`, sonst das eigene Repo). Dort liegt das Harness-Sammelticket. */
 export const ZIEL = zielRepo("factory");

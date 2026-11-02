@@ -54,6 +54,8 @@
  *  - `ausserhalbRepo` ist rein lexikalisch: ein verlinkter (Linked) Worktree außerhalb des Repo-Ordners (`repoRoot`) zählt als außerhalb.
  *  - Text in Interpreter-Code (`node -e "…"`, `python -c`) wird nicht geparst: das grobe Netz wertet ein Wortpaar "git" + "commit"/"push" darin als Aufruf (auch
  *    `console.log('git commit')`) und blockt im Haupt-Checkout; im PowerShell-Pfad gilt dasselbe für Skript-Laufzeiten (#97 L11m).
+ *  - Bekannte Grenze (Asymmetrie): der Bash-Guard hat keine Laufzeit-Liste, sein grobes Netz greift auf jeden Interpreter-Code-Text; der PowerShell-Guard wertet das Wortpaar
+ *    nur bei den Namen der Tabelle `SKRIPT_LAUFZEITEN` (`shell-tabellen.mjs`), ein anderer Interpreter dort sieht ihn nicht.
  *
  * Reines Node-Skript (nur Builtins). Die Entscheidungslogik ist pur/exportiert und testbar
  * (execFile/stat/homedir/platform injizierbar) — EINE Quelle für Hook-CLI und Test.

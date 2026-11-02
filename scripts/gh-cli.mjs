@@ -5,7 +5,7 @@
  * Wächter `test/harness/gh-cli.test.ts` verbietet einen direkten `execFileSync("gh"` außerhalb dieser Datei.
  */
 import { execFileSync } from "node:child_process";
-import { gleichesRepo } from "./projekt-config-lib.mjs";
+import { gleichesRepo } from "./repo-form.mjs";
 
 /** Standard-Puffer: Seiten von `gh api --paginate` und Lauflisten sind groß. */
 export const GH_MAX_BUFFER = 256 * 1024 * 1024;

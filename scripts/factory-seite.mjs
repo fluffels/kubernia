@@ -6,7 +6,7 @@
  * (Upstream selbst, fehlende, kaputte oder nicht bestimmbare Daten). Die Link-Wächter-Erweiterung
  * (Link statt Pfad prüfen) steht in #93; der Wächter `test/harness/factory-seite.test.ts` prüft die Literal-Aufrufe von `factorySeiteIn`.
  */
-import { liesSyncStand } from "./factory-sync-lib.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { boardDerRolle, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 /** Pur: `https://github.com/<repo>/blob/<tag>/<pfad>#<anker>` mit `repo` und `tag`, sonst `<pfad>#<anker>`; ohne Anker ohne `#`. */

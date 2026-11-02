@@ -22,7 +22,7 @@ name: Festgefahren-Wächter
 #     Commit → gleiche head_sha → wird nur einmal gezählt.
 
 on:
-  workflow_run:
+  workflow_run:  # zizmor: ignore[dangerous-triggers] Checkout zieht den Default-Branch (kein ref), PR-Eingaben nur über env
     workflows: ["CI"]
     types: [completed]
 
@@ -52,6 +52,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # Kein `ref:` → default-Branch (main). Das Skript soll NIE aus dem
         # PR-Branch stammen — ein PR-Autor könnte es sonst modifizieren.
+        with:
+          persist-credentials: false
 
       - name: Node einrichten
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

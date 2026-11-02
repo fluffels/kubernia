@@ -6,7 +6,7 @@
  * Eingebettet (ohne Block) liegt der Harness im Repo, der Worktree-Ordner ist `<repo>/.claude/worktrees`. Im Arbeitsplatz liegen die Repos
  * unter einer Wurzel, die Worktrees außerhalb jedes Repos unter `<wurzel>/.claude/worktrees/<name>`.
  *
- * Nur `node:path`: ein Import von `projekt-config-lib` oder `ticket-namen` ergäbe einen Zyklus (beide importieren diese Datei).
+ * Nur `node:path` und das importfreie `relativ-pfad.mjs`: ein Import von `projekt-config-lib` oder `ticket-namen` ergäbe einen Zyklus (beide importieren diese Datei).
  *
  * bekannte Muster (Spur-Liste, geschlossen): Segmente `.claude`, `.agents`, `.factory`, `.codex`; Dateinamen `AGENTS.md`, `CLAUDE.md`,
  * `CLAUDE.local.md`; ein Segment `<worktree-präfix><nr>` (mit `-`, `.` oder Ende dahinter); jeweils ohne Groß-/Kleinschreibung und nur bei
@@ -15,6 +15,9 @@
  * Tut ein Ordner mit anderem Namen Harness-Dateien auf, sieht der Parser sie nicht.
  */
 import { isAbsolute, posix, resolve } from "node:path";
+import { istRelativPosix } from "./relativ-pfad.mjs";
+
+export { istRelativPosix };
 
 /** Zeichenklasse eines Repo-Namens (Regex-Quelltext): beginnt alphanumerisch, danach Buchstaben, Ziffern, `.`, `_`, `-`; kein Schrägstrich, kein Leerraum. */
 export const REPO_NAME_QUELLE = "[A-Za-z0-9][A-Za-z0-9._-]*";
@@ -31,12 +34,6 @@ export const istRepoName = (name) => typeof name === "string" && NAME_MUSTER.tes
  * Regex-Quelltext des Pfadtrenners. Das Segment darf selbst nicht wie `<wt><nr>` beginnen, damit es den Worktree-Namen nicht verschluckt.
  */
 export const repoSegment = (wEscaped, trenner) => `(?:(?!${wEscaped}\\d)${REPO_NAME_QUELLE}${trenner})?`;
-
-/** Pur: ein relativer POSIX-Pfad (`src`, `docs/module`): kein absoluter Pfad, kein Laufwerk, keine `.`/`..`-Segmente, kein Backslash, kein End- oder Doppel-Slash. */
-export function istRelativPosix(pfad) {
-  if (pfad.includes("\\") || pfad.includes(":")) return false;
-  return pfad.split("/").every((teil) => teil !== "" && teil !== "." && teil !== "..");
-}
 
 const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 const istText = (v) => typeof v === "string" && v.trim() !== "";

@@ -21,12 +21,14 @@
  *  - Unbekannte Optionen mit Wert (z.B. `node --env-file x -`) lesen das Wert-Wort als Programm: der Aufruf wird durchgelassen.
  *  - Nicht zerlegbare Befehle und jeder interne Fehler: fail-open (`null`), der Guard blockt nie selbst.
  *
- * Reines Node-Skript (nur Builtins + bash-parser/worktree-guard-tabellen). `bewerteStdinSkript` ist pur und exportiert.
+ * Reines Node-Skript (nur Builtins + bash-parser/shell-tabellen/worktree-guard-tabellen). `bewerteStdinSkript` ist pur und exportiert.
  */
 import { einfacheKommandos, parseBash } from "./bash-parser.mjs";
+import { NODE_LAUFZEITEN, PYTHON_LAUFZEITEN } from "./shell-tabellen.mjs";
 import { peel, stripRedirs } from "./worktree-guard-tabellen.mjs";
 
-const INTERPRETER = /^(?:python(?:3(?:\.\d+)?)?|py|node)$/;
+/** Versionsnamen der Python-Familie (`python3.12`); die Basisnamen kommen aus `shell-tabellen.mjs`. */
+const PYTHON_VERSION = /^python3\.\d+$/;
 
 /** Optionen, die das nächste Wort als Wert verbrauchen. */
 const MIT_WERT = {
@@ -40,7 +42,7 @@ const PROGRAMM_ODER_AUSKUNFT = {
 };
 
 /** `python` oder `node` für einen Basisnamen, sonst null. */
-const familie = (name) => (name === "node" ? "node" : INTERPRETER.test(name ?? "") ? "python" : null);
+const familie = (name) => (NODE_LAUFZEITEN.includes(name) ? "node" : PYTHON_LAUFZEITEN.includes(name) || PYTHON_VERSION.test(name ?? "") ? "python" : null);
 
 /** Programm-/Auskunfts-Option, auch als Cluster (`-Ic`, `-pe`) und als `--eval=…`. */
 function istProgrammOption(fam, text) {

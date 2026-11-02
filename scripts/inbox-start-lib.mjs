@@ -4,7 +4,7 @@
  * deshalb kommen sie erst nach dem Check und der Config: eine kaputte Config meldet sich als `::error::` mit Fix-Zeile und Exit 2 statt als
  * Stacktrace (das direkte Laden von `board-lib` endet bei einer kaputten Config ebenso mit Exit 2, `ladeProjektOderAbbruch`). Kein Guard, kein Import von `board-lib`/`inbox-lib` beim Laden dieser Datei.
  */
-import { fehlerMeldung } from "./gh-cli.mjs";
+import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
@@ -40,7 +40,7 @@ export const zielZugang = (libs) => ({ ziel: libs.ZIEL ?? libs.REPO, zielOpt: { 
 
 /**
  * Die Ticket-Aktionen der Inboxen, alle gegen das Ziel-Repo (`zielZugang`): `holeBody(nr)`, `legeIssueAn(titel, body)` (Rückgabe: Nummer; mit `label` nur, wenn gesetzt),
- * `aktualisiere(nr, body)`, `kommentiere(nr, text)`, `schliesse(nr, kommentar)` und `platziere(nr, art)` (wirft; `platziereOben` bekommt `PROJECT_TOKEN` und das Ziel-Repo, wenn es nicht
+ * `aktualisiere(nr, body, titel?)` (`-f title=` nur mit Titel), `kommentiere(nr, text)`, `schliesse(nr, kommentar)` und `platziere(nr, art)` (wirft; `platziereOben` bekommt `PROJECT_TOKEN` und das Ziel-Repo, wenn es nicht
  * das eigene ist). `gh` ist `{ text(args, opt), json(args, opt) }` (Test-Naht). Pur bis auf diese Aufrufe.
  */
 export function zielAktionen({ gh, libs, label }) {
@@ -49,7 +49,7 @@ export function zielAktionen({ gh, libs, label }) {
     ziel,
     holeBody: (nr) => String(gh.json(["api", `repos/${ziel}/issues/${nr}`], zielOpt).body ?? ""),
     legeIssueAn: (titel, body) => gh.text(["issue", "create", "--repo", ziel, "--title", titel, ...(label ? ["--label", label] : []), "--body", body], zielOpt).trim().split("/").pop(),
-    aktualisiere: (nr, body) => gh.text(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, "-f", `body=${body}`], zielOpt),
+    aktualisiere: (nr, body, titel) => gh.text(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, ...(titel === undefined ? [] : ["-f", `title=${titel}`]), "-f", `body=${body}`], zielOpt),
     kommentiere: (nr, text) => gh.text(["api", `repos/${ziel}/issues/${nr}/comments`, "-f", `body=${text}`], zielOpt),
     schliesse: (nr, kommentar) => gh.text(["issue", "close", String(nr), "--repo", ziel, "--reason", "completed", "--comment", kommentar], zielOpt),
     platziere: (nr, art) => libs.platziereOben(nr, art, process.env.PROJECT_TOKEN, ziel === libs.REPO ? undefined : ziel),
@@ -58,3 +58,22 @@ export function zielAktionen({ gh, libs, label }) {
 
 /** Der Owner, gegen den `istVertraut` prüft: der des Ziel-Repos (`kontext.owner` aus `ladeSammelKontext`), sonst der des eigenen Repos. Dort liegen die Tickets, ihr Autor ist der Token-Inhaber. Pur. */
 export const vertrauterOwner = (kontext, libs) => kontext.owner ?? libs.OWNER;
+
+/**
+ * Zweitabfrage vor dem Anlegen (fail-closed, #101 L17): die REST-Liste hinkt bei frischen Tickets nach, ein zweites Ticket entstand so schon. Nur bei
+ * `aktion: "anlegen"` fragt `zweit()` (liefert `[{ number, titel }]`) einen zweiten Weg: kennt er ein Ticket, auf das `passt(issue)` zutrifft, oder wirft er
+ * oder liefert er keine Liste (`.filter` wirft dann), wird daraus `nichts` mit Warnung. Jede andere Aktion bleibt unberührt (dieselbe Entscheidung zurück). `was` benennt das Ticket in den Meldungen.
+ * Pur (`zweit` und `passt` sind injiziert); liefert eine neue Entscheidung.
+ */
+export function bestaetigeAnlegen(e, { zweit, passt, was = "Ticket" }) {
+  if (e.aktion !== "anlegen") return e;
+  let da;
+  try {
+    const frisch = zweit();
+    da = frisch.filter((i) => passt(i)).map((i) => `#${i.number}`);
+  } catch (err) {
+    return { aktion: "nichts", grund: "Anlegen abgebrochen: die Zweitabfrage ist fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Zweitabfrage vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
+  }
+  if (da.length === 0) return e;
+  return { aktion: "nichts", grund: `Anlegen abgebrochen: die REST-Liste kannte ${da.join(", ")} noch nicht, die Zweitabfrage schon (frisch angelegt)`, warnungen: [...e.warnungen, `REST-Liste hinkt: offenes ${was} ${da.join(", ")} nur per Zweitabfrage gefunden.`] };
+}

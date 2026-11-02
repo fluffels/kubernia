@@ -4,9 +4,10 @@
  *
  *   node scripts/harness-doctor-melden.mjs [--dry-run]
  *
- * Zeile: `- [ ] <YYYY-MM-DD> Harness-Doctor (Wochenlauf): LÜCKE <Punkt>: <Befund> Fix: <Schritt>`. Bekannt ist ein Punkt, wenn irgendeine offene
- * Zeile `- [ ]` eines vertrauten Autors (`istVertraut`) in einem offenen Harness-Sammelticket (auch einem geclaimten) `Harness-Doctor (Wochenlauf):
- * LÜCKE <Punkt>: ` enthält; Schlüssel ist der Punkt, nicht der Befund (ein geänderter Befund erzeugt keine zweite Zeile). Alle neuen Zeilen
+ * Zeile: `- [ ] <YYYY-MM-DD> Harness-Doctor (Wochenlauf): LÜCKE <Punkt>: <Befund> Fix: <Schritt>`, bei einem nicht prüfbaren Punkt (factory#116) `NICHT PRÜFBAR` statt `LÜCKE`.
+ * Bekannt ist ein Punkt, wenn irgendeine offene Zeile `- [ ]` eines vertrauten Autors (`istVertraut`) in einem offenen Harness-Sammelticket (auch einem geclaimten)
+ * `Harness-Doctor (Wochenlauf): <Art> <Punkt>: ` mit derselben Art enthält; Schlüssel ist Art und Punkt, nicht der Befund (ein geänderter Befund erzeugt keine zweite Zeile;
+ * wird aus „nicht prüfbar“ eine Lücke, ändert sich die Abhilfe und es kommt eine neue Zeile). Alle neuen Zeilen
  * eines Laufs gehen in einem Kommentar an das jüngste ungeclaimte Sammelticket. Geprüft wird mit `PROJECT_TOKEN` (Project-Scope); gelesen und
  * gepostet wird im eigenen Repo mit dem Standard-`GH_TOKEN` (`github.token`), in einem fremden Ziel-Repo mit `PROJECT_TOKEN`; fehlt das Secret in Actions, meldet der Lauf genau das als Lücke. Langfuse bleibt außen vor (läuft nur lokal).
  * Exit 0: nichts Neues oder gemeldet (bzw. Dry-Run); 1: Doctor nicht lauffähig, kein ungeclaimtes Sammelticket oder Post fehlgeschlagen
@@ -26,15 +27,18 @@ const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const KENNUNG = "Harness-Doctor (Wochenlauf)";
 const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ");
 
-/** Schlüssel einer Lücke im Zeilentext (endet mit `: `, damit `Secret A` nicht `Secret AB` trifft). Pur. */
-export const schluesselFuer = (punkt) => `${KENNUNG}: LÜCKE ${punkt}: `;
+/** Art der Meldung zu einem Ergebnis des Doctors: `NICHT PRÜFBAR` bei `nichtPruefbar`, sonst `LÜCKE`. Pur. */
+export const artFuer = (l) => (l.nichtPruefbar === true ? "NICHT PRÜFBAR" : "LÜCKE");
 
-/** Die Sammelticket-Zeile zu einer Lücke `{ punkt, befund, fix }`. Pur. */
-export const zeileFuer = (l, heute) => `- [ ] ${heute} ${KENNUNG}: LÜCKE ${l.punkt}: ${einzeilig(l.befund)} Fix: ${l.fix}`;
+/** Schlüssel einer Meldung im Zeilentext (endet mit `: `, damit `Secret A` nicht `Secret AB` trifft). Pur. */
+export const schluesselFuer = (punkt, art = "LÜCKE") => `${KENNUNG}: ${art} ${punkt}: `;
 
-/** Ist der Punkt schon als offene Zeile eines vertrauten Autors in `kommentare` (`[{ user, body }]`) gemeldet? Pur. */
-export function istBekannt(punkt, kommentare, owner) {
-  const schluessel = schluesselFuer(punkt);
+/** Die Sammelticket-Zeile zu einer Lücke oder einem nicht prüfbaren Punkt `{ punkt, befund, fix, nichtPruefbar? }`. Pur. */
+export const zeileFuer = (l, heute) => `- [ ] ${heute} ${schluesselFuer(l.punkt, artFuer(l))}${einzeilig(l.befund)} Fix: ${l.fix}`;
+
+/** Ist der Punkt (mit dieser Art) schon als offene Zeile eines vertrauten Autors in `kommentare` (`[{ user, body }]`) gemeldet? Pur. */
+export function istBekannt(punkt, kommentare, owner, art = "LÜCKE") {
+  const schluessel = schluesselFuer(punkt, art);
   return kommentare.some(
     (k) => istVertraut(k?.user ?? null, owner) && String(k?.body ?? "").split(/\r?\n/).some((z) => /^\s*[-*]\s+\[ \]/.test(z) && z.includes(schluessel)),
   );
@@ -42,7 +46,7 @@ export function istBekannt(punkt, kommentare, owner) {
 
 /** Die neuen Zeilen: je Lücke, deren Punkt nicht bekannt ist (zwei Lücken desselben neuen Punkts kommen beide). Pur. */
 export const plane = ({ luecken, kommentare, owner, heute }) =>
-  luecken.filter((l) => !istBekannt(l.punkt, kommentare, owner)).map((l) => zeileFuer(l, heute));
+  luecken.filter((l) => !istBekannt(l.punkt, kommentare, owner, artFuer(l))).map((l) => zeileFuer(l, heute));
 
 /**
  * Die Lücken dieses Laufs. In Actions ohne `PROJECT_TOKEN` kann der Doctor nichts prüfen (kein einziger Aufruf): dann ist genau das die Lücke.

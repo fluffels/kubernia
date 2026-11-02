@@ -2,7 +2,7 @@
 /**
  * Lens-Sabotage-Guard (#1349): die Lens (`agenten.lens` der Projekt-Config) hat das Tool `Edit`, ausschließlich für die Sabotage-Probe der Test-Lens
  * (Implementierung testweise verfälschen, Test wird rot?). Die Probe gehört in einen eigenen Lens-Worktree
- * (`.claude/worktrees/<worktree-präfix><nr>-lens-r<runde>`, bei der Merge-Delta-Lens `…-lens-m<n>`, bei der Delta-Lens nach einem Abnahme-Fix `…-lens-a<n>`; für einen fremden Klon: `git -C <klon> worktree add <klon>/.claude/worktrees/<präfix><nr>-lens-r<n>`, das Präfix liest der Guard aus `<klon>/.factory/projekt.json`, ohne lesbare Config gilt das der Session); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
+ * (`.claude/worktrees/<worktree-präfix><nr>-lens-r<runde>`, bei der Merge-Delta-Lens `…-lens-m<n>`, bei der Delta-Lens nach einem Abnahme-Fix `…-lens-a<n>`; für einen fremden Klon: `git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>`, das Präfix liest der Guard aus `<klon>/.factory/projekt.json`, ohne lesbare Config gilt das der Session); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
  * anderen Lenses (so passiert im Review von #1331). Die Regel stand bisher nur als Text in der Lens-Definition.
  *
  * Dieser Hook (Frontmatter der Lens-Definition unter `.claude/agents/`, Matcher `Edit`, gilt nur für diesen Subagenten) erzwingt sie:
@@ -27,7 +27,7 @@ const lensWorktree = (namen) => namen.lensPfadMuster;
 
 /**
  * Repo-Root eines Pfads unter `.claude/worktrees/` (alles vor dem ersten Segment) oder null (#78 L3f/L9d). Liegt dort eine lesbare Config,
- * gilt deren Worktree-Präfix (Lens-Worktree eines fremden Klons, angelegt per `git -C <klon> worktree add`); sonst null → Präfix der Session.
+ * gilt deren Worktree-Präfix (Lens-Worktree eines fremden Klons, angelegt per `git -C <klon> worktree add --detach … <erwarteter HEAD>`); sonst null → Präfix der Session.
  */
 function zielNamen(norm) {
   const i = norm.search(/\/\.claude\/worktrees\//i);
@@ -57,7 +57,7 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
     block: true,
     reason:
       `${namen.agenten.lens} ändert nichts im Feature-Worktree: Edit ist nur im eigenen Lens-Worktree erlaubt ` +
-      `(.claude/worktrees/${namen.worktreeName("<nr>")}-lens-r<runde> (fremder Klon: git -C <klon> worktree add <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde>) bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
+      `(.claude/worktrees/${namen.worktreeName("<nr>")}-lens-r<runde> (fremder Klon: git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>) bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
       "Ist der Lens-Worktree nicht anlegbar: Befund „Sabotage nicht möglich“ melden, kein Ersatz.",
   };
 }

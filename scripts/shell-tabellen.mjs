@@ -41,3 +41,12 @@ export const WRAPPERS = {
 
 /** Namen der Wrapper (Schlüssel der Wrapper-Tabelle). */
 export const WRAPPER_NAMEN = new Set(Object.keys(WRAPPERS));
+
+/** Skript-Laufzeiten (#101): Interpreter, die Programmtext aus einem Argument oder von stdin ausführen. EINE Liste für PowerShell-Guard (Wortpaar `git … commit|push` im Code-Text) und Stdin-Skript-Guard. */
+export const SKRIPT_LAUFZEITEN = ["node", "nodejs", "python", "python3", "py", "perl", "ruby", "deno", "bun", "php"];
+
+/** Untermenge der Skript-Laufzeiten: Node-Familie (Basisnamen). */
+export const NODE_LAUFZEITEN = ["node"];
+
+/** Untermenge der Skript-Laufzeiten: Python-Familie (Basisnamen; Versionsnamen `python3.x` erkennt der Stdin-Skript-Guard per Familienregel). */
+export const PYTHON_LAUFZEITEN = ["python", "python3", "py"];
