@@ -1,6 +1,6 @@
 /* Factory-Link-Wächter (#1966, ADR 0022 F10): Links ins Factory-Repo stehen auf dem Sync-Tag und zeigen auf Pfade und Anker, die es dort gibt.
  *
- * @harness-waechter – Projekt-Test: das Skript ist (noch) Projekt-Gate in kubernia; die Lebendigkeitsprobe unten prüft die echte Doku dieses Repos. */
+ * @harness-waechter – Projekt-Test: das Skript ist Kern (factory#130), die Ausnahmen kommen aus `.factory/projekt.json`; die Lebendigkeitsprobe unten prüft die echte Doku dieses Repos. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -177,7 +177,17 @@ describe("Prüfmodus (AK1, AK3)", () => {
   test("kein Board mit Rolle factory und kein Sync-Stand: nichts zu prüfen (Kern, factory#130)", () => {
     const root = fixture({ ".factory/projekt.json": JSON.stringify({ boards: [{ rolle: "produkt", repo: REPO }] }), "docs/x.md": tagLinks("v1") });
     assert.equal(lib.auditFactoryLinks(root).nichtsZuPruefen, true);
-    assert.equal(run([], root).code, 0);
+    const r = run([], root);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /nichts zu prüfen/);
+  });
+  test("Sync-Stand vorhanden, aber weder quelle.repo noch Board mit Rolle factory: rot [projekt] (Kern)", () => {
+    const root = fixture({
+      ".factory/projekt.json": JSON.stringify({ boards: [{ rolle: "produkt", repo: REPO }] }),
+      ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", commit: "c1", sauber: true }, einheiten: {} }),
+      "docs/x.md": tagLinks("v1"),
+    });
+    assert.deepEqual(arten(root), ["projekt"]);
   });
   test("--wurzel wählt den Projektbaum", () => {
     const root = projekt(tagLinks("v1"), gut());
