@@ -240,13 +240,15 @@ describe("scanSeiten, gekuerzteSeiten, gegenstueckBefund, Umgebungsvariablen", (
     assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/docs/y.md)"));
     assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/docs/xamd)"));
     assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](x.md)"));
+    assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/sub/docs/x.md)"), "Pfad mit Vorspann zählt nicht");
   });
   const kopf = "# Titel\n\n## Anderes\n\nProsa.\n\n";
   const umgebung = (inhalt: string): string => `${kopf}## Umgebungsvariablen\n\n${inhalt}\n## Danach\n\nProsa.\n`;
   test("umgebungsvariablenAbschnitt: reicht bis zur nächsten ##, fehlt leer", () => {
     const a = umgebungsvariablenAbschnitt(umgebung(KERN));
     assert.ok(a.startsWith("## Umgebungsvariablen") && !a.includes("Danach") && !a.includes("Anderes"));
-    assert.equal(umgebungsvariablenAbschnitt("# T\n"), "");
+    assert.equal(umgebungsvariablenAbschnitt("# T\nProsa"), "");
+    assert.equal(umgebungsvariablenAbschnitt("# T\n\n## Umgebungsvariablen\n\nletzte Zeile"), "## Umgebungsvariablen\n\nletzte Zeile");
   });
   test("befehle: grün mit Kern-Zeile und Block, rot mit FACTORY_-Zeile außerhalb des Blocks", () => {
     const block = `${START}\n\n| \`KQ_X\` | Projekt |\n\n${ENDE}\n`;
@@ -353,7 +355,9 @@ describe("Lebendprobe an den echten Seiten", () => {
   const inventar = lies(INVENTAR_DATEI);
   const GEKUERZT = gekuerzteSeiten(inventar);
   test("das Inventar und die Seiten mit Marker oder Kern-Zeile decken sich in beide Richtungen", () => {
-    assert.deepEqual(inventarBefunde(inventar, scanSeiten(docsSeiten()), (p) => existsSync(`${WURZEL}${p}`)), []);
+    const scan = scanSeiten(docsSeiten());
+    for (const pfad of [BEFEHLE, INVENTAR_DATEI, "docs/model-routing.md"]) assert.ok(scan.some((x) => x.pfad === pfad), `Leerlauf-Schutz: ${pfad} fehlt im Scan`);
+    assert.deepEqual(inventarBefunde(inventar, scan, (p) => existsSync(`${WURZEL}${p}`)), []);
   });
   test("Leerlauf-Schutz: die Tabelle liefert gekürzte Seiten, jede trägt Überschrift und Kern-Zeile oder Factory-Link", () => {
     assert.ok(GEKUERZT.length >= 1, "GEKUERZT ist leer");
