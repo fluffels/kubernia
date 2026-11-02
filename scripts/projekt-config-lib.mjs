@@ -12,12 +12,14 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { arbeitsplatzMaengel, istRelativPosix } from "./arbeitsplatz-lib.mjs";
+import { arbeitsplatzMaengel } from "./arbeitsplatz-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
-import { REPO_FORM, istRepoForm, spracheMaengel } from "./spezifikation-lib.mjs";
+import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
+import { istRelativPosix } from "./relativ-pfad.mjs";
+import { spracheMaengel } from "./spezifikation-lib.mjs";
 
-export { istRepoForm };
+export { gleichesRepo, istRepoForm, zerlegeRepo };
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -321,13 +323,6 @@ export function gatesAus(config) {
   return { nichtInVerify: wert.nichtInVerify ?? [] };
 }
 
-/** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
-export function zerlegeRepo(repo) {
-  const m = typeof repo === "string" ? REPO_FORM.exec(repo) : null;
-  if (!m) throw new Error(`repo fehlt oder hat nicht die Form owner/name in ${PROJEKT_CONFIG}\nFix: den Schlüssel repo in ${PROJEKT_CONFIG} als owner/name eintragen`);
-  return { owner: m[1], name: m[2] };
-}
-
 /** Pur: der Namensteil von `repo` der Config (`owner/name` → `name`); wirft wie `zerlegeRepo`. */
 export const repoName = (config) => zerlegeRepo(config?.repo).name;
 
@@ -518,9 +513,6 @@ export function boardPfad(board) {
 
 /** Pur: das Repo (`owner/name`), dessen Issues das Board führt: `board.repo`, ohne Schlüssel das `repo` der Config. */
 export const boardRepo = (board, config) => (typeof board?.repo === "string" ? board.repo : config?.repo);
-
-/** Pur: sind zwei Repo-Angaben (`owner/name`) dasselbe Repo? GitHub unterscheidet Groß- und Kleinschreibung nicht; ein Nicht-String ist nie gleich. */
-export const gleichesRepo = (a, b) => typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
 
 /** Pur: das Repo (`owner/name`) aus der `repository_url` eines Issues (`…/repos/<owner>/<name>`); leer, wenn die URL es nicht trägt. */
 export const repoAusUrl = (url) => /\/repos\/([^/]+\/[^/]+)$/.exec(String(url ?? ""))?.[1] ?? "";

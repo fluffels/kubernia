@@ -10,6 +10,7 @@
  */
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
+import { bestaetigeAnlegen as bestaetigeAnlegenLib } from "./inbox-start-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 
 export { STATUS_TITEL };
@@ -70,22 +71,9 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
 /**
  * Zweitabfrage vor dem Anlegen (fail-closed): die REST-Liste der offenen Issues hinkt bei frischen Tickets nach, ein zweites Status-Ticket
  * entstand so schon. Nur bei `aktion: "anlegen"` fragt `zweit()` (liefert `[{ number, titel }]`, z.B. `frischeOffeneIssues`) einen zweiten
- * Weg: kennt er ein offenes `STATUS_TITEL` oder wirft er, wird daraus `nichts` mit Warnung. Jede andere Aktion bleibt unberührt. Pur
- * (`zweit` ist injiziert); liefert eine neue Entscheidung.
+ * Weg (Logik: `bestaetigeAnlegen` in inbox-start-lib.mjs): kennt er ein offenes `STATUS_TITEL` oder wirft er, wird daraus `nichts` mit Warnung. Jede andere Aktion bleibt unberührt. Pur.
  */
-export function bestaetigeAnlegen(e, { zweit }) {
-  if (e.aktion !== "anlegen") return e;
-  let frisch;
-  try {
-    frisch = zweit();
-    if (!Array.isArray(frisch)) throw new Error("Antwort ist keine Liste.");
-  } catch (err) {
-    return { aktion: "nichts", grund: "Anlegen abgebrochen: die Zweitabfrage über GraphQL ist fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Zweitabfrage vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
-  }
-  const da = frisch.filter((i) => i.titel === STATUS_TITEL).map((i) => `#${i.number}`);
-  if (da.length === 0) return e;
-  return { aktion: "nichts", grund: `Anlegen abgebrochen: die REST-Liste kannte ${da.join(", ")} noch nicht, GraphQL schon (frisch angelegt)`, warnungen: [...e.warnungen, `REST-Liste hinkt: offenes „${STATUS_TITEL}“ ${da.join(", ")} nur per GraphQL gefunden.`] };
-}
+export const bestaetigeAnlegen = (e, { zweit }) => bestaetigeAnlegenLib(e, { zweit, passt: (i) => i?.titel === STATUS_TITEL, was: `„${STATUS_TITEL}“` });
 
 /** Soll das Status-Ticket bewegt werden? `nach-oben` nur, wenn es nicht schon im Kopf von `items` steht; anlegen bewegt immer. Pur. */
 export function sollBewegen(e, items) {
@@ -107,14 +95,22 @@ export function wochenFenster(jetzt) {
   return { letzte: woche(mo - 7 * TAG_MS), davor: woche(mo - 14 * TAG_MS) };
 }
 
-/** Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen). Pur. */
-export function statusBody({ vorgaenger, jetzt, repo = REPO }) {
+/**
+ * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
+ * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
+ */
+export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null }) {
   const w = wochenFenster(jetzt);
   const zeitraum = vorgaenger
     ? `seit dem Abschluss von #${vorgaenger.number} (${vorgaenger.closedAt}) bis zum Claim`
-    : "seit dem Merge von #1293 bis zum Claim";
+    : start
+      ? `seit dem ersten Commit auf main (${start}) bis zum Claim`
+      : "seit dem Beginn der Historie von main bis zum Claim";
   const schonGemessen = vorgaenger?.createdAt && wochenFenster(vorgaenger.createdAt).letzte.von === w.letzte.von;
-  const budget = schonGemessen
+  const zuJung = !vorgaenger && Boolean(start) && start.slice(0, 10) > w.davor.von;
+  const budget = zuJung
+    ? `- **Wochenbudget:** entfällt, main ist jünger als zwei volle Wochen (erster Commit ${start}; der Vergleich braucht letzte Woche ${w.letzte.von} bis ${w.letzte.bis} und die davor; Checkliste Punkt 7 überspringen).`
+    : schonGemessen
     ? `- **Wochenbudget:** entfällt, Woche ${w.letzte.von} bis ${w.letzte.bis} hat #${vorgaenger.number} schon gemessen (Checkliste Punkt 7 überspringen).`
     : `- **Wochenbudget:** letzte volle Woche ${w.letzte.von} bis ${w.letzte.bis} (Mo–So UTC) gegen die Woche davor ${w.davor.von} bis ${w.davor.bis}.`;
   const docs = `https://github.com/${repo}/blob/main/docs`;
@@ -123,7 +119,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO }) {
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
-    `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
+    `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
     `- **Checkliste:** [docs/model-routing.md › Langfuse-Status überprüfen](${docs}/model-routing.md#langfuse-status-überprüfen-1293).`,
     `- **Mechanik:** [docs/ticket-reihenfolge.md](${docs}/ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293).`,
     `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), PR mit Verdichtungszeile und \`Closes\`.`,
@@ -134,9 +130,9 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO }) {
 /**
  * Status-Ticket anlegen bzw. nach oben schieben. `items` = die schon geladene Board-Liste (der Aufrufer lädt sie einmal je Lauf).
  * Liefert `{ ok, nr, itemId }`: `ok` bei Erfolg (oder fehlendem Token, das nur warnt), `itemId` nur, wenn das Item an die Spitze gesetzt
- * wurde (der Aufrufer zieht seine Liste damit im Speicher nach); `nr` ist die Nummer des Tickets.
+ * wurde (der Aufrufer zieht seine Liste damit im Speicher nach); `nr` ist die Nummer des Tickets. `start` = Datum des ersten Commits auf main (siehe `statusBody`).
  */
-export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {}, config }) {
+export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {}, config, start = null }) {
   // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
   const harness = labelAus(config, "harness");
   const board = boardFuerRolle(boardRolleFuer([harness], config));
@@ -154,7 +150,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [],
   if (e.aktion === "anlegen") {
     const neu = gh([
       "api", "-X", "POST", `repos/${repo}/issues`,
-      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo })}`, "-f", `labels[]=${harness}`,
+      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo, start })}`, "-f", `labels[]=${harness}`,
     ], "schreiben");
     console.log(`Angelegt: #${neu.number}`);
     node = neu.node_id;

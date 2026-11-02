@@ -31,6 +31,16 @@ export const istGanzeDatei = (e) => e.block === undefined && e.schluessel === un
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;
 
+/** Pfad des Besitz-Manifests (eine Quelle; kein Skript außerhalb dieser Lib schreibt das Literal). */
+export const MANIFEST_PFAD = ".factory/besitz.json";
+
+/** Spanne `[a, b]` des Blocks `block` (Start der Start-Marker, Start der Ende-Marker) oder `null`, wenn ein Marker fehlt oder das Ende vor dem Start steht. */
+export function blockSpanne(text, block) {
+  const a = text.indexOf(markerStart(block));
+  const b = text.indexOf(markerEnde(block));
+  return a < 0 || b < a ? null : [a, b];
+}
+
 /** Der Projekt-Block in AGENTS.md: ab dieser Marker-Zeile steht Projektinhalt, den die Verteilung nie anfasst. */
 export const PROJEKT_BLOCK_START = "<!-- factory-projekt:start -->";
 /** Ende des Projekt-Blocks (Gegenstück zu `PROJEKT_BLOCK_START`). */
@@ -53,10 +63,8 @@ const zaehleVorkommen = (text, s) => text.split(s).length - 1;
 /** Text der Einheit oder `null`, wenn Block/Schlüssel nicht auflösbar ist. */
 export function einheitText(e, text) {
   if (e.block !== undefined) {
-    const a = text.indexOf(markerStart(e.block));
-    const b = text.indexOf(markerEnde(e.block));
-    if (a < 0 || b < a) return null;
-    return text.slice(a, b + markerEnde(e.block).length);
+    const spanne = blockSpanne(text, e.block);
+    return spanne ? text.slice(spanne[0], spanne[1] + markerEnde(e.block).length) : null;
   }
   if (e.schluessel !== undefined) {
     try {
@@ -627,7 +635,7 @@ export function projektwertLauf(wurzel, ladeConfig, { schreiben = false } = {}) 
   };
   let manifestPfade = [];
   try {
-    manifestPfade = JSON.parse(lies(".factory/besitz.json") ?? "{}").eintraege?.map((e) => e.pfad) ?? [];
+    manifestPfade = JSON.parse(lies(MANIFEST_PFAD) ?? "{}").eintraege?.map((e) => e.pfad) ?? [];
   } catch {
     // ein kaputtes Manifest meldet das Drift-Gate selbst
   }

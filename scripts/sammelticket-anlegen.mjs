@@ -175,31 +175,53 @@ export function lesbarImZiel(repo, fn, { err = console.error, exit = process.exi
   }
 }
 
-/** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
-function pruefeDublette(nr, titel, vorgaenger, { repo, owner }) {
-  const einzelAbruf = einzelAbrufIn(repo);
-  return lesbarImZiel(repo, () => {
-    const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages(repo, zielOpts(repo))), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
-    const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, owner);
-    return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
-  });
+/**
+ * Die Nähte der gh-Zugriffe (#101 L5/L6): `gh` (`args, opt`, Standard `ghJson`), `ladeSeiten` (`repo, opt`, Standard `loadOpenIssuePages`), `env` (Standard `process.env`),
+ * `log`, `err`, `exit` (siehe `lesbarImZiel`). Ohne Angabe läuft alles echt.
+ */
+const naehte = (n = {}) => ({ gh: ghJson, ladeSeiten: loadOpenIssuePages, env: process.env, log: console.log, ...n });
+
+/**
+ * Die offenen Kandidaten des Sammeltickets `titel` im Ziel-Repo `repo` (frisch geladen, bei `vorgaenger` nur jüngere), höchstens mit der Nummer unter `vorVon`. Das Lesen steht in
+ * `lesbarImZiel` (#78 L14: unlesbar heißt `✖`-Meldung und Exit 1, kein Stacktrace) und nutzt die Token-Optionen des Ziel-Repos (`zielOpts`).
+ */
+function offeneKandidaten({ repo, titel, vorgaenger, vorVon = Infinity }, n) {
+  return kandidatenSammelticket(normalizeOffene(n.ladeSeiten(repo, zielOpts(repo, n.env))), titel, { nach: vorgaenger }).filter((i) => i.number < vorVon);
 }
 
-/** Wertet `pruefeDublette` aus: schließt das eigene Ticket bei einer Dublette (`true`), warnt sonst. */
-function schliesseWennDublette(nr, titel, vorgaenger, ziel) {
+/** Das älteste bestätigte ungeclaimte Sammelticket `titel` im Ziel-Repo (Direktabruf bestätigt, die Liste hinkt nach) oder null. Ein unlesbares Ziel endet mit Exit 1 (`lesbarImZiel`). */
+export function findeVorhandenes({ repo, titel, vorgaenger, owner }, naht = {}) {
+  const n = naehte(naht);
+  return lesbarImZiel(repo, () => waehleBestaetigtes(offeneKandidaten({ repo, titel, vorgaenger }, n), einzelAbrufIn(repo, n.gh, n.env), owner), n);
+}
+
+/** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
+function pruefeDublette(nr, titel, vorgaenger, { repo, owner }, n) {
+  const einzelAbruf = einzelAbrufIn(repo, n.gh, n.env);
+  return lesbarImZiel(repo, () => {
+    const aelter = waehleBestaetigtes(offeneKandidaten({ repo, titel, vorgaenger, vorVon: nr }, n), einzelAbruf, owner);
+    return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
+  }, n);
+}
+
+/** Wertet `pruefeDublette` aus: schließt das eigene Ticket bei einer Dublette (`true`), warnt sonst. Schreibt mit den Token-Optionen des Ziel-Repos. */
+export function schliesseWennDublette(nr, titel, vorgaenger, ziel, naht = {}) {
+  const n = naehte(naht);
   const { repo } = ziel;
-  const d = pruefeDublette(nr, titel, vorgaenger, ziel);
-  if (d.art === "warnung") console.log(`::warning::#${nr} ist eine Dublette von #${d.aelter}, hat aber schon Kommentare: nicht geschlossen, Zeilen von Hand nach #${d.aelter} übertragen und #${nr} schließen.`);
+  const d = pruefeDublette(nr, titel, vorgaenger, ziel, n);
+  if (d.art === "warnung") n.log(`::warning::#${nr} ist eine Dublette von #${d.aelter}, hat aber schon Kommentare: nicht geschlossen, Zeilen von Hand nach #${d.aelter} übertragen und #${nr} schließen.`);
   if (d.art !== "eigenes-schliessen") return false;
-  ghJson(["api", "-X", "POST", `repos/${repo}/issues/${nr}/comments`, "-f", `body=Dublette von #${d.aelter} (Wettlauf beim Anlegen)`], zielOpts(repo));
-  ghJson(["api", "-X", "PATCH", `repos/${repo}/issues/${nr}`, "-f", "state=closed", "-f", "state_reason=not_planned"], zielOpts(repo));
-  console.log(`Dublette von #${d.aelter} (Wettlauf beim Anlegen): #${nr} geschlossen (stand es schon im Board, bleibt das Item dort geschlossen liegen). Das Original ist #${d.aelter}.`);
+  n.gh(["api", "-X", "POST", `repos/${repo}/issues/${nr}/comments`, "-f", `body=Dublette von #${d.aelter} (Wettlauf beim Anlegen)`], zielOpts(repo, n.env));
+  n.gh(["api", "-X", "PATCH", `repos/${repo}/issues/${nr}`, "-f", "state=closed", "-f", "state_reason=not_planned"], zielOpts(repo, n.env));
+  n.log(`Dublette von #${d.aelter} (Wettlauf beim Anlegen): #${nr} geschlossen (stand es schon im Board, bleibt das Item dort geschlossen liegen). Das Original ist #${d.aelter}.`);
   return true;
 }
-/** Zustand des Vorgängers `nr` per REST (`zustandVonIssue`); unlesbar gilt als offen (die Sperre ist die sichere Seite). */
-function vorgaengerZustand(nr, repo) {
+
+/** Zustand des Vorgängers `nr` per REST (`zustandVonIssue`, Lesezugriff mit den Token-Optionen des Ziel-Repos); unlesbar gilt als `unbekannt` (die Sperre ist die sichere Seite). */
+export function vorgaengerZustand(nr, repo, naht = {}) {
+  const n = naehte(naht);
   try {
-    return zustandVonIssue(ghJson(["api", `repos/${repo}/issues/${nr}`], zielOpts(repo)));
+    return zustandVonIssue(n.gh(["api", `repos/${repo}/issues/${nr}`], zielOpts(repo, n.env)));
   } catch {
     return "unbekannt";
   }
@@ -271,10 +293,7 @@ async function main(argv = process.argv.slice(2)) {
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
-  const vorhanden = lesbarImZiel(repo, () => {
-    const offene = normalizeOffene(loadOpenIssuePages(repo, zielOpts(repo)));
-    return waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbrufIn(repo), ziel.owner);
-  });
+  const vorhanden = findeVorhandenes({ repo, titel, vorgaenger, owner: ziel.owner });
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;

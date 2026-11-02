@@ -38,7 +38,8 @@ import { REPO, teilantwortAusStdout } from "./board-lib.mjs";
 import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { labelAus, ladeProjektConfig, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnis, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
 import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
 import { lensWorktreeName, ticketAusRef } from "./ticket-refs.mjs";
@@ -101,7 +102,7 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
 
 /** Gebündelte GraphQL-Abfragen (`viewer` und je Nummer ein Alias `i<k>`), je bis zu `ALIAS_MAX` Nummern. Pur. */
 export function aliasAbfragen(nummern, repo = REPO) {
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
+  if (!istRepoForm(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
   if (nummern.some((n) => !Number.isInteger(n) || n <= 0)) throw new Error("Nummern müssen positive Ganzzahlen sein");
   const { owner, name } = zerlegeRepo(repo);
   const felder = "state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";

@@ -6,7 +6,7 @@
  *    Manifest selbst berührt. Bewusste Grenze: Pfad-Ebene, nicht Block- oder Schlüssel-Ebene; das zählt eher zu viel als zu wenig.
  *  - Ab 3 Besitz-PRs, einem ältesten Commit über 7 Tage oder einer Commit-Zeile `<praefixe.commitZeile>Sync-Dringlich: <grund>` in einem Besitz-Commit
  *    hält das Skript GENAU EIN Kopf-Ticket „🏷️ Tag v<x> setzen und syncen“ (Board-Spitze, Art `tag`) mit Tag-Vorschlag, PRs, CI-Status des
- *    main-Commits, fertigem Befehl und der Checkliste („Trockenlauf-Sync in einem Bezieher“, „CI des Sync-PR je Bezieher grün“). Ein offenes Ticket wird nie verdoppelt, sondern bei
+ *    main-Commits, fertigem Befehl und der Checkliste („Trockenlauf-Sync in einem Bezieher“, CI des Sync-PR je Bezieher). Ein offenes Ticket wird nie verdoppelt, sondern bei
  *    Änderung aktualisiert (geclaimt: unberührt) und geschlossen, sobald nichts Ungetaggtes mehr da ist.
  *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach setzt der Agent den Tag und erstellt je Bezieher den Sync-PR.
  *  - Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret = Pre-Flight); ohne ihn bleibt die Checkliste.
@@ -14,15 +14,15 @@
  * In einem Bezieher (es gibt `.factory/sync-stand.json`) tut das Skript nichts. Ohne Release-Tag ebenfalls nichts.
  *
  * Aufruf: node scripts/tag-takt.mjs [--dry-run]   (Workflow: .github/workflows/board-takt.yml)
- * Die Funktionen oben sind pur und getestet (test/tag-takt.test.ts); die Aufrufe von git und gh unten nicht.
+ * Die Funktionen oben sind pur und getestet (test/tag-takt.test.ts); `main` läuft in test/tag-takt-main.test.ts über injizierte Nähte, die echten git-/gh-Aufrufe unten nicht.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD as MANIFEST, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { liesSyncStand } from "./factory-sync-lib.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { inboxStart, vertrauterOwner, zielZugang } from "./inbox-start-lib.mjs";
+import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { teile, vergleicheTags } from "./release-tag-lib.mjs";
@@ -33,7 +33,6 @@ export const MIN_PRS = 3;
 export const MAX_ALTER_TAGE = 7;
 const MAX_ZEILEN = 50;
 const TAG_MS = 86_400_000;
-const MANIFEST = ".factory/besitz.json";
 const CI_WORKFLOW = ".github/workflows/ci.yml";
 
 /** Titel des Tag-Tickets. Pur. */
@@ -129,18 +128,7 @@ export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlich
  * Zweitabfrage vor dem Anlegen (fail-closed): die REST-Liste hinkt bei frischen Tickets nach. `zweit()` liefert `[{ number, titel }]`; kennt es ein offenes
  * Tag-Ticket oder wirft es, wird aus `anlegen` ein `nichts` mit Warnung. Jede andere Aktion bleibt unberührt. Pur.
  */
-export function bestaetigeTagAnlegen(e, { zweit }) {
-  if (e.aktion !== "anlegen") return e;
-  let da;
-  try {
-    const frisch = zweit();
-    da = frisch.filter((i) => String(i?.titel).startsWith(TAG_MARKER)).map((i) => `#${i.number}`);
-  } catch (err) {
-    return { aktion: "nichts", grund: "Anlegen abgebrochen: Zweitabfrage fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Zweitabfrage vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
-  }
-  if (da.length === 0) return e;
-  return { aktion: "nichts", grund: `Anlegen abgebrochen: die REST-Liste kannte ${da.join(", ")} noch nicht (frisch angelegt)`, warnungen: [...e.warnungen, `REST-Liste hinkt: offenes Tag-Ticket ${da.join(", ")} nur per Zweitabfrage gefunden.`] };
-}
+export const bestaetigeTagAnlegen = (e, { zweit }) => bestaetigeAnlegen(e, { zweit, passt: (i) => String(i?.titel).startsWith(TAG_MARKER), was: "Tag-Ticket" });
 
 /** Pur: CI-Zustand des main-Commits aus den Workflow-Läufen (`[{ path, status, conclusion, html_url }]`, neueste zuerst) als `{ zustand: gruen|rot|laeuft|unbekannt, url }`. */
 export function ciZustand(laeufe) {
@@ -151,7 +139,7 @@ export function ciZustand(laeufe) {
   return { zustand: lauf.conclusion === "success" ? "gruen" : "rot", url };
 }
 
-const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch", unbekannt: "unbekannt" };
+const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)", unbekannt: "unbekannt" };
 
 /** Pur: Body des Tag-Tickets. `prs` = `besitzCommits`, `aeltestes` = `{ datum, sha }`, `ci` = `ciZustand`. */
 export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci }) {
@@ -182,8 +170,8 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci })
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
     `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`)`,
-    "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf listet nur Dateiänderungen; check:docdrift und die Wächter-Tests des Beziehers laufen erst dort; rot: Folge-Fix in der Factory und Patch-Tag)",
-    "- [ ] Ticket schließen, sobald der Tag steht und die Sync-PRs grün sind (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
+    "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf fährt kein verify); rot durch Factory-Besitz: Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
+    "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen und deren CI grün ist (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
     "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: docs/agent-harness.md › Tag-Takt (#103).",
   ].join("\n");
@@ -283,22 +271,22 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-const git = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
 
-/** Einstieg. `deps` (Tests): `start`, `gh`, `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `start`, `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `ladeManifest`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), ladeManifest = () => JSON.parse(readFileSync(MANIFEST, "utf8")) } = {}) {
   const s = await start(argv, { skript: "tag-takt", praefix: "Tag-Takt: Projekt-Config nicht lesbar: ", log, err });
   if (s.code !== undefined) return s.code;
   const { config, libs } = s;
-  const { REPO, ladeSammelKontext, vertrauteIssues, frischeOffeneIssues, platziereOben } = libs;
+  const { REPO, ladeSammelKontext, vertrauteIssues, frischeOffeneIssues } = libs;
   const { ziel, zielOpt } = zielZugang(libs);
-  const wurzel = process.cwd();
+  const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness") });
   const io = {
     log,
     istBezieher: () => liesSyncStand(wurzel).zustand !== "fehlt",
     tags: () => git(["tag", "--merged", "HEAD"]).split(/\r?\n/).map((t) => t.trim()).filter(Boolean),
     ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", `${tag}..HEAD`, "--"]),
-    ladeManifest: () => JSON.parse(readFileSync(MANIFEST, "utf8")),
+    ladeManifest,
     headSha: () => git(["rev-parse", "HEAD"]).trim(),
     ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/runs?head_sha=${sha}&event=push&per_page=30`, "--jq", ".workflow_runs"]),
     ladeOffene: () => {
@@ -311,20 +299,17 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     dringlichKey: commitZeilenAus(config).syncDringlich,
     jetzt: () => new Date(),
     projectToken: process.env.PROJECT_TOKEN,
-    legeIssueAn: (titel, body) => {
-      const label = labelAus(config, "harness");
-      return gh.text(["issue", "create", "--repo", ziel, "--title", titel, ...(label ? ["--label", label] : []), "--body", body], zielOpt).trim().split("/").pop();
-    },
+    legeIssueAn: aktion.legeIssueAn,
     sortiereEin: (nr, art) => {
       try {
-        platziereOben(nr, art, process.env.PROJECT_TOKEN, ziel === REPO ? undefined : ziel);
+        aktion.platziere(nr, art);
         return true;
       } catch {
         return false;
       }
     },
-    aktualisiere: (nr, titel, body) => gh.text(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, "-f", `title=${titel}`, "-f", `body=${body}`], zielOpt),
-    schliesse: (nr, kommentar) => gh.text(["issue", "close", String(nr), "--repo", ziel, "--reason", "completed", "--comment", kommentar], zielOpt),
+    aktualisiere: (nr, titel, body) => aktion.aktualisiere(nr, body, titel),
+    schliesse: aktion.schliesse,
   };
   return lauf({ io, trocken: s.trocken });
 }

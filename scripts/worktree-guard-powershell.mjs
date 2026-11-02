@@ -12,6 +12,9 @@
  * FOLGT dem persistenten `Set-Location` früherer Aufrufe. Der Hook startet darum bei `cwd` und wertet nur
  * Ortswechsel INNERHALB des einen Befehls aus.
  *
+ * Bekannte Grenze (Asymmetrie): Skript-Code-Text wertet er nur bei den Namen aus `SKRIPT_LAUFZEITEN` (`shell-tabellen.mjs`); der Bash-Guard hat keine
+ * Laufzeit-Liste und greift dort auf jeden Interpreter-Code-Text.
+ *
  * Was er versteht (Tokenizer statt Regex auf dem Rohtext):
  *  - Trenner `;`, `&&`, `||`, `|`, Zeilenumbruch und Blöcke `{ … }`; Text in `'…'`, `"…"` (Backtick-Escape),
  *    Here-Strings und Kommentare (`#`, `<# … #>`) zählt nicht als Befehl.
@@ -39,7 +42,7 @@
 import { statSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
 import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
-import { INTERPRETER_NAMEN, SHELLS, baseName } from "./shell-tabellen.mjs";
+import { INTERPRETER_NAMEN, SHELLS, SKRIPT_LAUFZEITEN, baseName } from "./shell-tabellen.mjs";
 import { GIT_COMMIT_PUSH } from "./worktree-guard-tabellen.mjs";
 import { MAX_INTERPRETER, parseHookInput } from "./hook-io.mjs";
 
@@ -48,7 +51,7 @@ export { parseHookInput };
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
 const INTERPRETER = new Set([...INTERPRETER_NAMEN.flatMap((n) => [n, `${n}.exe`]), "iex", "invoke-expression", "wsl", "start-process", "start", "invoke-command", "icm"]);
 // Skript-Laufzeiten: ihr Code-Text wird nicht geparst; wie im Bash-Pfad (grobes Netz) zählt ein Wortpaar git … commit|push darin als Aufruf (#97 L11m).
-const LAUFZEITEN = new Set(["node", "nodejs", "python", "python3", "py", "perl", "ruby", "deno", "bun", "php"].flatMap((n) => [n, `${n}.exe`]));
+const LAUFZEITEN = new Set(SKRIPT_LAUFZEITEN.flatMap((n) => [n, `${n}.exe`]));
 const GESCHUETZT = new Set(["commit", "push"]);
 
 /** Ein Token: `value` ohne Anführungszeichen, `literal` = komplett aus '…' (keine Variablen-Ersetzung). */

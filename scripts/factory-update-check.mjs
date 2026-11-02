@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { factoryRepo } from "./factory-seite.mjs";
-import { liesSyncStand } from "./factory-sync-lib.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { teile, vergleiche, vergleicheTags } from "./release-tag-lib.mjs";
 

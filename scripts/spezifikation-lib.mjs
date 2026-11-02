@@ -16,12 +16,9 @@
  */
 
 import { fenceMaske } from "./docs-gen/markdown.mjs";
+import { REPO_FORM, istRepoForm } from "./repo-form.mjs";
 
-/** Die Form `owner/name` eines Repos (SSOT, #97): weder Zerlegung noch Prüfung dürfen davon abweichen; `projekt-config-lib` führt sie weiter (`zerlegeRepo`, `istRepoForm`). Liegt hier, weil `projekt-config-lib` diese Datei importiert (kein Zyklus). */
-export const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
-
-/** Pur: hat `repo` genau die Form `owner/name`? Ein Nicht-String nie. */
-export const istRepoForm = (repo) => typeof repo === "string" && REPO_FORM.test(repo);
+export { REPO_FORM, istRepoForm };
 
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 

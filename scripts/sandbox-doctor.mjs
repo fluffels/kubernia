@@ -79,16 +79,16 @@ export function pruefeWindowsSperre({ platform, projektText, lokalText }) {
   return enabled === true && erlaubt === false;
 }
 
-const windowsAbhilfe = () => `Natives Windows: der Projekt-Block (.claude/settings.json) sperrt hier Shell-Befehle (sicher das PowerShell-Tool), weil es unter Windows keine Sandbox gibt. Abhilfe einmal je Checkout: ${LOKAL_OVERRIDE} in .claude/settings.local.json (ungetrackt, wirkt nur hier), dann die Session neu starten. Gesandboxt arbeitet man nur unter WSL2 (${natives()}).`;
+const windowsAbhilfe = (seite) => `Natives Windows: der Projekt-Block (.claude/settings.json) sperrt hier Shell-Befehle (sicher das PowerShell-Tool), weil es unter Windows keine Sandbox gibt. Abhilfe einmal je Checkout: ${LOKAL_OVERRIDE} in .claude/settings.local.json (ungetrackt, wirkt nur hier), dann die Session neu starten. Gesandboxt arbeitet man nur unter WSL2 (${seite}).`;
 
-/** Die SessionStart-Ausgabe (JSON für Claude Code) bei Sperre, sonst leer. Pur bis auf den Seiten-Verweis: factorySeiteIn liest Sync-Stand und Config. */
-export function sessionStartAusgabe(eingabe) {
+/** Die SessionStart-Ausgabe (JSON für Claude Code) bei Sperre, sonst leer. Pur: `seite` ist der fertige Verweis auf die Doku-Seite (`factorySeiteIn`, vom Aufrufer gelesen), die Funktion liest nichts. */
+export function sessionStartAusgabe(eingabe, seite) {
   if (!pruefeWindowsSperre(eingabe)) return "";
   return JSON.stringify({
-    systemMessage: windowsAbhilfe(),
+    systemMessage: windowsAbhilfe(seite),
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: `${windowsAbhilfe()} Override nicht selbst eintragen (Leitplanke), der Maintainerin melden; bis dahin das Bash-Tool nehmen.`,
+      additionalContext: `${windowsAbhilfe(seite)} Override nicht selbst eintragen (Leitplanke), der Maintainerin melden; bis dahin das Bash-Tool nehmen.`,
     },
   });
 }
@@ -310,7 +310,7 @@ export function main(argv, env = process.env, out = console.log, err = console.e
   };
   if (argv[0] === "--sessionstart") {
     try {
-      const ausgabe = sessionStartAusgabe(quellen);
+      const ausgabe = sessionStartAusgabe(quellen, natives());
       if (ausgabe) out(ausgabe);
     } catch {
       // Der Hinweis darf den Start nie blockieren.
