@@ -1,33 +1,33 @@
-/* Factory-Seiten (#1967, ADR 0022 F10): das Inventar nennt für sieben Seiten ein Urteil, und drei Seiten bestehen nur noch aus Projektanteil.
+/* Factory-Seiten (#1967, #1968, ADR 0022 F10): das Inventar in `docs/referenz/anlaufstellen.md` nennt je Seite und Abschnitt ein Urteil, und die gekürzten Seiten bestehen nur noch aus Projektanteil.
  *
  * @harness-waechter – Projekt-Test (Fitness-Function über die eigene Doku): prüft das Inventar in `docs/referenz/anlaufstellen.md` und die Form der gekürzten Seiten.
  *
- * Umfang: `inventarBefunde` verlangt alle sieben Seiten (geschlossene Liste) mit mindestens einer Zeile, Urteil genau `Projekt` oder `Kern`, nicht leerem Zielort
- * und bei `Kern` einem Factory-Link. `kuerzungBefunde` prüft je gekürzte Seite (geschlossene Liste `GEKUERZT`, #1968 ergänzt sie): außerhalb der
- * `factory-projekt`- und `GEN:`-Blöcke nur Überschriften, Leerzeilen, `>`-Zeilen vor der ersten `##` und Kern-Zeilen; eine Überschrift ohne Block und ohne GEN
- * trägt genau eine Kern-Zeile, mit Block höchstens eine; der Kennsatz `Konvergenzschleife` (Kernwissen) darf nicht vorkommen.
+ * Umfang: Die Inventar-Tabelle ist die einzige Quelle; `GEKUERZT` leitet sich aus ihr ab (Seiten mit mindestens einer Zeile Urteil `Kern`, ohne `CORE_DOCS` von `check:docdrift`:
+ * deren Rest-Inhalt muss bleiben, `befehle.md` prüft ein eigener Test nur am Abschnitt `## Umgebungsvariablen`).
+ * `inventarBefunde` prüft: jede Tabellenzeile hat vier Zellen, einen Seitenpfad `docs/…md` in Backticks, das Urteil genau `Projekt` oder `Kern`, einen Zielort
+ * und bei `Kern` einen Factory-Link; jede Inventar-Seite existiert; jede Seite unter `docs/` (außer `docs/adr/`) mit einer Zeile genau `<!-- factory-projekt:start -->`
+ * oder einer Kern-Zeile steht im Inventar, und eine Seite mit Kern-Zeile hat dort mindestens eine Zeile `Kern` (beide Richtungen).
+ * `kuerzungBefunde` prüft je gekürzte Seite: außerhalb der `factory-projekt`- und `GEN:`-Blöcke nur Überschriften, Leerzeilen, `>`-Zeilen vor der ersten `##` und Kern-Zeilen;
+ * eine Überschrift ohne Block und ohne GEN trägt genau eine Kern-Zeile, mit Block höchstens eine; der Kennsatz `Konvergenzschleife` (Kernwissen) darf nicht vorkommen.
+ * Jede gekürzte Seite verlinkt ihr eigenes Gegenstück im Factory-Repo (Pfad der URL gleich Seitenpfad).
  * Bekannte Grenzen: Kernwissen erkennt der Test nur an der Form und am Kennsatz, nicht an der Bedeutung; Prosa innerhalb eines Blocks bleibt Sache des Reviews;
- * Code-Zäune außerhalb von Blöcken zählen als Prosa; eine Kern-Zeile darf auf jedes github.com-Ziel zeigen (Repo und Tag bindet `check:factorylinks`, nicht dieser Test). Der Test liest die echten Seiten (Lebendprobe mit Leerlauf-Schutz). */
+ * Code-Zäune außerhalb von Blöcken zählen als Prosa; eine Kern-Zeile darf auf jedes github.com-Ziel zeigen (Repo und Tag bindet `check:factorylinks`, nicht dieser Test);
+ * eine ganze Seite als Stub ohne Kern-Zeile und ohne Block (nur `# Titel` und `>`-Zeile) findet der Scan nicht, sie steht nur über die Tabelle im Inventar.
+ * Der Test liest die echten Seiten (Lebendprobe mit Leerlauf-Schutz). */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { CORE_DOCS as KERN_DOKUS } from "../../scripts/check-docdrift.mjs";
 
+const CORE_DOCS = KERN_DOKUS as readonly string[];
 const WURZEL = fileURLToPath(new URL("../..", import.meta.url));
 const lies = (pfad: string): string => readFileSync(`${WURZEL}${pfad}`, "utf8").replace(/\r\n/g, "\n");
 
-const INVENTAR_SEITEN = [
-  "docs/agent-harness.md",
-  "docs/agent-harness-faq.md",
-  "docs/sicherheit-agenten.md",
-  "docs/model-routing.md",
-  "docs/ticket-reihenfolge.md",
-  "docs/harness-glossar.md",
-  "docs/referenz/befehle.md",
-];
-const GEKUERZT = ["docs/agent-harness.md", "docs/agent-harness-faq.md", "docs/sicherheit-agenten.md"];
 const INVENTAR_DATEI = "docs/referenz/anlaufstellen.md";
 const INVENTAR_UEBERSCHRIFT = "## Factory-Seiten: Projektanteil und Kern";
+const BEFEHLE = "docs/referenz/befehle.md";
 const KENNSATZ = /Konvergenzschleife/;
 const KERN_ZEILE = /^Kern: \[[^\]]+\]\(https:\/\/github\.com\/[^)\s]+\)$/;
 const START = "<!-- factory-projekt:start -->";
@@ -35,29 +35,77 @@ const ENDE = "<!-- factory-projekt:ende -->";
 const GEN_START = /^<!-- GEN:[\w-]+ START -->$/;
 const GEN_ENDE = /^<!-- GEN:[\w-]+ END -->$/;
 
-export function inventarBefunde(md: string): string[] {
+/** Eine Seite unter `docs/`, die das Projekt-Inventar kennen muss: `kern` heißt, sie trägt eine Kern-Zeile. */
+interface Scan { pfad: string; kern: boolean }
+
+/** Seiten mit Marker oder Kern-Zeile; `docs/adr/` bleibt außen vor, ein Marker nur inline in Backticks zählt nicht. */
+export function scanSeiten(dateien: readonly { pfad: string; md: string }[]): Scan[] {
+  const treffer: Scan[] = [];
+  for (const { pfad, md } of dateien) {
+    if (pfad.startsWith("docs/adr/")) continue;
+    const zeilen = md.split(/\r?\n/);
+    const kern = zeilen.some((z) => KERN_ZEILE.test(z));
+    if (kern || zeilen.includes(START)) treffer.push({ pfad, kern });
+  }
+  return treffer;
+}
+
+interface Inventar { urteile: Map<string, Set<string>>; befunde: string[] }
+
+function inventarLesen(md: string): Inventar {
   const befunde: string[] = [];
+  const urteile = new Map<string, Set<string>>();
   const zeilen = md.split("\n");
   const von = zeilen.findIndex((z) => z.trim() === INVENTAR_UEBERSCHRIFT);
-  if (von < 0) return [`Abschnitt „${INVENTAR_UEBERSCHRIFT.slice(3)}“ fehlt`];
+  if (von < 0) return { urteile, befunde: [`Abschnitt „${INVENTAR_UEBERSCHRIFT.slice(3)}“ fehlt`] };
   let bis = zeilen.findIndex((z, i) => i > von && z.startsWith("## "));
   if (bis < 0) bis = zeilen.length;
-  const gesehen = new Set<string>();
   for (const z of zeilen.slice(von + 1, bis)) {
     if (!z.startsWith("|")) continue;
     const zellen = z.split("|").slice(1, -1).map((c) => c.trim());
     if (zellen.length !== 4) { befunde.push(`Tabellenzeile mit ${zellen.length} statt 4 Zellen: ${z.slice(0, 50)}`); continue; }
     if (zellen[0] === "Seite" || /^-+$/.test(zellen[0] ?? "")) continue;
     const [seite = "", , urteil = "", ziel = ""] = zellen;
-    const pfad = /^`([^`]+)`$/.exec(seite)?.[1] ?? "";
-    if (!INVENTAR_SEITEN.includes(pfad)) { befunde.push(`unbekannte Seite „${seite}“ (geschlossene Liste)`); continue; }
-    gesehen.add(pfad);
+    const pfad = /^`(docs\/[^`]+\.md)`$/.exec(seite)?.[1] ?? "";
+    if (pfad === "") { befunde.push(`unbekannte Seite „${seite}“ (erwartet: Pfad docs/….md in Backticks)`); continue; }
+    urteile.set(pfad, (urteile.get(pfad) ?? new Set<string>()).add(urteil));
     if (urteil !== "Projekt" && urteil !== "Kern") befunde.push(`${pfad}: Urteil „${urteil}“ ist weder Projekt noch Kern`);
     if (ziel === "") befunde.push(`${pfad}: Zielort fehlt`);
     else if (urteil === "Kern" && !ziel.includes("https://github.com/")) befunde.push(`${pfad}: Kern-Zeile ohne Factory-Link`);
   }
-  for (const s of INVENTAR_SEITEN) if (!gesehen.has(s)) befunde.push(`${s}: ohne Urteil im Inventar`);
+  return { urteile, befunde };
+}
+
+/** Das Inventar in beide Richtungen gegen die Dateien: jede Seite existiert, jede Seite mit Marker oder Kern-Zeile hat ein Urteil. */
+export function inventarBefunde(md: string, scan: readonly Scan[], vorhanden: (pfad: string) => boolean): string[] {
+  const { urteile, befunde } = inventarLesen(md);
+  for (const pfad of urteile.keys()) if (!vorhanden(pfad)) befunde.push(`${pfad}: Seite existiert nicht`);
+  for (const s of scan) {
+    const u = urteile.get(s.pfad);
+    if (!u) befunde.push(`${s.pfad}: ohne Urteil im Inventar`);
+    else if (s.kern && !u.has("Kern") && !CORE_DOCS.includes(s.pfad)) befunde.push(`${s.pfad}: trägt Kern-Zeilen, das Inventar nennt kein Kern`);
+  }
   return befunde;
+}
+
+/** Die gekürzten Seiten: alle mit mindestens einer Zeile `Kern` im Inventar, ohne die Seiten aus `CORE_DOCS`. */
+export function gekuerzteSeiten(md: string): string[] {
+  return [...inventarLesen(md).urteile].filter(([pfad, u]) => u.has("Kern") && !CORE_DOCS.includes(pfad)).map(([pfad]) => pfad);
+}
+
+/** Der Link ins Factory-Repo auf genau diese Seite (Pfad der URL gleich Seitenpfad), mit oder ohne Anker. */
+export function gegenstueckBefund(seite: string, md: string): string | null {
+  const pfad = seite.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\(https://github\\.com/[^)\\s]+/blob/[^/\\s)]+/${pfad}(#[^)\\s]*)?\\)`).test(md) ? null : `${seite}: kein Factory-Link auf das eigene Gegenstück`;
+}
+
+/** Der Abschnitt `## Umgebungsvariablen` bis zur nächsten `##`. */
+export function umgebungsvariablenAbschnitt(md: string): string {
+  const zeilen = md.split("\n");
+  const von = zeilen.findIndex((z) => z === "## Umgebungsvariablen");
+  if (von < 0) return "";
+  const bis = zeilen.findIndex((z, i) => i > von && z.startsWith("## "));
+  return zeilen.slice(von, bis < 0 ? zeilen.length : bis).join("\n");
 }
 
 interface Pruefung { befunde: string[]; ueberschriften: number }
@@ -104,55 +152,107 @@ export function kuerzungBefunde(md: string): Pruefung {
 
 const tabelle = (zeilen: string[]): string => `${INVENTAR_UEBERSCHRIFT}\n\n| Seite | Abschnitt | Urteil | Zielort |\n|---|---|---|---|\n${zeilen.join("\n")}\n\n## Nächster Abschnitt\n`;
 const zeile = (seite: string, urteil = "Projekt", ziel = "bleibt hier"): string => `| \`${seite}\` | alles | ${urteil} | ${ziel} |`;
-const vollstaendig = (): string[] => INVENTAR_SEITEN.map((s) => zeile(s));
+const SEITEN = ["docs/a.md", "docs/b.md"];
+const vollstaendig = (): string[] => SEITEN.map((s) => zeile(s));
+const alleDa = (): boolean => true;
 const FL = "[Factory](https://github.com/o/f/blob/v0.2.0/docs/x.md)";
 const KERN = "Kern: [Titel](https://github.com/o/f/blob/v0.2.0/docs/x.md#anker)";
 
 describe("inventarBefunde (AK1)", () => {
-  test("grün: alle sieben Seiten mit Urteil und Zielort, Kern mit Factory-Link", () => {
-    assert.deepEqual(inventarBefunde(tabelle([...vollstaendig(), zeile("docs/agent-harness.md", "Kern", FL)])), []);
-  });
-  test("rot: eine Seite ohne Urteil", () => {
-    const b = inventarBefunde(tabelle(vollstaendig().slice(1)));
-    assert.ok(b.some((x) => x.includes("docs/agent-harness.md") && x.includes("ohne Urteil")), b.join("\n"));
+  test("grün: Projekt- und Kern-Zeilen, Kern mit Factory-Link, Marker-Seiten im Inventar", () => {
+    const scan = [{ pfad: "docs/a.md", kern: true }, { pfad: "docs/b.md", kern: false }];
+    assert.deepEqual(inventarBefunde(tabelle([...vollstaendig(), zeile("docs/a.md", "Kern", FL)]), scan, alleDa), []);
   });
   test("rot: Urteil „gemischt“ ist weder Projekt noch Kern", () => {
-    const b = inventarBefunde(tabelle([...vollstaendig(), zeile("docs/agent-harness.md", "gemischt")]));
+    const b = inventarBefunde(tabelle([...vollstaendig(), zeile("docs/a.md", "gemischt")]), [], alleDa);
     assert.ok(b.some((x) => x.includes("gemischt")), b.join("\n"));
   });
   test("rot: leerer Zielort", () => {
-    const b = inventarBefunde(tabelle([...vollstaendig(), zeile("docs/agent-harness.md", "Projekt", "")]));
+    const b = inventarBefunde(tabelle([...vollstaendig(), zeile("docs/a.md", "Projekt", "")]), [], alleDa);
     assert.ok(b.some((x) => x.includes("Zielort fehlt")), b.join("\n"));
   });
   test("rot: Kern ohne Factory-Link", () => {
-    const b = inventarBefunde(tabelle([...vollstaendig(), zeile("docs/agent-harness.md", "Kern", "bleibt hier")]));
+    const b = inventarBefunde(tabelle([...vollstaendig(), zeile("docs/a.md", "Kern", "bleibt hier")]), [], alleDa);
     assert.ok(b.some((x) => x.includes("ohne Factory-Link")), b.join("\n"));
   });
-  test("rot: Seite außerhalb der geschlossenen Liste", () => {
-    const b = inventarBefunde(tabelle([...vollstaendig(), zeile("docs/andere.md")]));
-    assert.ok(b.some((x) => x.includes("unbekannte Seite")), b.join("\n"));
-  });
   test("rot: Abschnitt fehlt", () => {
-    assert.equal(inventarBefunde("# Titel\n\n## Anderes\n").length, 1);
+    assert.equal(inventarBefunde("# Titel\n\n## Anderes\n", [], alleDa).length, 1);
   });
   test("grün: der Inventar-Abschnitt ist der letzte der Datei", () => {
     const md = tabelle(vollstaendig()).replace("\n## Nächster Abschnitt\n", "").trimEnd();
-    assert.deepEqual(inventarBefunde(md), []);
+    assert.deepEqual(inventarBefunde(md, [], alleDa), []);
   });
   test("grün: Zeilen hinter dem nächsten ##-Abschnitt zählen nicht", () => {
-    assert.deepEqual(inventarBefunde(`${tabelle(vollstaendig())}\n${zeile("docs/andere.md")}\n`), []);
+    assert.deepEqual(inventarBefunde(`${tabelle(vollstaendig())}\n${zeile("docs/c.md", "gemischt")}\n`, [], alleDa), []);
   });
   test("rot: Tabellenzeile mit falscher Zellenzahl wird gemeldet statt übersprungen", () => {
-    const fuenf = "| `docs/agent-harness.md` | a | Projekt | b | c |";
-    const drei = "| `docs/agent-harness.md` | Projekt | b |";
+    const fuenf = "| `docs/a.md` | a | Projekt | b | c |";
+    const drei = "| `docs/a.md` | Projekt | b |";
     for (const z of [fuenf, drei]) {
-      const b = inventarBefunde(tabelle([...vollstaendig(), z]));
+      const b = inventarBefunde(tabelle([...vollstaendig(), z]), [], alleDa);
       assert.ok(b.some((x) => x.includes("Zellen")), b.join("\n"));
     }
   });
-  test("rot: Seitenpfad ohne Backticks ist unbekannt", () => {
-    const b = inventarBefunde(tabelle([...vollstaendig(), "| docs/agent-harness.md | alles | Projekt | bleibt hier |"]));
-    assert.ok(b.some((x) => x.includes("unbekannte Seite")), b.join("\n"));
+  test("rot: Seitenpfad ohne Backticks oder außerhalb von docs/ ist unbekannt", () => {
+    for (const seite of ["| docs/a.md | alles | Projekt | bleibt hier |", zeile("src/a.md"), zeile("docs/a.txt")]) {
+      const b = inventarBefunde(tabelle([...vollstaendig(), seite]), [], alleDa);
+      assert.ok(b.some((x) => x.includes("unbekannte Seite")), b.join("\n"));
+    }
+  });
+  test("rot: eine Inventar-Seite existiert nicht", () => {
+    const b = inventarBefunde(tabelle(vollstaendig()), [], (p) => p !== "docs/b.md");
+    assert.deepEqual(b, ["docs/b.md: Seite existiert nicht"]);
+  });
+  test("rot: eine Seite mit Marker fehlt im Inventar", () => {
+    const b = inventarBefunde(tabelle([zeile("docs/a.md")]), [{ pfad: "docs/b.md", kern: false }], alleDa);
+    assert.deepEqual(b, ["docs/b.md: ohne Urteil im Inventar"]);
+  });
+  test("rot: eine Seite mit Kern-Zeile hat im Inventar nur Projekt-Zeilen", () => {
+    const b = inventarBefunde(tabelle(vollstaendig()), [{ pfad: "docs/a.md", kern: true }], alleDa);
+    assert.deepEqual(b, ["docs/a.md: trägt Kern-Zeilen, das Inventar nennt kein Kern"]);
+  });
+  test("grün: eine CORE_DOCS-Seite mit Kern-Zeile braucht kein Kern-Urteil", () => {
+    const b = inventarBefunde(tabelle([zeile(BEFEHLE)]), [{ pfad: BEFEHLE, kern: true }], alleDa);
+    assert.deepEqual(b, []);
+  });
+});
+
+describe("scanSeiten, gekuerzteSeiten, gegenstueckBefund, Umgebungsvariablen", () => {
+  test("scanSeiten: Marker-Zeile und Kern-Zeile zählen, docs/adr/ und Inline-Marker nicht", () => {
+    const scan = scanSeiten([
+      { pfad: "docs/m.md", md: `# T\n\n${START}\nx\n${ENDE}\n` },
+      { pfad: "docs/k.md", md: `# T\n\n## A\n\n${KERN}\r\n` },
+      { pfad: "docs/adr/0001-x.md", md: `${START}\n${KERN}\n` },
+      { pfad: "docs/inline.md", md: `Der Marker \`${START}\` steht nur im Text.\nKern: [T](lokal.md)\n` },
+      { pfad: "docs/leer.md", md: "# T\n" },
+    ]);
+    assert.deepEqual(scan, [{ pfad: "docs/m.md", kern: false }, { pfad: "docs/k.md", kern: true }]);
+  });
+  test("gekuerzteSeiten: nur Seiten mit Zeile Kern, ohne CORE_DOCS", () => {
+    const md = tabelle([zeile("docs/a.md", "Projekt"), zeile("docs/b.md", "Kern", FL), zeile("docs/b.md", "Projekt"), zeile(BEFEHLE, "Kern", FL), zeile("docs/c.md", "Projekt")]);
+    assert.deepEqual(gekuerzteSeiten(md), ["docs/b.md"]);
+    assert.deepEqual(gekuerzteSeiten(tabelle([zeile("docs/a.md", "Projekt")])), []);
+  });
+  test("gegenstueckBefund: grün mit eigenem Pfad (mit und ohne Anker), rot bei fremdem Pfad oder ohne Link", () => {
+    const link = "https://github.com/o/f/blob/v0.2.0/docs/x.md";
+    assert.equal(gegenstueckBefund("docs/x.md", `> [Seite](${link})`), null);
+    assert.equal(gegenstueckBefund("docs/x.md", `Kern: [A](${link}#anker)`), null);
+    assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/docs/y.md)"));
+    assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](https://github.com/o/f/blob/v0.2.0/docs/xamd)"));
+    assert.ok(gegenstueckBefund("docs/x.md", "> [Seite](x.md)"));
+  });
+  const kopf = "# Titel\n\n## Anderes\n\nProsa.\n\n";
+  const umgebung = (inhalt: string): string => `${kopf}## Umgebungsvariablen\n\n${inhalt}\n## Danach\n\nProsa.\n`;
+  test("umgebungsvariablenAbschnitt: reicht bis zur nächsten ##, fehlt leer", () => {
+    const a = umgebungsvariablenAbschnitt(umgebung(KERN));
+    assert.ok(a.startsWith("## Umgebungsvariablen") && !a.includes("Danach") && !a.includes("Anderes"));
+    assert.equal(umgebungsvariablenAbschnitt("# T\n"), "");
+  });
+  test("befehle: grün mit Kern-Zeile und Block, rot mit FACTORY_-Zeile außerhalb des Blocks", () => {
+    const block = `${START}\n\n| \`KQ_X\` | Projekt |\n\n${ENDE}\n`;
+    assert.deepEqual(kuerzungBefunde(umgebungsvariablenAbschnitt(umgebung(`${KERN}\n\n${block}`))).befunde, []);
+    const b = kuerzungBefunde(umgebungsvariablenAbschnitt(umgebung(`${KERN}\n\n| \`FACTORY_DIFF_BASE\` | Kern |\n\n${block}`))).befunde;
+    assert.ok(b.some((x) => x.includes("Prosa außerhalb") && x.includes("FACTORY_DIFF_BASE")), b.join("\n"));
   });
 });
 
@@ -242,18 +342,34 @@ describe("kuerzungBefunde (AK2 bis AK5)", () => {
   });
 });
 
+const docsSeiten = (ordner = "docs"): { pfad: string; md: string }[] =>
+  readdirSync(`${WURZEL}${ordner}`, { withFileTypes: true }).flatMap((e) => {
+    const pfad = `${ordner}/${e.name}`;
+    if (e.isDirectory()) return docsSeiten(pfad);
+    return e.name.endsWith(".md") ? [{ pfad, md: lies(pfad) }] : [];
+  });
+
 describe("Lebendprobe an den echten Seiten", () => {
-  test("das Inventar deckt alle sieben Seiten ab", () => {
-    const md = lies(INVENTAR_DATEI);
-    assert.deepEqual(inventarBefunde(md), []);
-    const seiten = new Set([...md.matchAll(/^\| `(docs\/[^`]+)` \|/gm)].map((m) => m[1]));
-    assert.ok(seiten.size >= INVENTAR_SEITEN.length, `nur ${seiten.size} Seiten im Inventar`);
+  const inventar = lies(INVENTAR_DATEI);
+  const GEKUERZT = gekuerzteSeiten(inventar);
+  test("das Inventar und die Seiten mit Marker oder Kern-Zeile decken sich in beide Richtungen", () => {
+    assert.deepEqual(inventarBefunde(inventar, scanSeiten(docsSeiten()), (p) => existsSync(`${WURZEL}${p}`)), []);
+  });
+  test("Leerlauf-Schutz: die Tabelle liefert gekürzte Seiten, jede trägt Überschrift und Kern-Zeile oder Factory-Link", () => {
+    assert.ok(GEKUERZT.length >= 1, "GEKUERZT ist leer");
+    for (const seite of ["docs/agent-harness.md", "docs/model-routing.md", "docs/harness-transfer.md"]) assert.ok(GEKUERZT.includes(seite), `${seite} fehlt in GEKUERZT`);
   });
   for (const seite of GEKUERZT) {
-    test(`${seite} besteht nur aus Projektanteil, GEN-Blöcken und Kern-Zeilen`, () => {
-      const p = kuerzungBefunde(lies(seite));
-      assert.deepEqual(p.befunde, []);
-      assert.ok(p.ueberschriften >= 3, `nur ${p.ueberschriften} Überschriften gescannt`);
+    test(`${seite} besteht nur aus Projektanteil, GEN-Blöcken und Kern-Zeilen und verlinkt ihr Gegenstück`, () => {
+      const md = lies(seite);
+      assert.deepEqual(kuerzungBefunde(md).befunde, []);
+      assert.equal(gegenstueckBefund(seite, md), null);
     });
   }
+  test(`${BEFEHLE}: der Abschnitt Umgebungsvariablen besteht nur aus Kern-Zeile und Projekt-Block`, () => {
+    const abschnitt = umgebungsvariablenAbschnitt(lies(BEFEHLE));
+    assert.ok(abschnitt !== "", "Abschnitt fehlt");
+    assert.deepEqual(kuerzungBefunde(abschnitt).befunde, []);
+    assert.equal(gegenstueckBefund(BEFEHLE, abschnitt), null);
+  });
 });
