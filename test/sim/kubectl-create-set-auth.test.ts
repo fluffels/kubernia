@@ -92,6 +92,13 @@ describe("(b) set image und set env: Ressourcen vor den Paaren", () => {
     expect(lauf("kubectl set image nginx=nginx:2", sim).out).toContain("error: one or more resources must be specified as <resource> <name> or <resource>/<name>");
     expect(lauf("kubectl set image", sim).out).toContain("error: [one or more resources must be specified as <resource> <name> or <resource>/<name>, at least one image update is required]");
   });
+  test("set image: Art ohne Namen meldet den Builder-Text von kubectl, nie 'null' (#1734)", () => {
+    const sim = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });
+    const r = lauf("kubectl set image deployment nginx=x", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toBe("error: resource(s) were provided, but no name was specified\n💡 Muster: kubectl set image deployment/<name> <container>=<image>");
+    expect(sim.deployments[0].image).toBe("nginx");
+  });
   test("set image: Paar ohne '=' (foo-) ist 'invalid image format'", () => {
     const r = lauf("kubectl set image deployment/web foo-", web());
     expect(r.out).toContain("error: invalid image format: foo-");
@@ -126,6 +133,14 @@ describe("(a) set image prüft den Container-Namen", () => {
     const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1 }] });
     expect(lauf("kubectl set image deployment/kasse nginx=x", sim).out).toContain('unable to find container named "nginx"');
     expect(lauf("kubectl set image deployment/kasse kasse=x", sim).out).toBe("deployment.apps/kasse image updated");
+  });
+  test.each([
+    "kubectl set image deployment/web nginx=nginx:1.29",
+    "kubectl set image deployment web nginx=nginx:1.29",
+  ])("Regression #1734: %s ändert das Image wie bisher", cmd => {
+    const sim = web();
+    expect(lauf(cmd, sim).out).toBe("deployment.apps/web image updated");
+    expect(sim.deployments[0].image).toBe("nginx:1.29");
   });
   test("initContainer 'vorbereiter' ist nicht simuliert", () => {
     const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, initContainer: { fillsMi: 10 } }] });
