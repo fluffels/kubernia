@@ -525,12 +525,19 @@ describe("Fitness: Registry ↔ Renderer ↔ Mapper", () => {
       expect(new Set([...baustein(sim).values()].map(o => o.kind)).size, plural).toBe(1);
     }
   });
-  test("die Grenze yaml-auswahl nennt jede Baustein-Art", () => {
+  // Die Fehlermeldung nennt die Arten (Test oben, `yamlKinds()`); die Grenze zählt sie nicht auf (#1751).
+  test("die Grenze yaml-auswahl zählt keine Arten auf (die Liste würde mit jedem Baustein veralten)", () => {
     const text = simGrenzen("kubectl").find(g => g.id === "yaml-auswahl")?.text ?? "";
-    for (const plural of YAML_BAUSTEINE.keys()) {
-      const k = RESOURCE_KINDS.find(r => r.plural === plural)!;
-      expect([k.plural, ...k.short].some(n => text.includes(n)), plural).toBe(true);
+    expect(text).not.toBe("");
+    for (const k of RESOURCE_KINDS) {
+      for (const n of [k.plural, ...k.short]) {
+        const wort = new RegExp(`(^|[^\\w-])${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^\\w-]|$)`);
+        expect(wort.test(text), `Art „${n}" steht im Text`).toBe(false);
+      }
     }
+  });
+  test("die Grenze yaml-auswahl bleibt wahr: nicht jede Art hat einen Baustein", () => {
+    expect(RESOURCE_KINDS.some(k => !YAML_BAUSTEINE.has(k.plural))).toBe(true);
   });
 });
 
