@@ -129,7 +129,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 ## Konventionen
 
 - **TS-Strenge:** `"strict": true` für das ganze Projekt (src, Tests, `vite.config`); echte Typen statt `any`. Neuer Code muss `npm run typecheck` bestehen.
-- **PixelLab-Grafik ablegen:** Quell-PNG nach `assets/pixellab/`, in `src/assets-data.ts` per `import` ins `KQAssets`-Objekt (kein Base64; Liste: `assets/pixellab/README.md`). Zugriff über den PixelLab-MCP-Server; bei „kein Zugriff" trägt die Maintainerin den Key ein (Pflicht-Stopp). **Key nie im Chat anfordern oder ausgeben.**
+- **PixelLab-Grafik ablegen:** Quell-PNG nach `assets/pixellab/`, in `src/assets-data.ts` per `import` ins `KQAssets`-Objekt (kein handgepflegtes Base64; Liste: `assets/pixellab/README.md`). Zugriff über den PixelLab-MCP-Server; bei „kein Zugriff" trägt die Maintainerin den Key ein (Pflicht-Stopp), danach `get_balance`. **Key nie im Chat anfordern oder ausgeben.**
 - **Grafik-Stil – Optik-Messlatte: Stardew-Look (#44):** einheitliches **16px-Raster**, nur **ganzzahlige Skalierung**, leicht erhöhte Frontalansicht, gedämpfte warme Palette, keine prozeduralen Platzhalter. Vor jedem Optik-Ticket lesen: [`docs/stardew-referenz.md`](docs/stardew-referenz.md) (Tokens: §6), Abweichungen: [`docs/art-direction.md`](docs/art-direction.md).
 - **Immer loslegen — KEIN Flag ist ein Vorab-Gate.** Das oberste freie Ticket wird angefangen; Optik/Epic/riskant sagt nur, **WIE**:
   - **🎨 Optik/Grafik, ⚠️ riskant** (z.B. Major-Migration): der Agent entscheidet selbst (Optik: Stardew-Checkliste, Screenshots im PR; riskant: erst evaluieren).
@@ -140,9 +140,9 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 
 Der Backlog sind **GitHub Issues** auf zwei **Project-Boards** (Trennregel: das Factory-Board führt die Issues des Factory-Repos, das Produkt-Board die von kubernia). Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei (#627). Befehl, Sonderfälle und Board-IDs: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)** (die SSOT der Auswahl-Mechanik).
 
-**Ticket-Auswahl im Projekt:** `/kubernia` wählt mit `--bereich produkt` nur auf dem Produkt-Board, `/factory` läuft im Factory-Repo (hier meldet `--bereich agentic` das fremde Board). Spielquote 1:3 ist nur Kennzahl, keine Auswahlregel ([Details](docs/ticket-reihenfolge.md#spielquote-über-zwei-boards-1729)).
+**Ticket-Auswahl im Projekt:** `/kubernia` wählt mit `--bereich produkt` nur auf dem Produkt-Board, `/factory` läuft im Factory-Repo (hier meldet `--bereich agentic` das fremde Board). Soll und Kennzahl im Selbst-Audit, keine Auswahlregel: ein Factory-Merge erst nach 3 Produkt-Merges (Spielquote 1:3) seit dem letzten.
 
-**Der Agent managt das Board (nur kubernia; Langfassung: [Board-Pflege](docs/ticket-reihenfolge.md#board-pflege-durch-den-agenten-nur-kubernia)):** GitHub ist die Single Source of Truth (Erledigtes sofort schließen, mit Ergebnis-Kommentar); Issues ohne Rückfrage verwalten, **neue Tickets ohne Assignee nur über `node scripts/spezifikation.mjs anlegen`** (`gh issue create` ist gesperrt); neue Issues sofort einsortieren, **nie vor das ungeclaimte Sammelticket, nie ans Ende**; **Epic/Phase → aufteilen statt umsetzen**; **🤖 Dependabot-Sammelticket → PRs einzeln bei grüner CI mergen, nie blind** ([CONTRIBUTING.md](CONTRIBUTING.md)).
+**Der Agent managt das Board (nur kubernia; Langfassung: [Board-Pflege](docs/ticket-reihenfolge.md#board-pflege-durch-den-agenten-nur-kubernia)):** GitHub ist die Single Source of Truth (Erledigtes sofort schließen, mit Ergebnis-Kommentar); Issues ohne Rückfrage verwalten, **neue Tickets ohne Assignee nur über `node scripts/spezifikation.mjs anlegen`** (`gh issue create` ist gesperrt); neue Issues sofort einsortieren, **nie vor das ungeclaimte Sammelticket, nie ans Ende**; **Epic/Phase → aufteilen statt umsetzen**, Epic schließen (nicht löschen); **🤖 Dependabot-Sammelticket → PRs einzeln bei grüner CI mergen, nie blind** ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Forum-Eingang (Discussions) bearbeiten
 
