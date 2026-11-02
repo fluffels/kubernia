@@ -237,6 +237,18 @@ describe("expose und set: weitere Ziele werden abgelehnt, nie still ignoriert", 
     ["kubectl set resources deployment/web deployment/api --limits=memory=1Gi", "mehrere Ziele bei 'kubectl set'"],
   ])("%s → Fehler, nichts angefasst", (cmd, text) => { ablehnen(cmd, text); });
 
+  test.each([
+    ["kubectl set env deployment --from=configmap/c", "Welches Deployment?"],
+    ["kubectl set resources deployment --limits=memory=1Gi", "Welches Deployment?"],
+    ["kubectl expose deployment --port=80", "Welches Deployment?"],
+    ["kubectl rollout history deployment", "Welches Deployment?"],
+    ["kubectl rollout undo deployment", "Welches Deployment?"],
+    ["kubectl set image deployment web=x", "no name was specified"],
+  ])("Art ohne Namen: %s druckt kein 'null' (#1734)", (cmd, text) => {
+    ablehnen(cmd, text);
+    expect(lauf(cmd).out, cmd).not.toContain("null");
+  });
+
   test("ein Ziel, Paar hinter der Referenz: gültig", () => {
     const r = lauf("kubectl set image deployment/web web=ghcr.io/org/img:1");
     expect(r.error).toBe(false);

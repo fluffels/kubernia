@@ -138,6 +138,8 @@ function kubectlSetEnv(host: KubectlHost, c: Call) {
   return "deployment.apps/" + depName + " env updated";
 }
 
+const SET_IMAGE_MUSTER = "Muster: kubectl set image deployment/<name> <container>=<image>";
+
 /** Die Validate-Fehler von `set image` (`SetImageOptions.Validate`): ein Fehler steht allein, mehrere als `[a, b]`. */
 function setImageValidate(host: KubectlHost, resources: number, pairs: readonly string[]): string | null {
   const errs: string[] = [];
@@ -145,7 +147,15 @@ function setImageValidate(host: KubectlHost, resources: number, pairs: readonly 
   if (pairs.length < 1) errs.push("at least one image update is required");
   else if (pairs.length > 1 && pairs.some(p => p.startsWith("*="))) errs.push("all containers are already specified by *, but saw more than one container_name=container_image pairs");
   if (errs.length === 0) return null;
-  return host._err("error: " + (errs.length === 1 ? errs[0] : "[" + errs.join(", ") + "]"), "Muster: kubectl set image deployment/<name> <container>=<image>");
+  return host._err("error: " + (errs.length === 1 ? errs[0] : "[" + errs.join(", ") + "]"), SET_IMAGE_MUSTER);
+}
+
+/** Das Deployment, das `set image` ändert. Eine Art ohne Namen (`name` ist `null`) meldet wie kubectl den Builder-Fehler
+ *  (`set_image.go` Complete → `builder.go` visitorResult: „resource(s) were provided, but no name was specified“), nie einen
+ *  NotFound mit Namen `null`; `deploymentNotFound` nimmt nur einen `string`. */
+function setImageTarget(host: KubectlHost, name: string | null): Deployment | string {
+  if (name === null) return host._err("error: resource(s) were provided, but no name was specified", SET_IMAGE_MUSTER);
+  return host.deployments.find(d => d.name === name) ?? host._err(deploymentNotFound(name));
 }
 
 /** Der Container-Check von `set image` (`unable to find container named`): `*` trifft jeden, sonst zählt der Container-Name
@@ -169,9 +179,9 @@ function kubectlSetImage(host: KubectlHost, c: Call) {
   const invalidSet = setImageValidate(host, split.resources.length, split.pairs);
   if (invalidSet) return invalidSet;
   if (split.pairs.length > 1) return notSimulated(host, "mehrere Container in 'kubectl set image'.", ["kubectl set image deployment/<name> <container>=<image>"]);
-  const depName = one.name;
-  const dep = host.deployments.find(d => d.name === depName);
-  if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');
+  const dep = setImageTarget(host, one.name);
+  if (typeof dep === "string") return dep;
+  const depName = dep.name;
   const kv = split.pairs[0];
   const container = kv.slice(0, kv.indexOf("="));
   const bad = setImageContainerCheck(host, dep, container);
