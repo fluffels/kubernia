@@ -52,6 +52,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { id: "yaml-auswahl", text: "-o yaml nur für einige Arten; die übrigen leer oder abgelehnt (Meldung nennt die Arten), nie System-Pods." },
     { id: "yaml-gekuerzt", text: "-o yaml zeigt nur die modellierten Felder und einen Status-Auszug, ohne uid, Zeitstempel und managedFields." },
     { id: "rollout-historie", text: "rollout history zeigt nur die Liste (kein --revision); es bleiben fest 10 alte ReplicaSets." },
+    { id: "container-name-template", text: "Der Container-Name zählt nicht zum Pod-Template-Hash: nach einer Umbenennung per apply zeigen get rs -o wide und rollout undo den alten Namen." },
     { id: "undo-ohne-fehler", text: "rollout undo holt das alte Template zurück, ein seither behobener Fehler kehrt nicht zurück." },
     { id: "apply-umfang", text: "apply -f liest Deployment, Service, GatewayClass, Gateway, HTTPRoute; andere Arten wie hinterlegt." },
     { id: "gateway-sofort", text: "Gateway API: Status sofort fest, Adresse aus dem Namen (ggf. doppelt); GatewayClass löschbar trotz Gateways." },
