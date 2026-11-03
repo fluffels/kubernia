@@ -223,7 +223,7 @@ const ohneBefehl = (art: string, run: CreateHandler): CreateHandler => (host, c)
   return vorDash ?? notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + art + "'.", ["'kubectl create " + art + "' ohne '--'"]);
 };
 
-type CreateOptionen = Pick<SubEntry<CreateHandler>, "hints" | "unknownFlags" | "requiredFlags">;
+type CreateOptionen = Pick<KubectlEntry<CreateHandler>, "hints" | "unknownFlags" | "requiredFlags">;
 const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], opt: CreateOptionen = {}): KubectlEntry<CreateHandler> =>
   ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, ...opt });
 
