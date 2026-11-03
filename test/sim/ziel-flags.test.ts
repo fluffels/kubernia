@@ -9,30 +9,40 @@ const lauf = (cmd: string, sim: KQSim = freshSim()) => { const r = sim.exec(cmd)
 const zustand = (sim: KQSim) => JSON.stringify(sim.snapshot());
 
 describe("kubectl create/set/auth: ein Flag eines anderen Ziels wird abgelehnt, der Zustand bleibt", () => {
-  // [Befehl, abgelehntes Flag, Ziel in der Meldung]
-  const FREMD: [string, string, string][] = [
-    ["kubectl create deployment web --image=nginx --verb=get", "--verb", "kubectl create deployment"],
-    ["kubectl create serviceaccount bot --image=nginx", "--image", "kubectl create serviceaccount"],
-    ["kubectl create role leser --verb=get --resource=pods --role=x", "--role", "kubectl create role"],
-    ["kubectl create clusterrole leser --verb=get --resource=pods --user=alice", "--user", "kubectl create clusterrole"],
-    ["kubectl create rolebinding b --role=leser --user=alice --verb=get", "--verb", "kubectl create rolebinding"],
-    ["kubectl create configmap c --from-literal=a=b --image=nginx", "--image", "kubectl create configmap"],
-    ["kubectl create secret generic s --from-literal=a=b --cert=x", "--cert", "kubectl create secret generic"],
-    ["kubectl create secret tls t --cert=a --key=b --from-literal=a=b", "--from-literal", "kubectl create secret tls"],
-    ["kubectl set image deployment/web nginx=nginx:2 --limits=memory=1Gi", "--limits", "kubectl set image"],
-    ["kubectl set env deployment/web --from=configmap/c --limits=memory=1Gi", "--limits", "kubectl set env"],
-    ["kubectl set resources deployment/web --limits=memory=1Gi --from=configmap/c", "--from", "kubectl set resources"],
-    ["kubectl auth can-i get pods --image=nginx", "--image", "kubectl auth can-i"],
-    ["kubectl rollout restart deployment web --to-revision=1", "--to-revision", "kubectl rollout restart"],
-    ["kubectl rollout history deployment web --to-revision=1", "--to-revision", "kubectl rollout history"],
+  // [Befehl, abgelehntes Flag]: das echte kubectl kennt das Flag an diesem Ziel nicht (#1989, gegen die kubectl-Quellen geprüft)
+  const UNBEKANNT: [string, string][] = [
+    ["kubectl create deployment web --image=nginx --verb=get", "--verb"],
+    ["kubectl create serviceaccount bot --image=nginx", "--image"],
+    ["kubectl create role leser --verb=get --resource=pods --role=x", "--role"],
+    ["kubectl create rolebinding b --role=leser --user=alice --verb=get", "--verb"],
+    ["kubectl create configmap c --from-literal=a=b --image=nginx", "--image"],
+    ["kubectl create secret generic s --from-literal=a=b --cert=x", "--cert"],
+    ["kubectl create secret tls t --cert=a --key=b --from-literal=a=b", "--from-literal"],
+    ["kubectl set image deployment/web nginx=nginx:2 --limits=memory=1Gi", "--limits"],
+    ["kubectl set env deployment/web --from=configmap/c --limits=memory=1Gi", "--limits"],
+    ["kubectl set resources deployment/web --limits=memory=1Gi --from=configmap/c", "--from"],
+    ["kubectl auth can-i get pods --image=nginx", "--image"],
+    ["kubectl rollout restart deployment web --to-revision=1", "--to-revision"],
+    ["kubectl rollout history deployment web --to-revision=1", "--to-revision"],
   ];
-  test.each(FREMD)("%s", (cmd, name, ziel) => {
+  test.each(UNBEKANNT)("%s: echter pflag-Text, kein „Nicht simuliert“, Zustand unverändert", (cmd, name) => {
     const sim = freshSim();
     lauf("kubectl create deployment web --image=nginx", sim);
     const vorher = zustand(sim);
     const r = lauf(cmd, sim);
     expect(r.error).toBe(true);
-    expect(r.out).toContain(NS + " das Flag '" + name + "' bei '" + ziel + "'");
+    expect(r.out.split("\n")[0]).toBe("error: unknown flag: " + name);
+    expect(r.out).not.toContain(NS);
+    expect(zustand(sim)).toBe(vorher);
+  });
+
+  test("create clusterrole --user: ein globales kubectl-Flag, kein „unknown flag“ (erfundener Text), Hinweis auf kubeconfig", () => {
+    const sim = freshSim();
+    const vorher = zustand(sim);
+    const r = lauf("kubectl create clusterrole leser --verb=get --resource=pods --user=alice", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain(NS + " das Flag '--user' bei 'kubectl create clusterrole'");
+    expect(r.out).toContain("kubeconfig");
     expect(zustand(sim)).toBe(vorher);
   });
 
@@ -96,7 +106,7 @@ describe("kubectl: Flags vor und hinter dem Ziel, Aliase, Tippfehler", () => {
     expect(lauf("kubectl create deploy web --image=nginx --replicas=2", sim).out).toBe("deployment.apps/web created");
     expect(lauf("kubectl create sa bot", sim).out).toBe("serviceaccount/bot created");
     expect(lauf("kubectl create cm c --from-literal=a=b", sim).out).toBe("configmap/c created");
-    expect(lauf("kubectl create deploy x --image=nginx --verb=get", sim).out).toContain("das Flag '--verb' bei 'kubectl create deploy'");
+    expect(lauf("kubectl create deploy x --image=nginx --verb=get", sim).out.split("\n")[0]).toBe("error: unknown flag: --verb");
   });
   test("echte, nicht simulierte Ziele: Nicht simuliert; Tippfehler mit Vorschlag; Ziel fehlt", () => {
     expect(lauf("kubectl create job x").out).toContain(NS + " 'kubectl create job'.");

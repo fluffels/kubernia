@@ -103,6 +103,11 @@ describe("cliargs: unknownFlags und requiredFlags (#1678)", () => {
   test("Alias und leerer Wert zählen als gesetzt", () => {
     expect(run("-a", "x", "--bb=")).toBeNull();
   });
+  test("Hinweistext folgt dem Stil: goflag hängt mit einem Strich an, pflag mit zwei", () => {
+    const go: ArgSpec = { cmd: "x make", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-out")], requiredFlags: ["-out"] };
+    expect(checkFlags(host, go, ["x", "make"], 2)).toBe('error: required flag(s) "out" not set\nHäng \'-out=<wert>\' an.');
+    expect(run()).toContain("Häng '--aa=<wert>' an.");
+  });
   test("Scan-Fehler hat Vorrang vor Pflicht-Flag", () => {
     expect(run("--nope=1")).toContain("unknown flag: --nope");
   });

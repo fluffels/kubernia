@@ -52,7 +52,8 @@ export const FLAG_HINTS: Readonly<Record<string, string>> = {
   "--show-labels": "Labels zeigt der Simulator nicht an.",
   "--sort-by": "Sortieren kann der Simulator nicht – die Liste kommt in fester Reihenfolge.",
   "--revision": "Einzelne Revisionen zeigt der Simulator nicht; welches Image ein ReplicaSet hat, zeigt 'kubectl get rs -o wide'.",
-  "--dry-run": "Trockenläufe gibt es nicht; der Befehl legt sonst wirklich etwas an, darum lehnt der Simulator ihn ab.",
+  "--user": "'--user' wählt in kubectl den kubeconfig-Benutzer (globales Flag, die Sim hat keine kubeconfig); Subjekte bindet 'kubectl create rolebinding <name> --role=<rolle> --user=<name>'.",
+  "--dry-run":"Trockenläufe gibt es nicht; der Befehl legt sonst wirklich etwas an, darum lehnt der Simulator ihn ab.",
 };
 
 /** `--replicas`: `null` = nicht angegeben, sonst die ganze Zahl (auch negativ: den Wertebereich prüft der Aufrufer, die

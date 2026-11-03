@@ -82,7 +82,7 @@ function authCanI(host: KubectlHost, c: Call): string {
 export const KUBECTL_AUTH: Dispatch<SubEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl auth",
   flags: [NS],
-  table: { "can-i": { run: authCanI, maxArgs: IM_HANDLER, flags: [flag(true, "--as")] } },
+  table: { "can-i": { run: authCanI, maxArgs: IM_HANDLER, flags: [flag(true, "--as")], unknownFlags: ["--image"] } },
   real: ["reconcile", "whoami"],
   unknown: UNKNOWN_TARGET,
 };

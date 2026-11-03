@@ -99,9 +99,9 @@ export const KUBECTL_SET: Dispatch<SubEntry<(host: KubectlHost, c: Call) => stri
   cmd: "kubectl set",
   flags: [NS],
   table: {
-    image: { run: (host, c) => kubectlSetImage(host, c), maxArgs: IM_HANDLER },
-    env: { run: (host, c) => kubectlSetEnv(host, c), maxArgs: IM_HANDLER, flags: [FROM_FLAG] },
-    resources: { run: (host, c) => kubectlSetResources(host, c), maxArgs: IM_HANDLER, flags: [LIMITS_FLAG, REQUESTS_FLAG] },
+    image: { run: (host, c) => kubectlSetImage(host, c), maxArgs: IM_HANDLER, unknownFlags: ["--limits"] },
+    env: { run: (host, c) => kubectlSetEnv(host, c), maxArgs: IM_HANDLER, flags: [FROM_FLAG], unknownFlags: ["--limits"] },
+    resources: { run: (host, c) => kubectlSetResources(host, c), maxArgs: IM_HANDLER, flags: [LIMITS_FLAG, REQUESTS_FLAG], unknownFlags: ["--from"] },
   },
   real: ["selector", "serviceaccount", "sa", "subject"],
   unknown: UNKNOWN_TARGET,
@@ -255,8 +255,8 @@ export const KUBECTL_ROLLOUT: Dispatch<SubEntry<(host: KubectlHost, c: Call) => 
   cmd: "kubectl rollout",
   flags: [NS],
   table: {
-    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE },
-    history: { run: (host, c) => kubectlRolloutHistory(host, c), maxArgs: IM_HANDLER },
+    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE, unknownFlags: ["--to-revision"] },
+    history: { run: (host, c) => kubectlRolloutHistory(host, c), maxArgs: IM_HANDLER, unknownFlags: ["--to-revision"] },
     undo: { run: (host, c) => kubectlRolloutUndo(host, c), maxArgs: IM_HANDLER, flags: [REVISION_FLAG] },
   },
   real: ["pause", "resume", "status"],

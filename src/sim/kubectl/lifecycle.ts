@@ -226,21 +226,21 @@ type CreateOptionen = Pick<SubEntry<CreateHandler>, "hints" | "unknownFlags" | "
 const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], opt: CreateOptionen = {}): SubEntry<CreateHandler> =>
   ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, ...opt });
 
-const CREATE_DEPLOYMENT = createEntry("deployment", createDeployment, [flag(true, "--image"), flag(true, "--replicas")]);
-const CREATE_SERVICEACCOUNT = createEntry("serviceaccount", createServiceAccount);
-const CREATE_ROLE = createEntry("role", createRoleOf(false), [flag(true, "--verb"), flag(true, "--resource")]);
+const CREATE_DEPLOYMENT = createEntry("deployment", createDeployment, [flag(true, "--image"), flag(true, "--replicas")], { unknownFlags: ["--verb"], requiredFlags: ["--image"] });
+const CREATE_SERVICEACCOUNT = createEntry("serviceaccount", createServiceAccount, [], { unknownFlags: ["--image"] });
+const CREATE_ROLE = createEntry("role", createRoleOf(false), [flag(true, "--verb"), flag(true, "--resource")], { unknownFlags: ["--role"] });
 const CREATE_CLUSTERROLE = createEntry("clusterrole", createRoleOf(true), [flag(true, "--verb"), flag(true, "--resource")]);
-const CREATE_ROLEBINDING = createEntry("rolebinding", createRoleBindingOf(false), [flag(true, "--role"), flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG]);
+const CREATE_ROLEBINDING = createEntry("rolebinding", createRoleBindingOf(false), [flag(true, "--role"), flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG], { unknownFlags: ["--verb"] });
 const CREATE_CLUSTERROLEBINDING = createEntry("clusterrolebinding", createRoleBindingOf(true), [flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG],
   { unknownFlags: ["--role"], requiredFlags: ["--clusterrole"], hints: { "--role": "Ein ClusterRoleBinding verweist nur auf eine ClusterRole: nutze '--clusterrole=<name>'." } });
-const CREATE_CONFIGMAP = createEntry("configmap", createConfigMap, [LITERAL_FLAG]);
+const CREATE_CONFIGMAP = createEntry("configmap", createConfigMap, [LITERAL_FLAG], { unknownFlags: ["--image"] });
 
 /** `create secret <art>`: eine eigene Ebene, damit `tls` und `generic` je ihre Flags haben. */
 const KUBECTL_CREATE_SECRET: Dispatch<SubEntry<CreateHandler>> = {
   cmd: "kubectl create secret",
   table: {
-    generic: createEntry("secret generic", createSecretGeneric, [LITERAL_FLAG]),
-    tls: createEntry("secret tls", createSecretTls, [flag(true, "--cert"), flag(true, "--key")]),
+    generic: createEntry("secret generic", createSecretGeneric, [LITERAL_FLAG], { unknownFlags: ["--cert"] }),
+    tls: createEntry("secret tls", createSecretTls, [flag(true, "--cert"), flag(true, "--key")], { unknownFlags: ["--from-literal"] }),
   },
   real: ["docker-registry"],
   unknown: UNKNOWN_TARGET,
