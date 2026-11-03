@@ -105,6 +105,8 @@ const HOST_HTML = "dist/index.html";
  *     Spielcode 591_000 → 592_000 (Ist 591_669 B in der CI, zusammen mit dem Stand von main nach #1530).
  *   • #1693 (gemeinsames esc() für HTML-Attribute in der Präsentation, Sicherheitsfix für CodeQL-Alerts; bewusst und legitim):
  *     Spielcode 592_000 → 593_000 (Ist 592_027 B).
+ *   • #1989 (kubectl: weitere unknownFlags/requiredFlags, Builder-Text von set image, apiserver-Text von create deployment, Hinweis zu --user,
+ *     eine Grenze im Hilfetext; echte kubectl-Texte statt erfundener, bewusst und legitim, Ist-Werte siehe maxBytes): Spielcode 593_000 → 594_000, Offline-Build 2_593_000 → 2_594_000.
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -114,13 +116,13 @@ export const BUNDLE_BUDGETS = [
     // Die Offline-Datei enthält den Content inline; er wird über `subtractChunksDir` abgezogen und
     // zählt allein bei den Content-Chunks (ADR 0018). Gemessen: Offline-HTML minus Summe der Chunks.
     subtractChunksDir: CONTENT_CHUNK_DIR_DIST,
-    maxBytes: 2_593_000, // #1665: Gateway API Teil 2, +5,5 KB; #1530: kubectl-Eingabeprüfung, Messwert 2_590_281 B
+    maxBytes: 2_594_000, // #1989: kubectl-Flags und Texte wie echtes kubectl, Messwert 2593229 B; #1665: Gateway API Teil 2, +5,5 KB; #1530: kubectl-Eingabeprüfung, Messwert 2_590_281 B
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 593_000, // #1693: gemeinsames esc() für HTML-Attribute (src/core/html-escape.ts, maskiert auch " und '), Messwert 592027 B; #1667: Mehrfachziele und Aktionsgruppen auf der #1530-Prüfung (zusammen Messwert 591669 B in der CI); #1530: kubectl-Eingabeprüfung, Messwert 590135 B
+    maxBytes: 594_000, // #1989: kubectl-Flags und Texte wie echtes kubectl, Messwert 593450 B; #1693: gemeinsames esc() für HTML-Attribute (src/core/html-escape.ts, maskiert auch " und '), Messwert 592027 B; #1667: Mehrfachziele und Aktionsgruppen auf der #1530-Prüfung (zusammen Messwert 591669 B in der CI); #1530: kubectl-Eingabeprüfung, Messwert 590135 B
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",
