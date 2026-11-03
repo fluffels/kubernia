@@ -157,11 +157,11 @@ type Tab = Dispatch<KubectlEntry<unknown>>;
 /** Alle kubectl-Blätter (Gruppen rekursiv): Befehlsname, Eintrag und die Tokens bis zum Blatt. */
 function kubectlBlaetter(d: Tab, pfad: string[] = []): { cmd: string; entry: KubectlEntry<unknown>; tokens: string[] }[] {
   return Object.entries(d.table).flatMap(([key, e]) => "group" in e
-    ? kubectlBlaetter(e.group as Tab, [...pfad, key])
+    ? kubectlBlaetter(e.group, [...pfad, key])
     : [{ cmd: d.cmd + " " + key, entry: e, tokens: [...pfad, key] }]);
 }
 /** Eine Dispatch-Ebene und alle Gruppen darunter. */
-const ebenen = (d: Tab): Tab[] => [d, ...Object.values(d.table).flatMap(e => "group" in e ? ebenen(e.group as Tab) : [])];
+const ebenen = (d: Tab): Tab[] => [d, ...Object.values(d.table).flatMap(e => "group" in e ? ebenen(e.group) : [])];
 const BLAETTER = kubectlBlaetter(KUBECTL);
 /** Aliase teilen den Eintrag: je Eintrag ein Blatt genügt. */
 const EINDEUTIG = BLAETTER.filter((b, i) => BLAETTER.findIndex(o => o.entry === b.entry) === i);
@@ -218,8 +218,8 @@ describe("Namespace-Wache: -n <fremd> wird nie still auf default angewendet (#17
   const FREMD = "Nicht simuliert: der Namespace 'prod' bei '";
   test.each(EINDEUTIG.map(b => [b.cmd, b.tokens, b.entry.namespace] as const))("%s (Markierung: %s)", (cmd, tokens, bezug) => {
     const out = lauf("kubectl " + tokens.join(" ") + " -n prod").out;
-    if (bezug) expect(out).not.toContain(FREMD);
-    else expect(out).toContain(FREMD + cmd + "'.");
+    expect(out.includes(FREMD + cmd + "'.")).toBe(!bezug);
+    expect(out.includes(FREMD)).toBe(!bezug);
     expect(lauf("kubectl " + tokens.join(" ") + " -n default").out).not.toContain(FREMD);
   });
   test("nur die Handler, die -n selbst lesen oder clusterweit sind, tragen eine Markierung", () => {
