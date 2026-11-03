@@ -320,11 +320,17 @@ export interface Dispatch<E extends SubEntry<unknown>> {
  *  Flags der Ebene (`d.flags`) zuerst, dann die des Eintrags; Stil und Hinweise erbt der Eintrag von der Ebene (je Schlüssel,
  *  der Eintrag gewinnt). */
 function specOfSub(cmd: string, e: SubEntry<unknown>, d: Dispatch<SubEntry<unknown>>): ArgSpec {
-  return { cmd, flags: mergeFlags(d.flags, e.flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints), stopAtPositional: e.stopAtPositional, maxArgs: e.maxArgs };
+  return { cmd, flags: mergeFlags(cmd, d.flags, e.flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints), stopAtPositional: e.stopAtPositional, maxArgs: e.maxArgs };
 }
 
-function mergeFlags(outer: readonly FlagSpec[] | undefined, inner: readonly FlagSpec[] | undefined): readonly FlagSpec[] | undefined {
+/** Persistente Flags (außen) und Flags des Eintrags (innen) zusammen. Dasselbe Objekt zählt einmal; ein gleicher Flag-Name (auch nur
+ *  ein Alias) an einem ANDEREN Objekt ist eine Dublette in den Tabellendaten (#1720) und wirft, statt dass die Suche still das äußere nimmt. */
+function mergeFlags(cmd: string, outer: readonly FlagSpec[] | undefined, inner: readonly FlagSpec[] | undefined): readonly FlagSpec[] | undefined {
   if (!outer || !inner) return outer ?? inner;
+  for (const f of inner) {
+    const dup = outer.find(o => o !== f && o.names.some(n => f.names.includes(n)));
+    if (dup) throw new Error("Flag-Dublette bei '" + cmd + "': " + f.names.join("/") + " steht persistent und im Eintrag als verschiedene Flags.");
+  }
   return [...outer, ...inner.filter(f => !outer.includes(f))];
 }
 
@@ -384,7 +390,7 @@ function locateSub(host: ErrHost, d: Dispatch<SubEntry<unknown>>, t: readonly st
 
 /** Die Ebene einer Gruppe: erbt Flags, Stil und Hinweise der Eltern (der eigene Wert gewinnt; Hinweise je Schlüssel). */
 function inherit<E extends SubEntry<unknown>>(d: Dispatch<E>, g: Dispatch<E>): Dispatch<E> {
-  return { ...g, flags: mergeFlags(d.flags, g.flags), style: g.style ?? d.style, hints: mergeHints(d.hints, g.hints) };
+  return { ...g, flags: mergeFlags(g.cmd, d.flags, g.flags), style: g.style ?? d.style, hints: mergeHints(d.hints, g.hints) };
 }
 
 /** Der EINE Kopf jeder Befehlsfamilie: wählt den Eintrag zu `t[at]` und liest dessen Eingabe (`parseCall`).
@@ -392,7 +398,7 @@ function inherit<E extends SubEntry<unknown>>(d: Dispatch<E>, g: Dispatch<E>): D
  *  simulierter Unterbefehl, Tippfehler mit Vorschlag, dann `parseCall` mit den Flags GENAU dieses Ziels (#1491). Ergebnis:
  *  `{ sub, entry, call }` oder die fertige Fehlerausgabe. Familien-Wachen (Control-Plane, init, Repo) laufen danach im
  *  Familien-Dispatcher. */
-export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispatch<E>, t: readonly string[], at: number): { sub: string; entry: E; call: Call } | string {
+export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispatch<E>, t: readonly string[], at: number): { sub: string; cmd: string; entry: E; call: Call } | string {
   const kann = () => kannOf(d);
   const loc = locateSub(host, d, t, at, kann);
   if (typeof loc === "string") return loc;
@@ -400,6 +406,7 @@ export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispa
   const entry = subEntry(d.table, sub);
   if (entry && isGroup(entry)) return dispatchSub(host, inherit(d, entry.group), rest, at);
   if (!entry) return unknownSub(host, d, sub, kann);
-  const call = parseCall(host, specOfSub(d.cmd + " " + sub, entry, d), rest, at);
-  return typeof call === "string" ? call : { sub, entry, call };
+  const cmd = d.cmd + " " + sub;
+  const call = parseCall(host, specOfSub(cmd, entry, d), rest, at);
+  return typeof call === "string" ? call : { sub, cmd, entry, call };
 }
