@@ -196,6 +196,10 @@ describe("Reihenfolge der Prüfungen wie kubectl (#1989): Pflicht-Flag, Validate
     expect(unveraendert("kubectl create rolebinding rb --serviceaccount=bad").out.split("\n")[0]).toBe("error: exactly one of clusterrole or role must be specified");
     expect(unveraendert("kubectl create rolebinding rb --role=r --serviceaccount=bad").out.split("\n")[0]).toBe("error: serviceaccount must be <namespace>:<name>");
   });
+  test("rolebinding: mehrere --serviceaccount, erst das zweite kaputt: der Fehler kommt, nichts wird angelegt", () => {
+    const r = unveraendert("kubectl create rolebinding rb --role=r --serviceaccount=default:bot --serviceaccount=bad");
+    expect(r.out.split("\n")[0]).toBe("error: serviceaccount must be <namespace>:<name>");
+  });
   test("rolebinding ohne Namen: die Namensprüfung kommt vor dem Format des Subjekts", () => {
     const r = unveraendert("kubectl create rolebinding --role=r --serviceaccount=bad");
     expect(r.out).not.toContain("serviceaccount must be");
@@ -221,6 +225,12 @@ describe("Reihenfolge der Prüfungen wie kubectl (#1989): Pflicht-Flag, Validate
     expect(erste("kubectl set image deployment", web())).toBe("error: resource(s) were provided, but no name was specified");
     expect(unveraendert("kubectl set image nginx=nginx:2", web()).out).toContain(MISSING);
     expect(unveraendert("kubectl set image", web()).out).toContain(MISSING);
+  });
+  test("set image: ein `*=`-Paar an späterer Stelle zählt wie an erster, das Deployment bleibt unverändert", () => {
+    for (const cmd of ["kubectl set image deployment/web nginx=a *=b", "kubectl set image deployment/web *=a nginx=b"]) {
+      const r = unveraendert(cmd, web());
+      expect(r.out.split("\n")[0], cmd).toBe("error: all containers are already specified by *, but saw more than one container_name=container_image pairs");
+    }
   });
   test("set image: ohne Ressource steht der Builder-Text nicht in einer Validate-Liste", () => {
     expect(lauf("kubectl set image").out).not.toContain("[");

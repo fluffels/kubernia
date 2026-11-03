@@ -54,7 +54,7 @@ export const FLAG_HINTS: Readonly<Record<string, string>> = {
   "--sort-by": "Sortieren kann der Simulator nicht – die Liste kommt in fester Reihenfolge.",
   "--revision": "Einzelne Revisionen zeigt der Simulator nicht; welches Image ein ReplicaSet hat, zeigt 'kubectl get rs -o wide'.",
   "--user": "'--user' ist in kubectl der kubeconfig-Benutzer; Subjekte bindet 'create rolebinding … --user=<name>'.",
-  "--dry-run":"Trockenläufe gibt es nicht; der Befehl legt sonst wirklich etwas an, darum lehnt der Simulator ihn ab.",
+  "--dry-run": "Trockenläufe gibt es nicht; der Befehl legt sonst wirklich etwas an, darum lehnt der Simulator ihn ab.",
 };
 
 /** `--replicas`: `null` = nicht angegeben, sonst die ganze Zahl (auch negativ: den Wertebereich prüft der Aufrufer, die

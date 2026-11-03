@@ -110,7 +110,7 @@ describe("Flag-Tabellen aller Familien: requiredFlags und unknownFlags sind kons
     const unerreichbar: string[] = [];
     for (const eintrag of gefunden) {
       const [datei, name] = eintrag.split(":");
-      const modul = (MODULE_CACHE[datei] ??= {}) as Record<string, Tab>;
+      const modul = (MODULE_CACHE[datei] ?? {}) as Record<string, Tab>;
       if (!(name in modul)) unerreichbar.push(eintrag + " (nicht ladbar)");
       else if (!besucht.has(modul[name])) unerreichbar.push(eintrag);
     }
@@ -118,7 +118,7 @@ describe("Flag-Tabellen aller Familien: requiredFlags und unknownFlags sind kons
   });
 });
 
-/** Die geladenen Module je Datei; der Scan-Wächter füllt es oben per Import (synchron über `import.meta.glob`). */
+/** Die geladenen Module je Datei (synchron über `import.meta.glob`, beim Laden dieser Datei gefüllt). */
 const MODULE_CACHE: Record<string, Record<string, unknown>> = Object.fromEntries(
   Object.entries(import.meta.glob("../../src/sim/**/*.ts", { eager: true })).map(([pfad, m]) => [pfad.replace("../../src/sim/", ""), m as Record<string, unknown>]),
 );
