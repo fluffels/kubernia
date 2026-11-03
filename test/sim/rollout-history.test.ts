@@ -179,7 +179,7 @@ describe("Negativfälle", () => {
     for (const a of ["restart", "history"]) {
       const r = sim.exec("kubectl rollout " + a + " deployment/web --to-revision=1");
       expect(r.error).toBe(true);
-      expect(r.output.split("\n")[0]).toBe("error: unknown flag: --to-revision");
+      expect((r.output ?? "").split("\n")[0]).toBe("error: unknown flag: --to-revision");
       expect(r.output).toContain("kubectl rollout undo deployment <name> --to-revision=<n>");
     }
     expect(pods(sim)).toEqual(vorher);

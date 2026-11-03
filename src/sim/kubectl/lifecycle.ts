@@ -21,7 +21,7 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
 import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { exactlyOneName, literalKeysChecked, LITERAL_FLAG, notSimulated, NS, replicasArg, resolveRoleResources, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
+import { exactlyOneName, literalKeysChecked, LITERAL_FLAG, notSimulated, NS, parseServiceAccount, replicasArg, resolveRoleResources, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
 import { containerNameFromImage } from "../util";
 import { readTargets, targetOutcome, type Target } from "./targets";
 import { flag, IM_HANDLER, type Call, type Dispatch, type FlagSpec, type SubEntry } from "../cliargs";
@@ -165,13 +165,14 @@ const createRoleOf = (cluster: boolean): CreateHandler => (host, c) => {
   return warnings.join("") + typ + ".rbac.authorization.k8s.io/" + n.name + " created";
 };
 
-/** Die `--user`/`--serviceaccount`-Subjekte eines RoleBindings einsammeln (`<ns>:<sa>`, die Form hat die Flag-Tabelle
- *  schon geprüft; ohne Angabe bleibt die Liste leer, kubectl verlangt keine Subjekte). Beide Flags sind StringArray: eine Angabe wird nicht an Kommas gesplittet. */
-function collectRbacSubjects(c: Call): RbacSubject[] {
+/** Die `--user`/`--serviceaccount`-Subjekte eines RoleBindings einsammeln (`<ns>:<sa>`; ein falsches Format ist der Fehlertext;
+ *  ohne Angabe bleibt die Liste leer, kubectl verlangt keine Subjekte). Beide Flags sind StringArray: eine Angabe wird nicht an Kommas gesplittet. */
+function collectRbacSubjects(host: KubectlHost, c: Call): RbacSubject[] | string {
   const subjects: RbacSubject[] = c.values("--user").map(u => ({ kind: "User", name: u }));
   for (const sa of c.values("--serviceaccount")) {
-    const [ns, name] = sa.split(":");
-    subjects.push({ kind: "ServiceAccount", name, namespace: ns });
+    const parsed = parseServiceAccount(host, sa);
+    if (typeof parsed === "string") return parsed;
+    subjects.push({ kind: "ServiceAccount", name: parsed.name, namespace: parsed.namespace });
   }
   return subjects;
 }
@@ -179,16 +180,17 @@ function collectRbacSubjects(c: Call): RbacSubject[] {
 // kubectl create rolebinding|clusterrolebinding <name> --role=… --serviceaccount=… (Subjekte optional, ein ClusterRoleBinding kennt `--role` nicht)
 const createRoleBindingOf = (cluster: boolean): CreateHandler => (host, c) => {
   const typ = cluster ? "clusterrolebinding" : "rolebinding";
-  const n = createName(host, c.args, cluster ? "ClusterRoleBinding" : "RoleBinding", "Muster: kubectl create " + typ + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
+  const n = createName(host, c.args, cluster ? "ClusterRoleBinding" : "RoleBinding", "Muster: kubectl create " + typ + " <name> " + (cluster ? "--clusterrole" : "--role") + "=<rolle> --serviceaccount=<ns>:<sa>");
   if (typeof n === "string") return n;
   const roleName = c.value("--role");
   const clusterRoleName = c.value("--clusterrole");
   // RoleBinding (`Validate` in create_rolebinding.go): genau eines von --role und --clusterrole, beide oder keines ist derselbe Fehler.
   if (!cluster && !!roleName === !!clusterRoleName) return host._err("error: exactly one of clusterrole or role must be specified", "Häng entweder '--role=<name>' oder '--clusterrole=<name>' an.");
-  // `--clusterrole=` (leer) erreicht den apiserver, der roleRef.name verlangt; Run umhüllt den Text (create_clusterrolebinding.go).
+  // Das Subjekt-Format prüft kubectl in Run nach Validate; `--clusterrole=` (leer) erreicht erst danach den apiserver, der roleRef.name verlangt (Run umhüllt den Text, create_clusterrolebinding.go).
+  const subjects = collectRbacSubjects(host, c);
+  if (typeof subjects === "string") return subjects;
   if (cluster && !clusterRoleName) return host._err('error: failed to create clusterrolebinding: ClusterRoleBinding.rbac.authorization.k8s.io "' + n.name + '" is invalid: roleRef.name: Required value');
   const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
-  const subjects = collectRbacSubjects(c);
   if (host.roleBindings.some(b => sameRbac(b, { name: n.name, cluster }))) return host._err('error: ' + typ + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
   host.roleBindings.push({ name: n.name, cluster, roleRef, subjects, created: host.clock });
   return typ + ".rbac.authorization.k8s.io/" + n.name + " created";
@@ -199,7 +201,8 @@ const createDeployment: CreateHandler = (host, c) => {
   const n = createName(host, c.args, "Deployment", "z.B. 'kubectl create deployment kasse --image=nginx'");
   if (typeof n === "string") return n;
   const images = c.list("--image");
-  if (images.length === 0) return host._err("error: required flag(s) \"image\" not set", "Häng '--image=nginx' an.");
+  // `--image` ist Pflicht-Flag (Tabelle); ein leerer Wert zählt für cobra als gesetzt und scheitert erst am apiserver.
+  if (images.length === 0) return host._err('error: failed to create deployment: Deployment.apps "' + n.name + '" is invalid: spec.template.spec.containers: Required value');
   if (images.length > 1) return notSimulated(host, "mehrere Container (mehrfaches '--image').", ["kubectl create deployment <name> --image=<image>"], "Ein Deployment hat in der Sim genau einen Container.");
   const rep = replicasArg(host, c);
   if ("error" in rep) return rep.error;

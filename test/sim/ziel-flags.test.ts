@@ -167,3 +167,59 @@ describe("(c) übrige Familien: ein Flag eines Geschwister-Ziels wird abgelehnt"
     expect(r.out).toContain(NS + " das Flag '" + name + "' bei '" + ziel + "'");
   });
 });
+
+describe("Reihenfolge der Prüfungen wie kubectl (#1989): Pflicht-Flag, Validate, Builder", () => {
+  const erste = (cmd: string, sim: KQSim = freshSim()) => lauf(cmd, sim).out.split("\n")[0];
+  const unveraendert = (cmd: string, sim: KQSim = freshSim()) => {
+    const vorher = zustand(sim);
+    const r = lauf(cmd, sim);
+    expect(zustand(sim), cmd).toBe(vorher);
+    return r;
+  };
+
+  test("create deployment ohne --image: Pflicht-Flag vor der Namensprüfung (cobra), mit und ohne Namen", () => {
+    expect(erste("kubectl create deployment")).toBe('error: required flag(s) "image" not set');
+    expect(erste("kubectl create deployment web")).toBe('error: required flag(s) "image" not set');
+    expect(erste("kubectl create deployment Web!")).toBe('error: required flag(s) "image" not set');
+    expect(lauf("kubectl create deployment --image=nginx").out).not.toContain("required flag");
+  });
+  test("create deployment: leeres --image= zählt als gesetzt, der apiserver verlangt einen Container, nichts wird angelegt", () => {
+    const r = unveraendert("kubectl create deployment w --image=");
+    expect(r.error).toBe(true);
+    expect(r.out.split("\n")[0]).toBe('error: failed to create deployment: Deployment.apps "w" is invalid: spec.template.spec.containers: Required value');
+  });
+
+  test("rolebinding: --serviceaccount im falschen Format erst NACH der Prüfung role/clusterrole", () => {
+    expect(unveraendert("kubectl create rolebinding rb --serviceaccount=bad").out.split("\n")[0]).toBe("error: exactly one of clusterrole or role must be specified");
+    expect(unveraendert("kubectl create rolebinding rb --role=r --serviceaccount=bad").out.split("\n")[0]).toBe("error: serviceaccount must be <namespace>:<name>");
+  });
+  test("rolebinding ohne Namen: die Namensprüfung kommt vor dem Format des Subjekts", () => {
+    const r = unveraendert("kubectl create rolebinding --role=r --serviceaccount=bad");
+    expect(r.out).not.toContain("serviceaccount must be");
+    expect(r.error).toBe(true);
+  });
+  test("clusterrolebinding: Pflicht-Flag vor dem Format; mit leerem --clusterrole= zuerst das Format, dann der apiserver", () => {
+    expect(unveraendert("kubectl create clusterrolebinding crb --serviceaccount=bad").out.split("\n")[0]).toBe('error: required flag(s) "clusterrole" not set');
+    expect(unveraendert("kubectl create clusterrolebinding crb --clusterrole= --serviceaccount=bad").out.split("\n")[0]).toBe("error: serviceaccount must be <namespace>:<name>");
+    expect(unveraendert("kubectl create clusterrolebinding crb --clusterrole=").out).toContain("roleRef.name: Required value");
+  });
+  test("clusterrolebinding ohne Namen: das Muster nennt --clusterrole, nicht --role", () => {
+    const r = unveraendert("kubectl create clusterrolebinding --clusterrole=view");
+    expect(r.out).toContain("--clusterrole=<rolle>");
+    expect(r.out).not.toContain("--role=<rolle>");
+    expect(unveraendert("kubectl create rolebinding --role=r").out).toContain("--role=<rolle>");
+  });
+
+  const MISSING = "error: You must provide one or more resources by argument or filename.\nExample resource specifications include:\n   '-f rsrc.yaml'\n   '--filename=rsrc.json'\n   '<resource> <name>'\n   '<resource>'";
+  const web = () => { const s = freshSim(); lauf("kubectl create deployment web --image=nginx", s); return s; };
+  test("set image: der Builder löst die Ressource VOR Validate auf (NotFound, Art ohne Namen, keine Ressource)", () => {
+    expect(unveraendert("kubectl set image deployment/web", web()).out).toContain("error: at least one image update is required");
+    expect(erste("kubectl set image deployment/fehlt", web())).toBe('Error from server (NotFound): deployments.apps "fehlt" not found');
+    expect(erste("kubectl set image deployment", web())).toBe("error: resource(s) were provided, but no name was specified");
+    expect(unveraendert("kubectl set image nginx=nginx:2", web()).out).toContain(MISSING);
+    expect(unveraendert("kubectl set image", web()).out).toContain(MISSING);
+  });
+  test("set image: ohne Ressource steht der Builder-Text nicht in einer Validate-Liste", () => {
+    expect(lauf("kubectl set image").out).not.toContain("[");
+  });
+});
