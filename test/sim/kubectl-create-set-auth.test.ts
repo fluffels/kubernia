@@ -302,13 +302,44 @@ describe("(f) create rolebinding mit --role und --clusterrole", () => {
     expect(lauf("kubectl create rolebinding rb --role=r --user=a", freshSim()).out).toBe("rolebinding.rbac.authorization.k8s.io/rb created");
     expect(lauf("kubectl create rolebinding rb --clusterrole=c --user=a", freshSim()).out).toBe("rolebinding.rbac.authorization.k8s.io/rb created");
   });
-  test("clusterrolebinding behält seine Meldungen", () => {
+  test("clusterrolebinding ohne --clusterrole: Pflicht-Flag vor Namen und Format", () => {
+    for (const cmd of ["kubectl create clusterrolebinding rb --user=a", "kubectl create clusterrolebinding", "kubectl create clusterrolebinding rb --serviceaccount=bad"]) {
+      const sim = freshSim();
+      const r = lauf(cmd, sim);
+      expect(r.error).toBe(true);
+      expect(r.out).toContain('error: required flag(s) "clusterrole" not set');
+      expect(r.out).not.toContain("exactly one of");
+      expect(sim.roleBindings).toHaveLength(0);
+    }
+  });
+  test("clusterrolebinding mit --role: unknown flag", () => {
     const sim = freshSim();
-    const r = lauf("kubectl create clusterrolebinding rb --user=a", sim);
+    const r = lauf("kubectl create clusterrolebinding rb --role=r --clusterrole=c", sim);
     expect(r.error).toBe(true);
-    expect(r.out).toContain("error: exactly one of --role or --clusterrole must be specified");
-    expect(r.out).not.toContain("exactly one of clusterrole or role");
+    expect(r.out).toContain("error: unknown flag: --role");
     expect(sim.roleBindings).toHaveLength(0);
+  });
+  test("clusterrolebinding mit leerem --clusterrole: apiserver-Text, nichts entsteht", () => {
+    const sim = freshSim();
+    const r = lauf("kubectl create clusterrolebinding rb --clusterrole=", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain('error: failed to create clusterrolebinding: ClusterRoleBinding.rbac.authorization.k8s.io "rb" is invalid: roleRef.name: Required value');
+    expect(sim.roleBindings).toHaveLength(0);
+  });
+  test("ohne Subjekte wird angelegt (kubectl verlangt keine)", () => {
+    const sim = freshSim();
+    expect(lauf("kubectl create rolebinding rb --role=r", sim).out).toBe("rolebinding.rbac.authorization.k8s.io/rb created");
+    expect(lauf("kubectl create clusterrolebinding crb --clusterrole=c", sim).out).toBe("clusterrolebinding.rbac.authorization.k8s.io/crb created");
+    expect(sim.roleBindings.map(b => b.subjects)).toEqual([[], []]);
+    expect(lauf("kubectl get rolebindings -o wide", sim).error).toBe(false);
+    expect(lauf("kubectl auth can-i get pods --as=system:serviceaccount:default:x", sim).out).toContain("no");
+  });
+  test("kein erfundener Text bleibt", () => {
+    for (const cmd of ["kubectl create rolebinding rb --role=r", "kubectl create rolebinding rb", "kubectl create clusterrolebinding rb", "kubectl create clusterrolebinding rb --clusterrole=c"]) {
+      const out = lauf(cmd, freshSim()).out;
+      expect(out).not.toContain("at least one of --user");
+      expect(out).not.toContain("exactly one of --role or --clusterrole");
+    }
   });
 });
 

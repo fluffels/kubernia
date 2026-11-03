@@ -79,6 +79,39 @@ describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
   });
 });
 
+describe("cliargs: unknownFlags und requiredFlags (#1678)", () => {
+  const spec: ArgSpec = {
+    cmd: "x make", maxArgs: OFFENE_LISTE,
+    flags: [flag(true, "--aa", "-a"), flag(true, "--bb"), checkedFlag((_h, v) => (v === "bad" ? "WERT-FEHLER" : null), "--cc")],
+    unknownFlags: ["--nope"], requiredFlags: ["--aa", "--bb"], hints: { "--nope": "Nimm --aa.", "--zzz": "Tipp zzz." },
+  };
+  const run = (...t: string[]) => checkFlags(host, spec, ["x", "make", ...t], 2);
+
+  test("Flag aus unknownFlags: pflag-Text samt Tipp, kein „Nicht simuliert“", () => {
+    expect(run("--nope=1", "--aa=1", "--bb=1")).toBe("error: unknown flag: --nope\nNimm --aa.");
+  });
+  test("anderes unbekanntes Flag bleibt „Nicht simuliert“", () => {
+    expect(run("--zzz", "--aa=1", "--bb=1")).toContain(NS + " das Flag '--zzz'");
+  });
+  test("fehlendes Pflicht-Flag: Text mit Namen ohne Strich", () => {
+    expect(run("--aa=1")).toContain('error: required flag(s) "bb" not set');
+    expect(run("--aa=1")).toContain("Häng '--bb=<wert>' an.");
+  });
+  test("zwei fehlende: alphabetisch, mit Komma", () => {
+    expect(run()).toContain('error: required flag(s) "aa", "bb" not set');
+  });
+  test("Alias und leerer Wert zählen als gesetzt", () => {
+    expect(run("-a", "x", "--bb=")).toBeNull();
+  });
+  test("Scan-Fehler hat Vorrang vor Pflicht-Flag", () => {
+    expect(run("--nope=1")).toContain("unknown flag: --nope");
+  });
+  test("Pflicht-Flag hat Vorrang vor der Wertprüfung", () => {
+    expect(run("--cc=bad")).toContain("required flag(s)");
+    expect(run("--cc=bad", "--aa=1", "--bb=1")).toBe("WERT-FEHLER");
+  });
+});
+
 describe("cliargs: pflag-Stil", () => {
   test.each([
     [["x", "run", "-n", "a"]], [["x", "run", "-n=a"]], [["x", "run", "-na"]], [["x", "run", "--namespace", "a"]],
