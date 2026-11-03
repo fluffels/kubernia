@@ -161,8 +161,8 @@ const ORAKEL: Record<string, string[]> = {
   "describe": [...DATEI, ...SELEKTOR, "-A", "--all-namespaces", "--show-events", "--chunk-size"],
   // scale/scale.go
   "scale": [...PRINT, "--record", "--all", "--resource-version", "--current-replicas", "--replicas", "--timeout", ...DATEI, "--dry-run", ...SELEKTOR],
-  // expose/expose.go (-l ist hier --labels)
-  "expose": [...PRINT, "--record", "--protocol", "--port", "--type", "--load-balancer-ip", "--selector", "-l", "--labels", "--target-port", "--external-ip", "--name", "--session-affinity", "--cluster-ip", "--field-manager", "--dry-run", "--save-config", ...DATEI],
+  // expose/expose.go (-l ist hier --labels), --overrides/--override-type aus util/override_options.go (AddOverrideFlags)
+  "expose": [...PRINT, "--record", "--protocol", "--port", "--type", "--load-balancer-ip", "--selector", "-l", "--labels", "--target-port", "--external-ip", "--name", "--session-affinity", "--cluster-ip", "--field-manager", "--dry-run", "--save-config", "--overrides", "--override-type", ...DATEI],
   // delete/delete.go, delete_flags.go (NewDeleteCommandFlags)
   "delete": [...DATEI, ...SELEKTOR, "--field-selector", "--all", "-A", "--all-namespaces", "--force", "--cascade", "--now", "--grace-period", "--timeout", "--ignore-not-found", "--wait", "-o", "--output", "--raw", "-i", "--interactive", "--dry-run"],
   // apply/apply.go, delete_flags.go (NewDeleteFlags: Datei, cascade, grace-period, force, timeout, wait); --applyset nur mit Feature-Gate

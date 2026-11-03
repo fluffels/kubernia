@@ -500,7 +500,7 @@ describe("create deployment --replicas", () => {
       expect(r.error, cmd).toBe(true);
       expect(r.output?.split("\n")[0], cmd).toBe(erwartet);
     }
-    for (const cmd of ["kubectl get pods --kubeconfig=/tmp/k", "kubectl get pods --show-labels", "kubectl scale deployment web --replicas=2 --timeout=5s", "kubectl top pods --sort-by=cpu"]) {
+    for (const cmd of ["kubectl get pods --kubeconfig=/tmp/k", "kubectl get pods --show-labels", "kubectl scale deployment web --replicas=2 --timeout=5s", "kubectl top pods --sort-by=cpu", "kubectl expose deployment web --port=80 --overrides={}", "kubectl expose deployment web --port=80 --override-type=json"]) {
       expect(freshSim().exec(cmd).output, cmd).toContain("Nicht simuliert: das Flag");
     }
   });
