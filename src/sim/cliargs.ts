@@ -129,7 +129,7 @@ type ScanError =
 interface Walk {
   hits: Hit[]; entries: { tok: string; at: number }[]; error: ScanError | null; dashAt: number | null;
   /** Das erste echte, nicht simulierte Flag eines geschlossenen Ziels: meldet erst `firstError`, nach allen echten Fehlern. */
-  unsimulated: ScanError | null;
+  unsimulated: Extract<ScanError, { kind: "unknown" }> | null;
 }
 interface Step { used: boolean; error: ScanError | null }
 
@@ -255,9 +255,11 @@ function missingRequired(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
 }
 
 /** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool oder Ganzzahl), dann ein fehlendes Pflicht-Flag, dann der erste
- *  Wertprüfer, der anschlägt, zuletzt ein echtes, nicht simuliertes Flag („Nicht simuliert“). */
+ *  Wertprüfer, der anschlägt, zuletzt ein echtes, nicht simuliertes Flag („Nicht simuliert“); das Hilfe-Flag geht den Pflicht-Flags und Wertprüfern vor (cobra). */
 function firstError(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
   if (w.error) return scanErrorText(host, spec, w.error);
+  // cobra wertet das Hilfe-Flag vor den Pflicht-Flags und der Validierung aus
+  if (w.unsimulated && isHelpFlag(w.unsimulated.name)) return scanErrorText(host, spec, w.unsimulated);
   const required = missingRequired(host, spec, w);
   if (required) return required;
   for (const h of w.hits) {

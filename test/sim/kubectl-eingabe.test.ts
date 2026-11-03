@@ -469,6 +469,13 @@ describe("create deployment --replicas", () => {
     expect(sim.exec("kubectl create deployment web -rabc").output?.split("\n")[0]).toBe(erwartet);
     expect(sim.deployments).toHaveLength(0);
   });
+  test("--help an einem Ziel mit Pflicht-Flag zeigt den Hilfe-Hinweis, nicht den Pflicht-Fehler (#1996)", () => {
+    for (const cmd of ["kubectl create deployment --help", "kubectl create deployment web -h", "kubectl create clusterrolebinding b --help"]) {
+      const r = freshSim().exec(cmd);
+      expect(r.output).toContain("Hilfe zeigt der Simulator mit 'help kubectl'.");
+      expect(r.output).not.toContain("required flag");
+    }
+  });
   test("scale: das Label ist \"--replicas\" (ohne Kurzform), der Fehler kommt vor „So nicht ganz“ (#1996)", () => {
     const r = freshSim().exec("kubectl scale --replicas=abc");
     expect(r.error).toBe(true);

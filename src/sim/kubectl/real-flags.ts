@@ -11,6 +11,9 @@
  * Flags `cli-runtime/.../config_flags.go` (AddFlags), `kubectl/pkg/cmd/cmd.go` (PersistentFlags), `component-base/logs`.
  * Der Konsistenztest `test/sim/flag-tabellen.test.ts` führt die Listen unabhängig von hier gegen die Quelle.
  *
+ * Grenze: die Listen nennen nur Namen, nicht ob ein Flag einen Wert nimmt: der Wert eines echten Wert-Flags (`-o yaml`) wird im
+ * Scan als Positionsargument gelesen. Folgenlos, weil das echte Flag vor `tooMany` und dem Handler als „Nicht simuliert“ gemeldet wird.
+ *
  * Reines Datenmodul (pure Domäne, keine Imports). */
 
 /** Die globalen kubectl-Flags (`kubectl options`, persistente Flags der Wurzel): gelten an jedem Ziel. */

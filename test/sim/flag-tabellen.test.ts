@@ -158,7 +158,16 @@ const ORAKEL: Record<string, string[]> = {
   // auth/cani.go
   "auth can-i": ["-A", "--all-namespaces", "-q", "--quiet", "--subresource", "--list", "--no-headers"],
 };
-const GLOBAL = [...KUBECTL_OPTIONS, "-n", "--namespace"];
+/** Die globalen kubectl-Flags (`kubectl options`) laut Quelle, unabhängig von KUBECTL_OPTIONS abgeschrieben:
+ *  cli-runtime/pkg/genericclioptions/config_flags.go (AddFlags), kubectl/pkg/cmd/cmd.go (PersistentFlags: Profiling, --warnings-as-errors,
+ *  --kuberc, MatchVersionFlags), component-base/logs (-v/--v, --vmodule, --log-flush-frequency). `-n/--namespace` ist die persistente `NS` der Wurzel. */
+const GLOBALE_ORAKEL = [
+  "--kubeconfig", "--cache-dir", "--client-certificate", "--client-key", "--token", "--as", "--as-uid", "--as-group", "--as-user-extra",
+  "--username", "--password", "--cluster", "--user", "--context", "-s", "--server", "--tls-server-name", "--insecure-skip-tls-verify",
+  "--certificate-authority", "--request-timeout", "--disable-compression", "--proxy-url", "--profile", "--profile-output",
+  "--warnings-as-errors", "--kuberc", "--match-server-version", "-v", "--v", "--vmodule", "--log-flush-frequency",
+];
+const GLOBAL = [...GLOBALE_ORAKEL, "-n", "--namespace"];
 const lauf = (...t: string[]) => dispatchSub(host, KUBECTL, ["kubectl", ...t], 1);
 const text = (r: ReturnType<typeof lauf>) => (typeof r === "string" ? r : "");
 const UNBEKANNT = /unknown (shorthand )?flag/;
@@ -175,10 +184,15 @@ describe("(c) Orakel je geschlossenem kubectl-Ziel", () => {
   test.each(Object.entries(ORAKEL))("%s: kein echtes Flag meldet „unknown flag“", (wo, flags) => {
     for (const n of flags) expect(text(lauf(...wo.split(" "), n + "=1")), wo + " " + n).not.toMatch(UNBEKANNT);
   });
-  test.each(Object.keys(ORAKEL))("%s: ein globales Flag ist nie „unknown“, ein fremdes meldet den pflag-Text", wo => {
-    for (const n of KUBECTL_OPTIONS) expect(text(lauf(...wo.split(" "), n + "=1")), wo + " " + n).not.toMatch(UNBEKANNT);
+  test.each(Object.keys(ORAKEL))("%s: ein fremdes Flag meldet den pflag-Text", wo => {
     expect(text(lauf(...wo.split(" "), "--gibts-nicht=1"))).toMatch(/^error: unknown flag: --gibts-nicht\n/);
     expect(text(lauf(...wo.split(" "), "-Z"))).toMatch(/^error: unknown shorthand flag: 'Z' in -Z\n/);
+  });
+  test("KUBECTL_OPTIONS = die globalen Flags laut Quelle (Mengengleichheit mit dem Orakel)", () => {
+    expect([...KUBECTL_OPTIONS].sort()).toEqual([...GLOBALE_ORAKEL].sort());
+  });
+  test.each(GLOBALE_ORAKEL)("das globale Flag %s meldet an jedem geschlossenen Ziel nie „unknown flag“", n => {
+    for (const wo of Object.keys(ORAKEL)) expect(text(lauf(...wo.split(" "), n + "=1")), wo + " " + n).not.toMatch(UNBEKANNT);
   });
   test("ein globales Flag zwei Ebenen tief: „Nicht simuliert“", () => {
     expect(text(lauf("create", "secret", "tls", "t", "--kubeconfig=x"))).toContain("Nicht simuliert: das Flag '--kubeconfig' bei 'kubectl create secret tls'");

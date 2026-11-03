@@ -107,6 +107,13 @@ describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996
   test("-h und --help gelten immer als bekannt: „Nicht simuliert“ mit Hilfe-Hinweis", () => {
     for (const h of ["-h", "--help"]) expect(run(h, ...ok)).toContain("Hilfe zeigt der Simulator mit 'help x'.");
   });
+  test("das Hilfe-Flag geht dem Pflicht-Flag und dem Wertprüfer vor (cobra): Hilfe-Hinweis statt Pflicht-Fehler", () => {
+    for (const h of ["-h", "--help"]) {
+      expect(run(h)).toContain("Hilfe zeigt der Simulator mit 'help x'.");
+      expect(run("--cc=bad", h, "--aa=1", "--bb=1")).toContain("Hilfe zeigt der Simulator mit 'help x'.");
+    }
+    expect(run("--cc=bad", "--aa=1", "--bb=1")).toBe("WERT-FEHLER");
+  });
   test("Vorrang: ein unbekanntes Flag vor oder hinter einem echten meldet „unknown flag“", () => {
     expect(run("--real", "--zzz", ...ok)).toContain("error: unknown flag: --zzz");
     expect(run("--zzz", "--real", ...ok)).toContain("error: unknown flag: --zzz");
@@ -1140,6 +1147,12 @@ describe("cliargs: Dispatch.realFlags erreicht das geschlossene Blatt, die Famil
     const ohne: Dispatch<SubEntry<typeof run>> = { cmd: "y", table: { g: geschlossen } };
     expect(dispatchSub(host, ohne, ["y", "g", "--leaf"], 1)).toContain(NS + " das Flag '--leaf'");
     expect(dispatchSub(host, ohne, ["y", "g", "--fam"], 1)).toContain("error: unknown flag: --fam");
+  });
+  test("die Liste einer Gruppen-Ebene gilt auch unter einer Wurzel OHNE Liste", () => {
+    const g2: Dispatch<SubEntry<typeof run>> = { cmd: "y mid", realFlags: ["--mid"], table: { g: geschlossen } };
+    const wurzel: Dispatch<SubEntry<typeof run>> = { cmd: "y", table: { mid: { group: g2 } } };
+    expect(dispatchSub(host, wurzel, ["y", "mid", "g", "--mid"], 1)).toContain(NS + " das Flag '--mid'");
+    expect(dispatchSub(host, wurzel, ["y", "mid", "g", "--zzz"], 1)).toContain("error: unknown flag: --zzz");
   });
   test("ein Blatt ohne eigene Liste bleibt offen, auch mit Familien-Liste", () => {
     expect(lauf("mid", "deep", "o", "--zzz")).toContain(NS + " das Flag '--zzz'");
