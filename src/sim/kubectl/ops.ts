@@ -18,6 +18,7 @@ import { foreignNamespace, type KubectlEntry } from "./namespace";
 import { noResourcesIn } from "./inspect";
 import { DEFAULT_NAMESPACE } from "../state";
 import { IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch } from "../cliargs";
+import { REAL_ROLLOUT_HISTORY, REAL_ROLLOUT_RESTART, REAL_ROLLOUT_UNDO, REAL_SET_ENV, REAL_SET_IMAGE, REAL_SET_RESOURCES } from "./real-flags";
 
 /** Die NotFound-Zeile eines Deployments (ohne Fehlerrahmen: die Mehrfachziel-Befehle sammeln sie in `failed`). */
 const deploymentNotFound = (name: string): string => 'Error from server (NotFound): deployments.apps "' + name + '" not found';
@@ -61,11 +62,10 @@ function scaleAll(host: KubectlHost, names: readonly string[], replicas: number)
 export function kubectlScale(host: KubectlHost, c: Call) {
   const dn = deploymentNames(host, "scale", c.args);
   if ("error" in dn) return dn.error;
-  const rep = replicasArg(host, c);
-  if ("error" in rep) return rep.error;
-  if (dn.names.length === 0 || rep.replicas === null) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
-  if (rep.replicas < 0) return host._err("error: The --replicas=COUNT flag is required, and COUNT must be greater than or equal to 0");
-  return scaleAll(host, dn.names, rep.replicas);
+  const replicas = replicasArg(c);
+  if (dn.names.length === 0 || replicas === null) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
+  if (replicas < 0) return host._err("error: The --replicas=COUNT flag is required, and COUNT must be greater than or equal to 0");
+  return scaleAll(host, dn.names, replicas);
 }
 
 
@@ -98,9 +98,9 @@ export function kubectlExpose(host: KubectlHost, c: Call) {
 export const KUBECTL_SET: Dispatch<KubectlEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl set",
   table: {
-    image: { run: (host, c) => kubectlSetImage(host, c), maxArgs: IM_HANDLER },
-    env: { run: (host, c) => kubectlSetEnv(host, c), maxArgs: IM_HANDLER, flags: [FROM_FLAG] },
-    resources: { run: (host, c) => kubectlSetResources(host, c), maxArgs: IM_HANDLER, flags: [LIMITS_FLAG, REQUESTS_FLAG] },
+    image: { run: (host, c) => kubectlSetImage(host, c), maxArgs: IM_HANDLER, realFlags: REAL_SET_IMAGE },
+    env: { run: (host, c) => kubectlSetEnv(host, c), maxArgs: IM_HANDLER, flags: [FROM_FLAG], realFlags: REAL_SET_ENV },
+    resources: { run: (host, c) => kubectlSetResources(host, c), maxArgs: IM_HANDLER, flags: [LIMITS_FLAG, REQUESTS_FLAG], realFlags: REAL_SET_RESOURCES },
   },
   real: ["selector", "serviceaccount", "sa", "subject"],
   unknown: UNKNOWN_TARGET,
@@ -253,9 +253,9 @@ function kubectlSetResources(host: KubectlHost, c: Call) {
 export const KUBECTL_ROLLOUT: Dispatch<KubectlEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl rollout",
   table: {
-    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE, namespace: "liest" },
-    history: { run: (host, c) => kubectlRolloutHistory(host, c), maxArgs: IM_HANDLER },
-    undo: { run: (host, c) => kubectlRolloutUndo(host, c), maxArgs: IM_HANDLER, flags: [REVISION_FLAG] },
+    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE, namespace: "liest", realFlags: REAL_ROLLOUT_RESTART },
+    history: { run: (host, c) => kubectlRolloutHistory(host, c), maxArgs: IM_HANDLER, realFlags: REAL_ROLLOUT_HISTORY },
+    undo: { run: (host, c) => kubectlRolloutUndo(host, c), maxArgs: IM_HANDLER, flags: [REVISION_FLAG], realFlags: REAL_ROLLOUT_UNDO },
   },
   real: ["pause", "resume", "status"],
   unknown: UNKNOWN_TARGET,

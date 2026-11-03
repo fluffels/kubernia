@@ -7,7 +7,7 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import {
-  flag, checkedFlag, parseCall, shellTokens, subEntry, notSimulated, dispatchSub, kannOf, OFFENE_LISTE, type ArgSpec, type Dispatch, type FlagSpec, type FlagStyle, type SubEntry,
+  flag, checkedFlag, intFlag, parseCall, shellTokens, subEntry, notSimulated, dispatchSub, kannOf, OFFENE_LISTE, type ArgSpec, type Dispatch, type FlagSpec, type FlagStyle, type SubEntry,
 } from "../../src/sim/cliargs";
 
 const NS = "Nicht simuliert:";
@@ -79,19 +79,52 @@ describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
   });
 });
 
-describe("cliargs: unknownFlags und requiredFlags (#1678)", () => {
+describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996)", () => {
   const spec: ArgSpec = {
     cmd: "x make", maxArgs: OFFENE_LISTE,
     flags: [flag(true, "--aa", "-a"), flag(true, "--bb"), checkedFlag((_h, v) => (v === "bad" ? "WERT-FEHLER" : null), "--cc")],
-    unknownFlags: ["--nope"], requiredFlags: ["--bb", "--aa"], hints: { "--nope": "Nimm --aa.", "--zzz": "Tipp zzz." },
+    realFlags: ["--real", "-R"], requiredFlags: ["--bb", "--aa"], hints: { "--nope": "Nimm --aa.", "--real": "Echt, aber nicht simuliert." },
   };
   const run = (...t: string[]) => checkFlags(host, spec, ["x", "make", ...t], 2);
+  const ok = ["--aa=1", "--bb=1"];
 
-  test("Flag aus unknownFlags: pflag-Text samt Tipp, kein „Nicht simuliert“", () => {
-    expect(run("--nope=1", "--aa=1", "--bb=1")).toBe("error: unknown flag: --nope\nNimm --aa.");
+  test("Flag außerhalb von flags und realFlags: pflag-Text samt Tipp aus hints, kein „Nicht simuliert“", () => {
+    expect(run("--nope=1", ...ok)).toBe("error: unknown flag: --nope\nNimm --aa.");
   });
-  test("anderes unbekanntes Flag bleibt „Nicht simuliert“", () => {
-    expect(run("--zzz", "--aa=1", "--bb=1")).toContain(NS + " das Flag '--zzz'");
+  test("ohne Hinweis kommt der Ersatz-Tipp „Der Simulator kann: Flags“", () => {
+    expect(run("--zzz", ...ok)).toBe("error: unknown flag: --zzz\nDer Simulator kann: Flags: --aa/-a <wert>, --bb <wert>, --cc <wert>");
+  });
+  test("kurzes Flag: „unknown shorthand flag“ mit dem Rest der Kette ab dem Zeichen", () => {
+    expect(run("-Z", ...ok)).toContain("error: unknown shorthand flag: 'Z' in -Z\n");
+    const kette: ArgSpec = { cmd: "x make", maxArgs: OFFENE_LISTE, flags: [flag(false, "-a")], realFlags: [] };
+    expect(checkFlags(host, kette, ["x", "make", "-aZq"], 2)).toContain("error: unknown shorthand flag: 'Z' in -Zq\n");
+  });
+  test("ein Name aus realFlags bleibt „Nicht simuliert“ (mit Hinweis), lang und kurz", () => {
+    expect(run("--real", ...ok)).toContain(NS + " das Flag '--real' bei 'x make'. Echt, aber nicht simuliert.");
+    expect(run("-R", ...ok)).toContain(NS + " das Flag '-R'");
+    expect(run("--real=1", ...ok)).toContain(NS + " das Flag '--real'");
+  });
+  test("-h und --help gelten immer als bekannt: „Nicht simuliert“ mit Hilfe-Hinweis", () => {
+    for (const h of ["-h", "--help"]) expect(run(h, ...ok)).toContain("Hilfe zeigt der Simulator mit 'help x'.");
+  });
+  test("Vorrang: ein unbekanntes Flag vor oder hinter einem echten meldet „unknown flag“", () => {
+    expect(run("--real", "--zzz", ...ok)).toContain("error: unknown flag: --zzz");
+    expect(run("--zzz", "--real", ...ok)).toContain("error: unknown flag: --zzz");
+  });
+  test("Vorrang: ein fehlendes Pflicht-Flag und ein Wertprüfer kommen vor dem echten, nicht simulierten Flag", () => {
+    expect(run("--real", "--aa=1")).toContain('error: required flag(s) "bb" not set');
+    expect(run("--real", "--cc=bad", ...ok)).toBe("WERT-FEHLER");
+  });
+  test("ohne realFlags bleibt das Ziel offen: jedes unbekannte Flag ist „Nicht simuliert“", () => {
+    const offen: ArgSpec = { cmd: "x make", maxArgs: OFFENE_LISTE, flags: [flag(true, "--aa")] };
+    expect(checkFlags(host, offen, ["x", "make", "--zzz", "-Z"], 2)).toContain(NS + " das Flag '--zzz'");
+    expect(checkFlags(host, offen, ["x", "make", "-Z"], 2)).toContain(NS + " das Flag '-Z'");
+  });
+  test("goflag: der Wortlaut der Go-Bibliothek", () => {
+    const go: ArgSpec = { cmd: "t plan", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-out")], realFlags: ["-real"] };
+    expect(checkFlags(host, go, ["t", "plan", "-zzz"], 2)).toContain("flag provided but not defined: -zzz");
+    expect(checkFlags(host, go, ["t", "plan", "--zzz=1"], 2)).toContain("flag provided but not defined: -zzz");
+    expect(checkFlags(host, go, ["t", "plan", "-real"], 2)).toContain(NS + " das Flag '-real'");
   });
   test("fehlendes Pflicht-Flag: Text mit Namen ohne Strich", () => {
     expect(run("--aa=1")).toContain('error: required flag(s) "bb" not set');
@@ -1040,5 +1073,58 @@ describe("dispatchSub: persistente Flags und Flags je Ziel", () => {
   });
   test("kannOf: eine Gruppe mit zwei Alias-Schlüsseln erscheint nur einmal", () => {
     expect(kannOf(d)).toEqual(["x a, b", "x grp mb"]);
+  });
+});
+
+describe("cliargs: Ganzzahl-Flags (intFlag) gehören in den Scan (#1996)", () => {
+  const TIP = "Eine ganze Zahl, z.B. '--n=2'.";
+  const spec: ArgSpec = {
+    cmd: "x make", maxArgs: OFFENE_LISTE, flags: [intFlag(TIP, "-n", "--n"), flag(true, "--bb")], requiredFlags: ["--bb"],
+  };
+  const run = (...t: string[]) => checkFlags(host, spec, ["x", "make", ...t], 2);
+  const bad = (v: string) => 'error: invalid argument "' + v + '" for "-n, --n" flag: strconv.ParseInt: parsing "' + v + '": invalid syntax\n' + TIP;
+
+  test.each(["abc", "3.5", "", "0x2", "1_000", " 1"])("--n=%j ist ein Parse-Fehler mit Label, Text und Tipp", v => {
+    expect(run("--n=" + v, "--bb=1")).toBe(bad(v));
+  });
+  test("-n abc (getrennt) und -nabc (angeklebt, auch in einer Kette) melden denselben Fehler", () => {
+    expect(run("-n", "abc", "--bb=1")).toBe(bad("abc"));
+    expect(run("-nabc", "--bb=1")).toBe(bad("abc"));
+  });
+  test("der Parse-Fehler kommt vor dem Pflicht-Flag", () => {
+    expect(run("--n=abc")).toBe(bad("abc"));
+  });
+  test("ganze Zahlen sind gültig, auch mit Vorzeichen (den Wertebereich prüft der Handler)", () => {
+    for (const v of ["0", "3", "+3", "-1"]) expect(run("--n=" + v, "--bb=1")).toBeNull();
+    const r = parseCall(host, spec, ["x", "make", "-n", "7", "--bb=1"], 2);
+    expect(typeof r === "string" ? r : r.value("--n")).toBe("7");
+  });
+  test("ein unbekanntes Flag davor meldet seinen eigenen Fehler zuerst (Token-Reihenfolge wie pflag)", () => {
+    const zu: ArgSpec = { ...spec, realFlags: [] };
+    expect(checkFlags(host, zu, ["x", "make", "--zzz", "--n=abc"], 2)).toContain("unknown flag: --zzz");
+    expect(checkFlags(host, zu, ["x", "make", "--n=abc", "--zzz"], 2)).toBe(bad("abc"));
+  });
+  test("goflag: der Wortlaut der Go-Bibliothek", () => {
+    const go: ArgSpec = { cmd: "t plan", maxArgs: OFFENE_LISTE, style: "goflag", flags: [intFlag(TIP, "-n")] };
+    expect(checkFlags(host, go, ["t", "plan", "-n=abc"], 2)).toBe('invalid value "abc" for flag -n: parse error\n' + TIP);
+  });
+});
+
+describe("cliargs: Dispatch.realFlags erreicht das geschlossene Blatt, die Familien-Liste allein schließt nichts (#1996)", () => {
+  const run = (..._a: string[]) => "";
+  const geschlossen: SubEntry<typeof run> = { run, maxArgs: OFFENE_LISTE, realFlags: ["--leaf"] };
+  const offen: SubEntry<typeof run> = { run, maxArgs: OFFENE_LISTE };
+  const tief: Dispatch<SubEntry<typeof run>> = { cmd: "x mid deep", table: { g: geschlossen, o: offen } };
+  const mid: Dispatch<SubEntry<typeof run>> = { cmd: "x mid", table: { deep: { group: tief } }, realFlags: ["--mid"] };
+  const d: Dispatch<SubEntry<typeof run>> = { cmd: "x", table: { mid: { group: mid } }, realFlags: ["--fam"] };
+  const lauf = (...t: string[]) => dispatchSub(host, d, ["x", ...t], 1);
+
+  test("Familien- und Ebenen-Flags gelten zwei Ebenen tiefer im geschlossenen Blatt als „Nicht simuliert“", () => {
+    for (const f of ["--fam", "--mid", "--leaf"]) expect(lauf("mid", "deep", "g", f)).toContain(NS + " das Flag '" + f + "'");
+    expect(lauf("mid", "deep", "g", "--zzz")).toContain("error: unknown flag: --zzz");
+  });
+  test("ein Blatt ohne eigene Liste bleibt offen, auch mit Familien-Liste", () => {
+    expect(lauf("mid", "deep", "o", "--zzz")).toContain(NS + " das Flag '--zzz'");
+    expect(lauf("mid", "deep", "o", "--fam")).toContain(NS + " das Flag '--fam'");
   });
 });

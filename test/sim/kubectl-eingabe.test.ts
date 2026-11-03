@@ -458,8 +458,26 @@ describe("create deployment --replicas", () => {
     const sim = freshSim();
     const r = sim.exec(`kubectl create deployment web --image=nginx --replicas=${v}`);
     expect(r.error).toBe(true);
-    expect(r.output).toContain('invalid argument "' + v + '" for "--replicas" flag');
+    expect(r.output).toContain('invalid argument "' + v + '" for "' + (v === "-1" ? "--replicas" : "-r, --replicas") + '" flag');
     expect(sim.deployments).toHaveLength(0);
+  });
+  test("Int-Parsefehler kommen vor Pflicht-Flag und Namensprüfung (#1996): ohne Name und ohne Image, auch mit -r", () => {
+    const sim = freshSim();
+    const erwartet = 'error: invalid argument "abc" for "-r, --replicas" flag: strconv.ParseInt: parsing "abc": invalid syntax';
+    expect(sim.exec("kubectl create deployment --replicas=abc").output?.split("\n")[0]).toBe(erwartet);
+    expect(sim.exec("kubectl create deployment web -r abc").output?.split("\n")[0]).toBe(erwartet);
+    expect(sim.exec("kubectl create deployment web -rabc").output?.split("\n")[0]).toBe(erwartet);
+    expect(sim.deployments).toHaveLength(0);
+  });
+  test("scale: das Label ist \"--replicas\" (ohne Kurzform), der Fehler kommt vor „So nicht ganz“ (#1996)", () => {
+    const r = freshSim().exec("kubectl scale --replicas=abc");
+    expect(r.error).toBe(true);
+    expect(r.output?.split("\n")[0]).toBe('error: invalid argument "abc" for "--replicas" flag: strconv.ParseInt: parsing "abc": invalid syntax');
+    expect(r.output).not.toContain("So nicht ganz");
+  });
+  test("rollout undo --to-revision=abc: der Scan meldet den Parse-Fehler (#1996)", () => {
+    const r = freshSim().exec("kubectl rollout undo deployment web --to-revision=abc");
+    expect(r.output?.split("\n")[0]).toBe('error: invalid argument "abc" for "--to-revision" flag: strconv.ParseInt: parsing "abc": invalid syntax');
   });
 });
 

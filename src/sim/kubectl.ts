@@ -22,8 +22,9 @@ import { kubectlTop } from "./kubectl/top";
 import { kubectlLogs } from "./kubectl/logs";
 import { kubectlDescribe } from "./kubectl/describe";
 import { kubectlGet } from "./kubectl/get";
-import { FILE, FLAG_HINTS, NS, PORT_FLAG, REAL_KUBECTL_COMMANDS } from "./kubectl/args";
+import { FILE, FLAG_HINTS, NS, PORT_FLAG, REAL_KUBECTL_COMMANDS, REPLICAS_FLAG } from "./kubectl/args";
 import { OUTPUT_FLAG } from "./kubectl/output";
+import { KUBECTL_OPTIONS } from "./kubectl/real-flags";
 import { KUBECTL_CREATE, kubectlApply, kubectlDelete } from "./kubectl/lifecycle";
 import { kubectlScale, kubectlExpose, KUBECTL_SET, KUBECTL_ROLLOUT } from "./kubectl/ops";
 import { KUBECTL_AUTH, kubectlLabel } from "./kubectl/security";
@@ -47,11 +48,12 @@ type SubCommand = (host: KubectlHost, c: Call) => string;
 export const KUBECTL: Dispatch<KubectlEntry<SubCommand>> = {
   cmd: "kubectl",
   flags: [NS],
+  realFlags: KUBECTL_OPTIONS,
   table: {
     get: { run: kubectlGet, maxArgs: OFFENE_LISTE, namespace: "liest", flags: [flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG] },
     describe: { run: kubectlDescribe, maxArgs: OFFENE_LISTE },
     create: { group: KUBECTL_CREATE },
-    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [flag(true, "--replicas")] },
+    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [REPLICAS_FLAG] },
     expose: { run: kubectlExpose, maxArgs: IM_HANDLER, flags: [PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")] },
     delete: { run: kubectlDelete, maxArgs: OFFENE_LISTE, flags: [FILE] },
     apply: { run: kubectlApply, maxArgs: 0, flags: [FILE] },
