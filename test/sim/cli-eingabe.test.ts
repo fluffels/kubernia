@@ -122,6 +122,17 @@ describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996
       expect(run(h, "--real")).toContain("Hilfe zeigt der Simulator mit 'help x'.");
     }
   });
+  test("ein echter Scan-Fehler (unbekanntes Flag, fehlender Wert) geht dem Hilfe-Flag vor, wie bei pflag", () => {
+    for (const h of ["-h", "--help"]) {
+      expect(run("--zzz", h, ...ok)).toContain("error: unknown flag: --zzz");
+      expect(run(h, "--zzz")).toContain("error: unknown flag: --zzz");
+    }
+    expect(run("--help", "--aa")).toContain("flag needs an argument: --aa");
+  });
+  test("mehrere Hilfe-Flags: das erste wird genannt", () => {
+    expect(run("-h", "--help", ...ok)).toContain("das Flag '-h'");
+    expect(run("--help", "-h", ...ok)).toContain("das Flag '--help'");
+  });
   test("Vorrang: ein unbekanntes Flag vor oder hinter einem echten meldet „unknown flag“", () => {
     expect(run("--real", "--zzz", ...ok)).toContain("error: unknown flag: --zzz");
     expect(run("--zzz", "--real", ...ok)).toContain("error: unknown flag: --zzz");
