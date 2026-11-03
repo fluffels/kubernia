@@ -98,11 +98,13 @@ describe("Flag-Tabellen aller Familien: requiredFlags und unknownFlags sind kons
       "a: realFlags '--aa' ist zugleich ein Flag des Ziels",
     ]);
   });
-  test("Negativfall: ein Flag der Familien-Liste (global) in der Liste eines Ziels wird gemeldet, auch zwei Ebenen tief", () => {
-    const tief: D = { cmd: "x mid", table: { a: { run: () => "", maxArgs: OFFENE_LISTE, realFlags: ["--fam", "--eigen"] } } };
+  test("Negativfall: ein Flag der Familien-Liste (global) in der Liste eines Ziels wird gemeldet, auch zwei Ebenen tief und aus einer mittleren Ebene", () => {
+    const tief: D = { cmd: "x mid", realFlags: ["--mitte"], table: { a: { run: () => "", maxArgs: OFFENE_LISTE, flags: [flag(true, "--fam")], realFlags: ["--fam", "--mitte", "--eigen"] } } };
     const kaputt: D = { cmd: "x", realFlags: ["--fam"], table: { mid: { group: tief }, b: { run: () => "", maxArgs: OFFENE_LISTE, realFlags: ["--fam"] } } };
     expect(blaetter(kaputt).flatMap(verstoesse)).toEqual([
+      "mid a: realFlags '--fam' ist zugleich ein Flag des Ziels",
       "mid a: realFlags '--fam' steht schon in der Familien-Liste",
+      "mid a: realFlags '--mitte' steht schon in der Familien-Liste",
       "b: realFlags '--fam' steht schon in der Familien-Liste",
     ]);
   });
