@@ -83,7 +83,7 @@ describe("cliargs: unknownFlags und requiredFlags (#1678)", () => {
   const spec: ArgSpec = {
     cmd: "x make", maxArgs: OFFENE_LISTE,
     flags: [flag(true, "--aa", "-a"), flag(true, "--bb"), checkedFlag((_h, v) => (v === "bad" ? "WERT-FEHLER" : null), "--cc")],
-    unknownFlags: ["--nope"], requiredFlags: ["--aa", "--bb"], hints: { "--nope": "Nimm --aa.", "--zzz": "Tipp zzz." },
+    unknownFlags: ["--nope"], requiredFlags: ["--bb", "--aa"], hints: { "--nope": "Nimm --aa.", "--zzz": "Tipp zzz." },
   };
   const run = (...t: string[]) => checkFlags(host, spec, ["x", "make", ...t], 2);
 
