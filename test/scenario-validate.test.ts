@@ -169,6 +169,12 @@ test("reviveScenario: applyEffects.gateway: tlsSecret als Zahl oder HTTP mit tls
   assert.throws(() => reviveScenario(effGw([{ name: "h", port: 80, protocol: "HTTP", tlsSecret: "s" }]), "x"), effPfad);
 });
 
+test("reviveScenario: applyEffects.gateway: Gateway kein Objekt oder listeners kein Array wird mit Pfad abgelehnt", () => {
+  assert.throws(() => reviveScenario({ applyEffects: { "gw.yaml": { gateway: "tor" } } }, "x"), /applyEffects\["gw\.yaml"\]\.gateway.*Objekt erwartet/);
+  assert.throws(() => reviveScenario({ applyEffects: { "gw.yaml": { gateway: null } } }, "x"), /applyEffects\["gw\.yaml"\]\.gateway.*Objekt erwartet/);
+  assert.throws(() => reviveScenario(effGw("kein-array"), "x"), /applyEffects\["gw\.yaml"\]\.gateway\.listeners.*Array erwartet/);
+});
+
 test("reviveScenario: applyEffects.gateway: gültige Listener passen unverändert durch", () => {
   const raw = effGw([
     { name: "https", port: 443, protocol: "HTTPS", tlsSecret: "s" },

@@ -86,6 +86,15 @@ describe("Gateway-Accepted bei ungültigen Listenern (ListenersNotValid)", () =>
     expect(st.conditions[1]).toMatchObject({ type: "Programmed", status: "True" });
     expect(st.listeners).toEqual([]);
   });
+  test("Grenze gateway-programmed: Programmed bleibt True, obwohl alle Listener ungültig sind", () => {
+    const st = gatewayStatus(tor({ listeners: [https({ name: "a" }), https({ name: "b" })] }), env());
+    expect(st.conditions.find(c => c.type === "Accepted")).toMatchObject({ status: "False" });
+    expect(st.conditions.find(c => c.type === "Programmed")).toMatchObject({ status: "True" });
+    for (const l of st.listeners ?? []) {
+      expect(l.conditions.find(c => c.type === "Programmed")).toMatchObject({ status: "False", reason: "Invalid" });
+    }
+    expect(st.listeners).toHaveLength(2);
+  });
   test("alle gültig: Accepted wie bisher", () => {
     expect(accepted(tor())).toMatchObject({ status: "True", reason: "Accepted" });
   });
