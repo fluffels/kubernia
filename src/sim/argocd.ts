@@ -51,8 +51,8 @@ export function cloneChildSpec(c: ArgoChildSpec): ArgoChildSpec {
   return {
     name: c.name,
     ...(c.path ? { path: c.path } : {}),
-    deployment: Object.assign({}, c.deployment),
-    ...(c.service ? { service: Object.assign({}, c.service) } : {}),
+    deployment: structuredClone(c.deployment),
+    ...(c.service ? { service: structuredClone(c.service) } : {}),
   };
 }
 
@@ -63,8 +63,8 @@ export function cloneArgoApp(a: ArgoApp): ArgoApp {
     autoSync: !!a.autoSync, selfHeal: !!a.selfHeal,
     created: a.created || 0,
     ...(a.desired ? { desired: {
-      deployment: Object.assign({}, a.desired.deployment),
-      ...(a.desired.service ? { service: Object.assign({}, a.desired.service) } : {}),
+      deployment: structuredClone(a.desired.deployment),
+      ...(a.desired.service ? { service: structuredClone(a.desired.service) } : {}),
     } } : {}),
     ...(a.childApps ? { childApps: a.childApps.map(c => cloneChildSpec(c)) } : {}),
   };
@@ -193,8 +193,8 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
           autoSync: true,            // von der Flotte verwaltet → läuft mit
           selfHeal: app.selfHeal,    // erbt die Self-Heal-Politik der Wurzel
           desired: {
-            deployment: Object.assign({}, c.deployment),
-            ...(c.service ? { service: Object.assign({}, c.service) } : {}),
+            deployment: structuredClone(c.deployment),
+            ...(c.service ? { service: structuredClone(c.service) } : {}),
           },
           created: host.clock,
         };
