@@ -39,7 +39,8 @@ export const REPLICAS_TIP = "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--
 export const REPLICAS_FLAG = intFlag(REPLICAS_TIP, "--replicas");
 export const PORT_FLAG = checkedFlag(checkPort, "--port");
 export const LITERAL_FLAG = checkedFlag(checkLiteral, "--from-literal");
-export const SERVICEACCOUNT_FLAG = checkedFlag(checkServiceAccount, "--serviceaccount");
+/** Ohne Wertprüfer: kubectl prüft das Format erst nach Validate (`parseServiceAccount`, vom Handler gerufen). */
+export const SERVICEACCOUNT_FLAG = flag(true, "--serviceaccount");
 export const FROM_FLAG = checkedFlag(checkFromRef, "--from");
 export const LIMITS_FLAG = checkedFlag(checkResourceList, "--limits");
 export const REQUESTS_FLAG = checkedFlag(checkResourceList, "--requests");
@@ -55,6 +56,7 @@ export const FLAG_HINTS: Readonly<Record<string, string>> = {
   "--show-labels": "Labels zeigt der Simulator nicht an.",
   "--sort-by": "Sortieren kann der Simulator nicht – die Liste kommt in fester Reihenfolge.",
   "--revision": "Einzelne Revisionen zeigt der Simulator nicht; welches Image ein ReplicaSet hat, zeigt 'kubectl get rs -o wide'.",
+  "--user": "'--user' ist in kubectl der kubeconfig-Benutzer; Subjekte bindet 'create rolebinding … --user=<name>'.",
   "--dry-run": "Trockenläufe gibt es nicht; der Befehl legt sonst wirklich etwas an, darum lehnt der Simulator ihn ab.",
 };
 
@@ -64,6 +66,9 @@ export function replicasArg(c: Call): number | null {
   const v = c.value("--replicas");
   return v === null ? null : parseInt(v, 10);
 }
+
+/** Der Builder-Fehler ohne jede Ressource und ohne `-f` (`kubectl set image nginx=nginx:2`), wörtlich wie `NoResourceError` in `builder.go`. */
+export const MISSING_RESOURCE_ERROR = "error: You must provide one or more resources by argument or filename.\nExample resource specifications include:\n   '-f rsrc.yaml'\n   '--filename=rsrc.json'\n   '<resource> <name>'\n   '<resource>'";
 
 /** Die zwei Fehlertexte der Slash-Form `typ/name` – wörtlich wie `splitResourceTypeName` in kubectl. */
 const SLASH_MULTI_ERROR = "error: arguments in resource/name form may not have more than one slash";
@@ -103,10 +108,12 @@ function checkLiteral(host: ErrOnly, v: string): string | null {
   return v.indexOf("=") > 0 ? null : host._err("error: invalid literal source " + v + ", expected key=value", "Muster: '--from-literal=schluessel=wert'.");
 }
 
-/** `--serviceaccount=<namespace>:<name>`: genau zwei nicht-leere Teile. */
-function checkServiceAccount(host: ErrOnly, v: string): string | null {
+/** `--serviceaccount=<namespace>:<name>`: genau zwei nicht-leere Teile, sonst der Fehlertext. kubectl prüft das erst in Run, nach `Validate`
+ *  (create_rolebinding.go), darum ruft es der Handler und nicht die Flag-Tabelle. */
+export function parseServiceAccount(host: ErrOnly, v: string): { namespace: string; name: string } | string {
   const parts = v.split(":");
-  return parts.length === 2 && parts[0] !== "" && parts[1] !== "" ? null : host._err("error: serviceaccount must be <namespace>:<name>", "Muster: '--serviceaccount=default:deploy-bot'.");
+  if (parts.length === 2 && parts[0] !== "" && parts[1] !== "") return { namespace: parts[0], name: parts[1] };
+  return host._err("error: serviceaccount must be <namespace>:<name>", "Muster: '--serviceaccount=default:deploy-bot'.");
 }
 
 /** Die Dimensionen von `set resources`, die die Sim kennt: Mengen-Parser und Beispiel-Tipp je Schlüssel. */

@@ -880,7 +880,7 @@ describe("#1487: Arität mit echten kubectl-Texten", () => {
       expect(lauf1487(cmd, s).out, cmd).toContain(NICHT_SIMULIERT);
     }
     expect(s.deployments.some(d => d.name === "w")).toBe(false);
-    expect(lauf1487("kubectl create deployment w --image=", s).out).toContain('required flag(s) "image" not set');
+    expect(lauf1487("kubectl create deployment w --image=", s).out).toContain('spec.template.spec.containers: Required value');
   });
   test("create ohne Typ / unbekannter Typ / secret ohne Art bleiben nicht simuliert", () => {
     expect(lauf1487("kubectl create").out).toContain("kubectl create: Unterbefehl fehlt.");

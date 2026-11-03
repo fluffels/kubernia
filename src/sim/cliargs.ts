@@ -250,7 +250,8 @@ function scanErrorText(host: ErrHost, spec: ArgSpec, e: ScanError): string {
 function missingRequired(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
   const missing = (spec.requiredFlags ?? []).filter(n => !w.hits.some(h => h.spec.names.includes(n))).map(n => n.replace(/^-+/, "")).sort();
   if (missing.length === 0) return null;
-  return host._err("error: required flag(s) " + missing.map(n => '"' + n + '"').join(", ") + " not set", "Häng '--" + missing[0] + "=<wert>' an.");
+  const strich = styleOf(spec) === "goflag" ? "-" : "--";
+  return host._err("error: required flag(s) " + missing.map(n => '"' + n + '"').join(", ") + " not set", "Häng '" + strich + missing[0] + "=<wert>' an.");
 }
 
 /** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool oder Ganzzahl), dann ein fehlendes Pflicht-Flag, dann der erste
@@ -385,7 +386,8 @@ export interface Dispatch<E extends SubEntry<unknown>> {
  *  Flags der Ebene (`d.flags`) zuerst, dann die des Eintrags; Stil und Hinweise erbt der Eintrag von der Ebene (je Schlüssel,
  *  der Eintrag gewinnt). */
 function specOfSub(cmd: string, e: SubEntry<unknown>, d: Dispatch<SubEntry<unknown>>): ArgSpec {
-  return { cmd, flags: mergeFlags(cmd, d.flags, e.flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints), realFlags: e.realFlags && [...(d.realFlags ?? []), ...e.realFlags], requiredFlags: e.requiredFlags, stopAtPositional: e.stopAtPositional, maxArgs: e.maxArgs };
+  const { run: _run, flags, ...eigen } = e;
+  return { ...eigen, cmd, flags: mergeFlags(cmd, d.flags, flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints), realFlags: e.realFlags && [...(d.realFlags ?? []), ...e.realFlags] };
 }
 
 /** Persistente Flags (außen) und Flags des Eintrags (innen) zusammen. Dasselbe Objekt zählt einmal; ein gleicher Flag-Name (auch nur
