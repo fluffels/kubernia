@@ -89,8 +89,9 @@ describe("(b) set image und set env: Ressourcen vor den Paaren", () => {
   test("set image: ohne Paar und ohne Ressource die Validate-Texte von kubectl", () => {
     const sim = web();
     expect(lauf("kubectl set image deployment/web", sim).out).toContain("error: at least one image update is required");
-    expect(lauf("kubectl set image nginx=nginx:2", sim).out).toContain("error: one or more resources must be specified as <resource> <name> or <resource>/<name>");
-    expect(lauf("kubectl set image", sim).out).toContain("error: [one or more resources must be specified as <resource> <name> or <resource>/<name>, at least one image update is required]");
+    // Der Builder (Complete) läuft vor Validate: ohne Ressource meldet kubectl den Builder-Text, nicht die Validate-Liste (#1989).
+    expect(lauf("kubectl set image nginx=nginx:2", sim).out).toContain("error: You must provide one or more resources by argument or filename.");
+    expect(lauf("kubectl set image", sim).out).toContain("error: You must provide one or more resources by argument or filename.");
   });
   test("set image: Art ohne Namen meldet den Builder-Text von kubectl, nie 'null' (#1734)", () => {
     const sim = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });

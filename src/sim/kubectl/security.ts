@@ -82,7 +82,7 @@ function authCanI(host: KubectlHost, c: Call): string {
 /** `kubectl auth <ziel>` (#1491): `can-i` mit `--as`; `c.args` sind die Argumente hinter der Aktion (`get pods`). */
 export const KUBECTL_AUTH: Dispatch<KubectlEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl auth",
-  table: { "can-i": { run: authCanI, maxArgs: IM_HANDLER, flags: [flag(true, "--as")] } },
+  table: { "can-i": { run: authCanI, maxArgs: IM_HANDLER, flags: [flag(true, "--as")], unknownFlags: ["--image"] } },
   real: ["reconcile", "whoami"],
   unknown: UNKNOWN_TARGET,
 };

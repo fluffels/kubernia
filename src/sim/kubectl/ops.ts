@@ -12,7 +12,7 @@ import { maxRestartedAt, rolloutRevisions, undoTarget } from "../replicasets";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
-import { FROM_FLAG, isEnvArg, isImagePairArg, LIMITS_FLAG, notSimulated, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, splitResourcesAndPairs, UNKNOWN_TARGET, type ResourceList } from "./args";
+import { FROM_FLAG, isEnvArg, isImagePairArg, LIMITS_FLAG, MISSING_RESOURCE_ERROR, notSimulated, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, splitResourcesAndPairs, UNKNOWN_TARGET, type ResourceList } from "./args";
 import { readTargets, targetOutcome } from "./targets";
 import { foreignNamespace, type KubectlEntry } from "./namespace";
 import { noResourcesIn } from "./inspect";
@@ -98,9 +98,9 @@ export function kubectlExpose(host: KubectlHost, c: Call) {
 export const KUBECTL_SET: Dispatch<KubectlEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl set",
   table: {
-    image: { run: (host, c) => kubectlSetImage(host, c), maxArgs: IM_HANDLER },
-    env: { run: (host, c) => kubectlSetEnv(host, c), maxArgs: IM_HANDLER, flags: [FROM_FLAG] },
-    resources: { run: (host, c) => kubectlSetResources(host, c), maxArgs: IM_HANDLER, flags: [LIMITS_FLAG, REQUESTS_FLAG] },
+    image: { run: (host, c) => kubectlSetImage(host, c), maxArgs: IM_HANDLER, unknownFlags: ["--limits"] },
+    env: { run: (host, c) => kubectlSetEnv(host, c), maxArgs: IM_HANDLER, flags: [FROM_FLAG], unknownFlags: ["--limits"] },
+    resources: { run: (host, c) => kubectlSetResources(host, c), maxArgs: IM_HANDLER, flags: [LIMITS_FLAG, REQUESTS_FLAG], unknownFlags: ["--from"] },
   },
   real: ["selector", "serviceaccount", "sa", "subject"],
   unknown: UNKNOWN_TARGET,
@@ -139,14 +139,12 @@ function kubectlSetEnv(host: KubectlHost, c: Call) {
 
 const SET_IMAGE_MUSTER = "Muster: kubectl set image deployment/<name> <container>=<image>";
 
-/** Die Validate-Fehler von `set image` (`SetImageOptions.Validate`): ein Fehler steht allein, mehrere als `[a, b]`. */
-function setImageValidate(host: KubectlHost, resources: number, pairs: readonly string[]): string | null {
-  const errs: string[] = [];
-  if (resources < 1) errs.push("one or more resources must be specified as <resource> <name> or <resource>/<name>");
-  if (pairs.length < 1) errs.push("at least one image update is required");
-  else if (pairs.length > 1 && pairs.some(p => p.startsWith("*="))) errs.push("all containers are already specified by *, but saw more than one container_name=container_image pairs");
-  if (errs.length === 0) return null;
-  return host._err("error: " + (errs.length === 1 ? errs[0] : "[" + errs.join(", ") + "]"), SET_IMAGE_MUSTER);
+/** Die Validate-Fehler von `set image` (`SetImageOptions.Validate`), die nach dem Builder noch möglich sind (die Ressourcen sind dann
+ *  aufgelöst): kein Paar, oder `*=` neben weiteren Paaren. */
+function setImageValidate(host: KubectlHost, pairs: readonly string[]): string | null {
+  if (pairs.length < 1) return host._err("error: at least one image update is required", SET_IMAGE_MUSTER);
+  if (pairs.length > 1 && pairs.some(p => p.startsWith("*="))) return host._err("error: all containers are already specified by *, but saw more than one container_name=container_image pairs", SET_IMAGE_MUSTER);
+  return null;
 }
 
 /** Das Deployment, das `set image` ändert. Eine Art ohne Namen (`name` ist `null`) meldet wie kubectl den Builder-Fehler
@@ -165,8 +163,8 @@ function setImageContainerCheck(host: KubectlHost, dep: Deployment, container: s
   return host._err('error: unable to find container named "' + container + '"', "Der Container dieses Deployments heißt '" + containerNameOf(dep) + "' (steht in 'kubectl describe deployment " + dep.name + "').");
 }
 
-/** kubectl set image deployment/<name> <container>=<image> – wie kubectl: erst die Ressourcen, dann die Paare. */
-
+/** kubectl set image deployment/<name> <container>=<image> – Reihenfolge wie `set_image.go`: `Complete` (Paare zerlegen, der Builder
+ *  löst die Ressourcen auf: keine Ressource, Art ohne Namen, NotFound), dann `Validate` (Paare), dann `Run`. */
 function kubectlSetImage(host: KubectlHost, c: Call) {
   const rest = c.args;
   const split = splitResourcesAndPairs(rest, isImagePairArg);
@@ -175,11 +173,12 @@ function kubectlSetImage(host: KubectlHost, c: Call) {
   if (invalid.length > 0) return host._err("error: invalid image format: " + invalid.join(", "), "Muster: <container>=<image>, z.B. 'nginx=nginx:1.28'.");
   const one = singleDeployment(host, "set", split.resources);
   if ("error" in one) return one.error;
-  const invalidSet = setImageValidate(host, split.resources.length, split.pairs);
-  if (invalidSet) return invalidSet;
-  if (split.pairs.length > 1) return notSimulated(host, "mehrere Container in 'kubectl set image'.", ["kubectl set image deployment/<name> <container>=<image>"]);
+  if (split.resources.length === 0) return host._err(MISSING_RESOURCE_ERROR, SET_IMAGE_MUSTER);
   const dep = setImageTarget(host, one.name);
   if (typeof dep === "string") return dep;
+  const invalidSet = setImageValidate(host, split.pairs);
+  if (invalidSet) return invalidSet;
+  if (split.pairs.length > 1) return notSimulated(host, "mehrere Container in 'kubectl set image'.", ["kubectl set image deployment/<name> <container>=<image>"]);
   const depName = dep.name;
   const kv = split.pairs[0];
   const container = kv.slice(0, kv.indexOf("="));
@@ -253,8 +252,8 @@ function kubectlSetResources(host: KubectlHost, c: Call) {
 export const KUBECTL_ROLLOUT: Dispatch<KubectlEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl rollout",
   table: {
-    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE, namespace: "liest" },
-    history: { run: (host, c) => kubectlRolloutHistory(host, c), maxArgs: IM_HANDLER },
+    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE, namespace: "liest", unknownFlags: ["--to-revision"] },
+    history: { run: (host, c) => kubectlRolloutHistory(host, c), maxArgs: IM_HANDLER, unknownFlags: ["--to-revision"] },
     undo: { run: (host, c) => kubectlRolloutUndo(host, c), maxArgs: IM_HANDLER, flags: [REVISION_FLAG] },
   },
   real: ["pause", "resume", "status"],
