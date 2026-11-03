@@ -109,9 +109,9 @@ describe("Flag-Tabellen aller Familien: requiredFlags und unknownFlags sind kons
 });
 
 describe("(b) Ratchet: die kubectl-Ziele, die noch offen sind", () => {
-  // Folge-Ticket: #1998 (realFlags für diese Ziele; danach ist die Liste leer und der Test verlangt lauter geschlossene Ziele).
-  // Die Liste darf nur schrumpfen: ein Ziel, das geschlossen ist, steht nicht mehr hier, ein offenes, das hier fehlt, macht den Test rot.
-  const OFFENE_ZIELE = ["apply", "delete", "describe", "expose", "get", "label", "logs", "scale", "top"];
+  // Seit der Abnahme von #1996 sind alle kubectl-Ziele geschlossen. Ein neues Ziel ohne `realFlags` macht den Test rot; eine bewusste
+  // Ausnahme gehört mit offenem Ticket hierher (die Liste darf nur schrumpfen).
+  const OFFENE_ZIELE: string[] = [];
   test("offen ist genau das, was die Liste nennt", () => {
     const offen = blaetter(KUBECTL).filter(b => b.real === undefined).map(b => b.ziel.join(" ")).sort();
     expect(offen).toEqual(OFFENE_ZIELE);
@@ -155,6 +155,24 @@ const ORAKEL: Record<string, string[]> = {
   "rollout history": ["--revision", ...SELEKTOR, ...DATEI, ...PRINT],
   // rollout/rollout_undo.go
   "rollout undo": ["--to-revision", ...DATEI, "--dry-run", ...SELEKTOR, ...PRINT],
+  // get/get.go, get_flags.go (PrintFlags samt Human-Readable-Flags, --no-headers), humanreadable_flags.go
+  "get": [...PRINT, "--show-labels", "--sort-by", "-L", "--label-columns", "--show-kind", "--no-headers", "--raw", "-w", "--watch", "--watch-only", "--output-watch-events", "--ignore-not-found", "--field-selector", "-A", "--all-namespaces", ...DATEI, "--chunk-size", ...SELEKTOR, "--subresource", "--server-print"],
+  // describe/describe.go (kein Drucker)
+  "describe": [...DATEI, ...SELEKTOR, "-A", "--all-namespaces", "--show-events", "--chunk-size"],
+  // scale/scale.go
+  "scale": [...PRINT, "--record", "--all", "--resource-version", "--current-replicas", "--replicas", "--timeout", ...DATEI, "--dry-run", ...SELEKTOR],
+  // expose/expose.go (-l ist hier --labels)
+  "expose": [...PRINT, "--record", "--protocol", "--port", "--type", "--load-balancer-ip", "--selector", "-l", "--labels", "--target-port", "--external-ip", "--name", "--session-affinity", "--cluster-ip", "--field-manager", "--dry-run", "--save-config", ...DATEI],
+  // delete/delete.go, delete_flags.go (NewDeleteCommandFlags)
+  "delete": [...DATEI, ...SELEKTOR, "--field-selector", "--all", "-A", "--all-namespaces", "--force", "--cascade", "--now", "--grace-period", "--timeout", "--ignore-not-found", "--wait", "-o", "--output", "--raw", "-i", "--interactive", "--dry-run"],
+  // apply/apply.go, delete_flags.go (NewDeleteFlags: Datei, cascade, grace-period, force, timeout, wait); --applyset nur mit Feature-Gate
+  "apply": [...DATEI, "--cascade", "--grace-period", "--force", "--timeout", "--wait", "--record", ...PRINT, "--validate", "--dry-run", "--server-side", "--force-conflicts", "--field-manager", ...SELEKTOR, "--prune-allowlist", "--all", "--prune", "--overwrite", "--openapi-patch", "--subresource"],
+  // logs/logs.go
+  "logs": ["--all-pods", "--all-containers", "-f", "--follow", "--timestamps", "--limit-bytes", "-p", "--previous", "--tail", "--ignore-errors", "--since-time", "--since", "-c", "--container", "--insecure-skip-tls-verify-backend", "--pod-running-timeout", ...SELEKTOR, "--max-log-requests", "--prefix"],
+  // top/top_pod.go und top/top_node.go: die Sim hat EIN Ziel für beide, also die Vereinigung
+  "top": [...SELEKTOR, "--field-selector", "--sort-by", "--containers", "-A", "--all-namespaces", "--no-headers", "--use-protocol-buffers", "--sum", "--show-swap", "--show-capacity"],
+  // label/label.go
+  "label": [...PRINT, "--record", "--overwrite", "--list", "--local", "--field-selector", "--all", "-A", "--all-namespaces", "--resource-version", ...DATEI, "--dry-run", "--field-manager", ...SELEKTOR],
   // auth/cani.go
   "auth can-i": ["-A", "--all-namespaces", "-q", "--quiet", "--subresource", "--list", "--no-headers"],
 };

@@ -24,7 +24,7 @@ import { kubectlDescribe } from "./kubectl/describe";
 import { kubectlGet } from "./kubectl/get";
 import { FILE, FLAG_HINTS, NS, PORT_FLAG, REAL_KUBECTL_COMMANDS, REPLICAS_FLAG } from "./kubectl/args";
 import { OUTPUT_FLAG } from "./kubectl/output";
-import { KUBECTL_OPTIONS } from "./kubectl/real-flags";
+import { KUBECTL_OPTIONS, REAL_APPLY, REAL_DELETE, REAL_DESCRIBE, REAL_EXPOSE, REAL_GET, REAL_LABEL, REAL_LOGS, REAL_SCALE, REAL_TOP } from "./kubectl/real-flags";
 import { KUBECTL_CREATE, kubectlApply, kubectlDelete } from "./kubectl/lifecycle";
 import { kubectlScale, kubectlExpose, KUBECTL_SET, KUBECTL_ROLLOUT } from "./kubectl/ops";
 import { KUBECTL_AUTH, kubectlLabel } from "./kubectl/security";
@@ -50,19 +50,19 @@ export const KUBECTL: Dispatch<KubectlEntry<SubCommand>> = {
   flags: [NS],
   realFlags: KUBECTL_OPTIONS,
   table: {
-    get: { run: kubectlGet, maxArgs: OFFENE_LISTE, namespace: "liest", flags: [flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG] },
-    describe: { run: kubectlDescribe, maxArgs: OFFENE_LISTE },
+    get: { run: kubectlGet, maxArgs: OFFENE_LISTE, namespace: "liest", flags: [flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG], realFlags: REAL_GET },
+    describe: { run: kubectlDescribe, maxArgs: OFFENE_LISTE, realFlags: REAL_DESCRIBE },
     create: { group: KUBECTL_CREATE },
-    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [REPLICAS_FLAG] },
-    expose: { run: kubectlExpose, maxArgs: IM_HANDLER, flags: [PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")] },
-    delete: { run: kubectlDelete, maxArgs: OFFENE_LISTE, flags: [FILE] },
-    apply: { run: kubectlApply, maxArgs: 0, flags: [FILE] },
-    logs: { run: kubectlLogs, maxArgs: 1, flags: [flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] },
-    top: { run: kubectlTop, maxArgs: 2 },
+    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [REPLICAS_FLAG], realFlags: REAL_SCALE },
+    expose: { run: kubectlExpose, maxArgs: IM_HANDLER, flags: [PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")], realFlags: REAL_EXPOSE },
+    delete: { run: kubectlDelete, maxArgs: OFFENE_LISTE, flags: [FILE], realFlags: REAL_DELETE },
+    apply: { run: kubectlApply, maxArgs: 0, flags: [FILE], realFlags: REAL_APPLY },
+    logs: { run: kubectlLogs, maxArgs: 1, flags: [flag(false, "-f", "--follow"), flag(false, "-p", "--previous")], realFlags: REAL_LOGS },
+    top: { run: kubectlTop, maxArgs: 2, realFlags: REAL_TOP },
     set: { group: KUBECTL_SET },
     rollout: { group: KUBECTL_ROLLOUT },
     auth: { group: KUBECTL_AUTH },
-    label: { run: kubectlLabel, maxArgs: IM_HANDLER, namespace: "cluster", flags: [flag(false, "--overwrite")] },
+    label: { run: kubectlLabel, maxArgs: IM_HANDLER, namespace: "cluster", flags: [flag(false, "--overwrite")], realFlags: REAL_LABEL },
   },
   real: REAL_KUBECTL_COMMANDS,
   hints: FLAG_HINTS,

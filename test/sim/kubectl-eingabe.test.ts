@@ -107,7 +107,7 @@ describe("(a) nicht simulierte Flags werden abgelehnt", () => {
   test.each([
     ["get pods -l app=web", "-l"], ["get pods --selector=app=web", "--selector"], ["get pods -w", "-w"],
     ["get pods --watch", "--watch"], ["get pods --show-labels", "--show-labels"], ["get pods --sort-by=.metadata.name", "--sort-by"],
-    ["describe pod x -o yaml", "-o"], ["logs web-x -c app", "-c"], ["delete pod web-x --force", "--force"], ["describe pod x --show-events", "--show-events"],
+    ["logs web-x -c app", "-c"], ["delete pod web-x --force", "--force"], ["describe pod x --show-events", "--show-events"],
     ["create deployment x --image=nginx --dry-run=client", "--dry-run"], ["scale deployment web --replicas=2 --timeout=5s", "--timeout"],
   ])("kubectl %s → Nicht simuliert (%s)", (cmd, flag) => {
     const r = lauf("kubectl " + cmd);
@@ -485,6 +485,25 @@ describe("create deployment --replicas", () => {
   test("der Wert eines echten Wert-Flags mit Leerzeichen bleibt folgenlos: „Nicht simuliert“ vor tooMany (#1996)", () => {
     expect(freshSim().exec("kubectl create secret tls t --kubeconfig cfg").output).toContain("Nicht simuliert: das Flag '--kubeconfig' bei 'kubectl create secret tls'");
   });
+  test("Top-Level-Ziele sind geschlossen (Abnahme #1996): ein fremdes Flag oder ein Tippfehler meldet unknown flag, ein echtes bleibt „Nicht simuliert“", () => {
+    for (const [cmd, erwartet] of [
+      ["kubectl scale deployment web --replicas=2 --image=nginx", "error: unknown flag: --image"],
+      ["kubectl get pods --replicas=2", "error: unknown flag: --replicas"],
+      ["kubectl get pods --kubeconfg=/tmp/k", "error: unknown flag: --kubeconfg"],
+      ["kubectl get pods --image=nginx", "error: unknown flag: --image"],
+      ["kubectl describe pod x -o yaml", "error: unknown shorthand flag: 'o' in -o"],
+      ["kubectl delete pod x --verb=get", "error: unknown flag: --verb"],
+      ["kubectl logs web-x --image=nginx", "error: unknown flag: --image"],
+      ["kubectl top pods --image=nginx", "error: unknown flag: --image"],
+    ] as const) {
+      const r = freshSim().exec(cmd);
+      expect(r.error, cmd).toBe(true);
+      expect(r.output?.split("\n")[0], cmd).toBe(erwartet);
+    }
+    for (const cmd of ["kubectl get pods --kubeconfig=/tmp/k", "kubectl get pods --show-labels", "kubectl scale deployment web --replicas=2 --timeout=5s", "kubectl top pods --sort-by=cpu"]) {
+      expect(freshSim().exec(cmd).output, cmd).toContain("Nicht simuliert: das Flag");
+    }
+  });
   test("scale: das Label ist \"--replicas\" (ohne Kurzform), der Fehler kommt vor „So nicht ganz“ (#1996)", () => {
     const r = freshSim().exec("kubectl scale --replicas=abc");
     expect(r.error).toBe(true);
@@ -543,7 +562,7 @@ describe("args: parseKubectlCall (Positionsargumente, Flag-Werte, Prüfung)", ()
   });
   test("Prüfung: bekannt → Call, unbekannt → Text, Wert fehlt → Text", () => {
     expect(typeof parseKubectlCall(host, ["kubectl", "get", "pods", "-A"])).toBe("object");
-    expect(parseKubectlCall(host, ["kubectl", "get", "pods", "-x"])).toContain(NICHT_SIMULIERT);
+    expect(parseKubectlCall(host, ["kubectl", "get", "pods", "-x"])).toContain("error: unknown shorthand flag: 'x' in -x");
     expect(parseKubectlCall(host, ["kubectl", "get", "-n"])).toContain("flag needs an argument");
     expect(typeof parseKubectlCall(host, ["kubectl", "get", "-n", "x", "pods"])).toBe("object");
   });

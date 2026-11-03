@@ -4,7 +4,7 @@
  * `error: unknown flag`. Die Liste nennt NICHT die Flags, die die Sim auswertet (`flags` des Ziels) und enthält
  * die Familien-Flags nur einmal (`KUBECTL_OPTIONS`, gelten an jedem Ziel).
  *
- * Quelle: kubernetes/kubernetes, Tag v1.37.1 (staging/src/k8s.io): `kubectl/pkg/cmd/{create,set,rollout,auth}/*.go` (die
+ * Quelle: kubernetes/kubernetes, Tag v1.37.1 (staging/src/k8s.io): `kubectl/pkg/cmd/{create,set,rollout,auth,get,describe,scale,expose,delete,apply,logs,top,label}/*.go` (die
  * `cmd.Flags()`-Aufrufe je Befehl), `kubectl/pkg/cmd/util/helpers.go` (AddDryRunFlag, AddValidateFlags,
  * AddFieldManagerFlagVar, AddApplyAnnotationFlags, AddFilenameOptionFlags, AddLabelSelectorFlagVar),
  * `cli-runtime/pkg/genericclioptions/{print_flags,json_yaml_flags,template_flags,record_flags}.go` und für die globalen
@@ -24,10 +24,14 @@ export const KUBECTL_OPTIONS: readonly string[] = [
   "--tls-server-name", "--token", "--user", "--username", "-v", "--v", "--vmodule", "--warnings-as-errors",
 ];
 
+/** Der Drucker ohne Ausgabeformat (JSON/YAML, go-template). */
+const PRINT_REST = ["--show-managed-fields", "--template", "--allow-missing-template-keys"];
 /** Der Drucker (`PrintFlags.AddFlags`: Ausgabeformat, JSON/YAML, go-template). */
-const PRINT = ["-o", "--output", "--show-managed-fields", "--template", "--allow-missing-template-keys"];
+const PRINT = ["-o", "--output", ...PRINT_REST];
+/** `AddFilenameOptionFlags` ohne `-f/--filename` (das werten delete und apply aus). */
+const FILENAME_REST = ["-R", "--recursive", "-k", "--kustomize"];
 /** `AddFilenameOptionFlags`. */
-const FILENAME = ["-f", "--filename", "-R", "--recursive", "-k", "--kustomize"];
+const FILENAME = ["-f", "--filename", ...FILENAME_REST];
 /** `AddLabelSelectorFlagVar`. */
 const SELECTOR = ["-l", "--selector"];
 /** Der Rumpf der `create`-Befehle: Drucker, `--save-config`, `--validate`, `--dry-run`, `--field-manager`. */
@@ -54,3 +58,17 @@ export const REAL_ROLLOUT_HISTORY = [...PRINT, ...FILENAME, ...SELECTOR, "--revi
 export const REAL_ROLLOUT_UNDO = [...PRINT, ...FILENAME, ...SELECTOR, "--dry-run"];
 
 export const REAL_AUTH_CANI = ["-A", "--all-namespaces", "-q", "--quiet", "--subresource", "--list", "--no-headers"];
+
+/* Die Top-Level-Ziele (ohne die Flags, die die Sim auswertet: get -A/-o, scale --replicas, expose --port/--target-port/--type,
+ * delete und apply -f, logs -f/-p, label --overwrite). `top` ist EIN Ziel der Sim für `top pods` und `top nodes`: die Vereinigung
+ * beider Befehle (top_pod.go, top_node.go); die Sim trennt pods und nodes bei den Flags nicht. `--applyset` (apply) gibt es nur
+ * mit dem Feature-Gate KUBECTL_APPLYSET und steht deshalb nicht hier. */
+export const REAL_GET = [...PRINT_REST, "--show-labels", "--sort-by", "-L", "--label-columns", "--show-kind", "--no-headers", "--raw", "-w", "--watch", "--watch-only", "--output-watch-events", "--ignore-not-found", "--field-selector", ...FILENAME, "--chunk-size", ...SELECTOR, "--subresource", "--server-print"];
+export const REAL_DESCRIBE = [...FILENAME, ...SELECTOR, "-A", "--all-namespaces", "--show-events", "--chunk-size"];
+export const REAL_SCALE = [...PRINT, "--record", "--all", "--resource-version", "--current-replicas", "--timeout", ...FILENAME, "--dry-run", ...SELECTOR];
+export const REAL_EXPOSE = [...PRINT, "--record", "--protocol", "--selector", "-l", "--labels", "--external-ip", "--load-balancer-ip", "--name", "--session-affinity", "--cluster-ip", "--field-manager", "--dry-run", "--save-config", ...FILENAME];
+export const REAL_DELETE = [...FILENAME_REST, ...SELECTOR, "--field-selector", "--all", "-A", "--all-namespaces", "--force", "--cascade", "--now", "--grace-period", "--timeout", "--ignore-not-found", "--wait", "-o", "--output", "--raw", "-i", "--interactive", "--dry-run"];
+export const REAL_APPLY = [...FILENAME_REST, "--cascade", "--grace-period", "--force", "--timeout", "--wait", "--record", ...PRINT, "--validate", "--dry-run", "--server-side", "--force-conflicts", "--field-manager", ...SELECTOR, "--prune-allowlist", "--all", "--prune", "--overwrite", "--openapi-patch", "--subresource"];
+export const REAL_LOGS = ["--all-pods", "--all-containers", "--timestamps", "--limit-bytes", "--tail", "--ignore-errors", "--since-time", "--since", "-c", "--container", "--insecure-skip-tls-verify-backend", "--pod-running-timeout", ...SELECTOR, "--max-log-requests", "--prefix"];
+export const REAL_TOP = [...SELECTOR, "--field-selector", "--sort-by", "--containers", "-A", "--all-namespaces", "--no-headers", "--use-protocol-buffers", "--sum", "--show-swap", "--show-capacity"];
+export const REAL_LABEL = [...PRINT, "--record", "--list", "--local", "--field-selector", "--all", "-A", "--all-namespaces", "--resource-version", ...FILENAME, "--dry-run", "--field-manager", ...SELECTOR];
