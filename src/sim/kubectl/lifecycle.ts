@@ -167,7 +167,7 @@ const createRoleOf = (cluster: boolean): CreateHandler => (host, c) => {
 };
 
 /** Die `--user`/`--serviceaccount`-Subjekte eines RoleBindings einsammeln (`<ns>:<sa>`, die Form hat die Flag-Tabelle
- *  schon geprüft). Beide Flags sind StringArray: eine Angabe wird nicht an Kommas gesplittet. */
+ *  schon geprüft; ohne Angabe bleibt die Liste leer, kubectl verlangt keine Subjekte). Beide Flags sind StringArray: eine Angabe wird nicht an Kommas gesplittet. */
 function collectRbacSubjects(c: Call): RbacSubject[] {
   const subjects: RbacSubject[] = c.values("--user").map(u => ({ kind: "User", name: u }));
   for (const sa of c.values("--serviceaccount")) {
@@ -177,7 +177,7 @@ function collectRbacSubjects(c: Call): RbacSubject[] {
   return subjects;
 }
 
-// kubectl create rolebinding|clusterrolebinding <name> --role=… --serviceaccount=… (ein ClusterRoleBinding kennt `--role` nicht)
+// kubectl create rolebinding|clusterrolebinding <name> --role=… --serviceaccount=… (Subjekte optional, ein ClusterRoleBinding kennt `--role` nicht)
 const createRoleBindingOf = (cluster: boolean): CreateHandler => (host, c) => {
   const typ = cluster ? "clusterrolebinding" : "rolebinding";
   const n = createName(host, c.args, cluster ? "ClusterRoleBinding" : "RoleBinding", "Muster: kubectl create " + typ + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
@@ -186,10 +186,10 @@ const createRoleBindingOf = (cluster: boolean): CreateHandler => (host, c) => {
   const clusterRoleName = c.value("--clusterrole");
   // RoleBinding (`Validate` in create_rolebinding.go): genau eines von --role und --clusterrole, beide oder keines ist derselbe Fehler.
   if (!cluster && !!roleName === !!clusterRoleName) return host._err("error: exactly one of clusterrole or role must be specified", "Häng entweder '--role=<name>' oder '--clusterrole=<name>' an.");
-  if (cluster && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", "Häng '--clusterrole=<name>' an.");
+  // `--clusterrole=` (leer) erreicht den apiserver, der roleRef.name verlangt; Run umhüllt den Text (create_clusterrolebinding.go).
+  if (cluster && !clusterRoleName) return host._err('error: failed to create clusterrolebinding: ClusterRoleBinding.rbac.authorization.k8s.io "' + n.name + '" is invalid: roleRef.name: Required value');
   const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
   const subjects = collectRbacSubjects(c);
-  if (subjects.length === 0) return host._err("error: at least one of --user or --serviceaccount must be specified", "Muster: '--serviceaccount=default:deploy-bot' oder '--user=alice'.");
   if (host.roleBindings.some(b => sameRbac(b, { name: n.name, cluster }))) return host._err('error: ' + typ + 's.rbac.authorization.k8s.io "' + n.name + '" already exists');
   host.roleBindings.push({ name: n.name, cluster, roleRef, subjects, created: host.clock });
   return typ + ".rbac.authorization.k8s.io/" + n.name + " created";
@@ -223,8 +223,9 @@ const ohneBefehl = (art: string, run: CreateHandler): CreateHandler => (host, c)
   return vorDash ?? notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + art + "'.", ["'kubectl create " + art + "' ohne '--'"]);
 };
 
-const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], hints?: Readonly<Record<string, string>>): KubectlEntry<CreateHandler> =>
-  ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, hints });
+type CreateOptionen = Pick<SubEntry<CreateHandler>, "hints" | "unknownFlags" | "requiredFlags">;
+const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], opt: CreateOptionen = {}): KubectlEntry<CreateHandler> =>
+  ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, ...opt });
 
 const CREATE_DEPLOYMENT = createEntry("deployment", createDeployment, [flag(true, "--image"), flag(true, "--replicas")]);
 const CREATE_SERVICEACCOUNT = createEntry("serviceaccount", createServiceAccount);
@@ -232,7 +233,7 @@ const CREATE_ROLE = createEntry("role", createRoleOf(false), [flag(true, "--verb
 const CREATE_CLUSTERROLE = { ...createEntry("clusterrole", createRoleOf(true), [flag(true, "--verb"), flag(true, "--resource")]), namespace: "cluster" } as const;
 const CREATE_ROLEBINDING = createEntry("rolebinding", createRoleBindingOf(false), [flag(true, "--role"), flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG]);
 const CREATE_CLUSTERROLEBINDING = { ...createEntry("clusterrolebinding", createRoleBindingOf(true), [flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG],
-  { "--role": "Ein ClusterRoleBinding verweist nur auf eine ClusterRole: nutze '--clusterrole=<name>'." }), namespace: "cluster" } as const;
+  { unknownFlags: ["--role"], requiredFlags: ["--clusterrole"], hints: { "--role": "Ein ClusterRoleBinding verweist nur auf eine ClusterRole: nutze '--clusterrole=<name>'." } }), namespace: "cluster" } as const;
 const CREATE_CONFIGMAP = createEntry("configmap", createConfigMap, [LITERAL_FLAG]);
 
 /** `create secret <art>`: eine eigene Ebene, damit `tls` und `generic` je ihre Flags haben. */

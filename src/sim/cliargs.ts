@@ -48,6 +48,14 @@ export interface ArgSpec {
   readonly style?: FlagStyle;
   /** Lernhinweise je Flag-Name (`-o`) für Flags, die Spieler aus dem echten Werkzeug kennen. */
   readonly hints?: Readonly<Record<string, string>>;
+  /** Lange Flag-Namen, die das echte Werkzeug bei genau diesem Befehl nicht kennt (gegen die Quelle belegt): die Sim meldet
+   *  den pflag-Text `error: unknown flag: --x` (plus Tipp aus `hints`) statt „Nicht simuliert“. Ein nicht gelistetes
+   *  unbekanntes Flag bleibt „Nicht simuliert“ (die Sim kennt nicht jedes echte Flag). */
+  readonly unknownFlags?: readonly string[];
+  /** Pflicht-Flags (cobra `MarkFlagRequired`): fehlt eines, meldet `parseCall` `error: required flag(s) "x" not set`
+   *  (alphabetisch). Ein Alias oder ein leerer Wert zählt als gesetzt. Grenze: die Arität (`tooMany`) wird nach den Flags
+   *  geprüft, cobra prüft ValidateArgs davor. */
+  readonly requiredFlags?: readonly string[];
   /** Das erste Nicht-Flag beendet die Prüfung (`docker run IMAGE BEFEHL …`: danach gehört alles dem Container). */
   readonly stopAtPositional?: boolean;
   /** Höchstzahl der Positionsargumente (Pflicht, #1490): mehr lehnt `parseCall` zentral ab. `0` = keine, `OFFENE_LISTE`
@@ -182,6 +190,7 @@ const isHelpFlag = (name: string) => name === "-h" || name === "--help" || name 
 const helpHint = (cli: string) => "Hilfe zeigt der Simulator mit 'help " + cli + "'.";
 
 function rejectFlag(host: ErrHost, spec: ArgSpec, name: string): string {
+  if (spec.unknownFlags?.includes(name)) return host._err("error: unknown flag: " + name, spec.hints?.[name]);
   const cli = spec.cmd.split(" ")[0];
   const hint = spec.hints?.[name] ?? (isHelpFlag(name) ? helpHint(cli) : undefined);
   const kann = spec.flags.length ? "Flags: " + flagList(spec.flags).join(", ") : "'" + spec.cmd + "' ohne Flags";
@@ -194,9 +203,18 @@ function scanErrorText(host: ErrHost, spec: ArgSpec, e: ScanError): string {
   return host._err('invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseBool: parsing "' + e.value + '": invalid syntax');
 }
 
-/** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool) oder der erste Wertprüfer, der anschlägt. */
+/** cobra `ValidateRequiredFlags`: der Text für die nicht gesetzten Pflicht-Flags (alphabetisch) oder `null`. */
+function missingRequired(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
+  const missing = (spec.requiredFlags ?? []).filter(n => !w.hits.some(h => h.spec.names.includes(n))).map(n => n.replace(/^-+/, "")).sort();
+  if (missing.length === 0) return null;
+  return host._err("error: required flag(s) " + missing.map(n => '"' + n + '"').join(", ") + " not set", "Häng '--" + missing[0] + "=<wert>' an.");
+}
+
+/** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool), dann ein fehlendes Pflicht-Flag, dann der erste Wertprüfer, der anschlägt. */
 function firstError(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
   if (w.error) return scanErrorText(host, spec, w.error);
+  const required = missingRequired(host, spec, w);
+  if (required) return required;
   for (const h of w.hits) {
     const invalid = h.value !== null && h.spec.check?.(host, h.value);
     if (invalid) return invalid;
@@ -320,7 +338,7 @@ export interface Dispatch<E extends SubEntry<unknown>> {
  *  Flags der Ebene (`d.flags`) zuerst, dann die des Eintrags; Stil und Hinweise erbt der Eintrag von der Ebene (je Schlüssel,
  *  der Eintrag gewinnt). */
 function specOfSub(cmd: string, e: SubEntry<unknown>, d: Dispatch<SubEntry<unknown>>): ArgSpec {
-  return { cmd, flags: mergeFlags(cmd, d.flags, e.flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints), stopAtPositional: e.stopAtPositional, maxArgs: e.maxArgs };
+  return { cmd, flags: mergeFlags(cmd, d.flags, e.flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints), unknownFlags: e.unknownFlags, requiredFlags: e.requiredFlags, stopAtPositional: e.stopAtPositional, maxArgs: e.maxArgs };
 }
 
 /** Persistente Flags (außen) und Flags des Eintrags (innen) zusammen. Dasselbe Objekt zählt einmal; ein gleicher Flag-Name (auch nur

@@ -19,7 +19,6 @@ describe("kubectl create/set/auth: ein Flag eines anderen Ziels wird abgelehnt, 
     ["kubectl create role leser --verb=get --resource=pods --role=x", "--role", "kubectl create role"],
     ["kubectl create clusterrole leser --verb=get --resource=pods --user=alice", "--user", "kubectl create clusterrole"],
     ["kubectl create rolebinding b --role=leser --user=alice --verb=get", "--verb", "kubectl create rolebinding"],
-    ["kubectl create clusterrolebinding b --clusterrole=leser --user=alice --role=x", "--role", "kubectl create clusterrolebinding"],
     ["kubectl create configmap c --from-literal=a=b --image=nginx", "--image", "kubectl create configmap"],
     ["kubectl create secret generic s --from-literal=a=b --cert=x", "--cert", "kubectl create secret generic"],
     ["kubectl create secret tls t --cert=a --key=b --from-literal=a=b", "--from-literal", "kubectl create secret tls"],
@@ -37,6 +36,16 @@ describe("kubectl create/set/auth: ein Flag eines anderen Ziels wird abgelehnt, 
     const r = lauf(cmd, sim);
     expect(r.error).toBe(true);
     expect(r.out).toContain(NS + " das Flag '" + name + "' bei '" + ziel + "'");
+    expect(zustand(sim)).toBe(vorher);
+  });
+
+  test("create clusterrolebinding --role: echter pflag-Text, kein „Nicht simuliert“, Zustand unverändert", () => {
+    const sim = freshSim();
+    const vorher = zustand(sim);
+    const r = lauf("kubectl create clusterrolebinding b --clusterrole=leser --user=alice --role=x", sim);
+    expect(r.error).toBe(true);
+    expect(r.out.split("\n")[0]).toBe("error: unknown flag: --role");
+    expect(r.out).not.toContain(NS);
     expect(zustand(sim)).toBe(vorher);
   });
 
