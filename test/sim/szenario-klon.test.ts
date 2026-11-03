@@ -101,6 +101,82 @@ describe("tiefe Kopie: Keys und applyEffects", () => {
   });
 });
 
+/* #1985: Argo-Apps und per apply angelegte Application/RoleBinding teilen nichts mit Szenario,
+ * Snapshot und applyEffects (Kopierstellen in sim/argocd.ts und sim/kubectl/lifecycle.ts). */
+const argoSzenario = (): Scenario => ({
+  argoApps: [
+    { name: "kasse", repo: "r", path: "kasse/", autoSync: false, selfHeal: false, created: 0,
+      desired: { deployment: { name: "kasse", image: "nginx", replicas: 3 }, service: { name: "kasse", port: "80" } } },
+    { name: "flotte", repo: "r", path: "flotte/", autoSync: false, selfHeal: false, created: 0,
+      childApps: [{ name: "kind", deployment: { name: "kind", image: "nginx", replicas: 1 }, service: { name: "kind", port: "80" } }] },
+  ],
+});
+
+describe("tiefe Kopie: Argo-Apps und apply von Application/RoleBinding", () => {
+  test("reset: Eingriffe in desired und childApps ändern das Szenario nicht", () => {
+    const sc = argoSzenario();
+    const sim = new KQSim(sc);
+    sim.argoApps[0].desired!.deployment.replicas = 9;
+    sim.argoApps[0].desired!.service!.port = "81";
+    sim.argoApps[1].childApps![0].deployment.replicas = 9;
+    sim.argoApps[1].childApps![0].service!.port = "81";
+    expect(sc).toEqual(argoSzenario());
+    sim.reset();
+    expect(sim.argoApps[0].desired!.deployment.replicas).toBe(3);
+    expect(sim.argoApps[1].childApps![0].deployment.replicas).toBe(1);
+  });
+  test("snapshot: spätere Änderungen an desired und childApps verändern den Snapshot nicht", () => {
+    const sim = new KQSim(argoSzenario());
+    const snap = sim.snapshot();
+    const vorher = JSON.stringify(snap);
+    sim.argoApps[0].desired!.deployment.replicas = 9;
+    sim.argoApps[0].desired!.service!.port = "81";
+    sim.argoApps[1].childApps![0].deployment.replicas = 9;
+    sim.argoApps[1].childApps![0].service!.port = "81";
+    expect(JSON.stringify(snap)).toBe(vorher);
+  });
+  test("apply einer Application: der Live-Zustand teilt nichts mit applyEffects", () => {
+    const sim = new KQSim({});
+    sim.files["a.yaml"] = "kind: Application";
+    const eff = {
+      application: { name: "kasse", deployment: { name: "kasse", image: "nginx", replicas: 3 }, service: { name: "kasse", port: "80" } },
+    };
+    sim.applyEffects["a.yaml"] = structuredClone(eff);
+    sim.exec("kubectl apply -f a.yaml");
+    const app = sim.argoApps.find(x => x.name === "kasse")!;
+    app.desired!.deployment.replicas = 9;
+    app.desired!.service!.port = "81";
+    expect(sim.applyEffects["a.yaml"]).toEqual(eff);
+  });
+  test("apply einer App-of-Apps und Sync: Kind-Apps teilen nichts mit der Wurzel", () => {
+    const sim = new KQSim({});
+    sim.files["w.yaml"] = "kind: Application";
+    sim.applyEffects["w.yaml"] = { application: { name: "flotte", childApps: [
+      { name: "kind", deployment: { name: "kind", image: "nginx", replicas: 1 }, service: { name: "kind", port: "80" } },
+    ] } };
+    sim.exec("kubectl apply -f w.yaml");
+    const wurzel = sim.argoApps.find(x => x.name === "flotte")!;
+    const vorher = structuredClone(wurzel.childApps);
+    sim.exec("argocd app sync flotte");
+    const kind = sim.argoApps.find(x => x.name === "kind")!;
+    expect(kind).toBeDefined();
+    kind.desired!.deployment.replicas = 9;
+    kind.desired!.service!.port = "81";
+    expect(wurzel.childApps).toEqual(vorher);
+  });
+  test("apply einer RoleBinding: die Subjects teilen nichts mit applyEffects", () => {
+    const sim = new KQSim({});
+    sim.files["rb.yaml"] = "kind: RoleBinding";
+    const eff = { roleBinding: { name: "rb", roleRef: { kind: "Role" as const, name: "r" }, subjects: [{ kind: "ServiceAccount" as const, name: "bot", namespace: "default" }] } };
+    sim.applyEffects["rb.yaml"] = structuredClone(eff);
+    sim.exec("kubectl apply -f rb.yaml");
+    const rb = sim.roleBindings.find(b => b.name === "rb")!;
+    expect(rb).toBeDefined();
+    rb.subjects[0].name = "anders";
+    expect(sim.applyEffects["rb.yaml"]).toEqual(eff);
+  });
+});
+
 /* #1985: Aufrufer (Quest-Replay, Savegame-Restore) übergeben `step.scenario` ohne Außenkopie;
  * `mergeScenario` darf das Szenario deshalb nie verändern. */
 function tiefEinfrieren<T>(o: T): T {
