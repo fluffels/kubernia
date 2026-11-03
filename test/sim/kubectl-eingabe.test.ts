@@ -476,6 +476,15 @@ describe("create deployment --replicas", () => {
       expect(r.output).not.toContain("required flag");
     }
   });
+  test("--help hinter einem echten, nicht simulierten Flag: weiter der Hilfe-Hinweis (#1996)", () => {
+    for (const cmd of ["kubectl create deployment web --kubeconfig=x --help", "kubectl create deployment web --dry-run=client -h"]) {
+      const r = freshSim().exec(cmd);
+      expect(r.output).toContain("Hilfe zeigt der Simulator mit 'help kubectl'.");
+    }
+  });
+  test("der Wert eines echten Wert-Flags mit Leerzeichen bleibt folgenlos: „Nicht simuliert“ vor tooMany (#1996)", () => {
+    expect(freshSim().exec("kubectl create secret tls t --kubeconfig cfg").output).toContain("Nicht simuliert: das Flag '--kubeconfig' bei 'kubectl create secret tls'");
+  });
   test("scale: das Label ist \"--replicas\" (ohne Kurzform), der Fehler kommt vor „So nicht ganz“ (#1996)", () => {
     const r = freshSim().exec("kubectl scale --replicas=abc");
     expect(r.error).toBe(true);

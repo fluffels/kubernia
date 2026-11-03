@@ -114,6 +114,14 @@ describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996
     }
     expect(run("--cc=bad", "--aa=1", "--bb=1")).toBe("WERT-FEHLER");
   });
+
+  test("das Hilfe-Flag gilt an jeder Position, auch hinter einem echten, nicht simulierten Flag", () => {
+    for (const h of ["-h", "--help"]) {
+      expect(run("--real", h)).toContain("Hilfe zeigt der Simulator mit 'help x'.");
+      expect(run("--real", "--cc=bad", h, "--aa=1", "--bb=1")).toContain("Hilfe zeigt der Simulator mit 'help x'.");
+      expect(run(h, "--real")).toContain("Hilfe zeigt der Simulator mit 'help x'.");
+    }
+  });
   test("Vorrang: ein unbekanntes Flag vor oder hinter einem echten meldet „unknown flag“", () => {
     expect(run("--real", "--zzz", ...ok)).toContain("error: unknown flag: --zzz");
     expect(run("--zzz", "--real", ...ok)).toContain("error: unknown flag: --zzz");

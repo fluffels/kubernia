@@ -130,6 +130,8 @@ interface Walk {
   hits: Hit[]; entries: { tok: string; at: number }[]; error: ScanError | null; dashAt: number | null;
   /** Das erste echte, nicht simulierte Flag eines geschlossenen Ziels: meldet erst `firstError`, nach allen echten Fehlern. */
   unsimulated: Extract<ScanError, { kind: "unknown" }> | null;
+  /** Das erste Hilfe-Flag (`-h`, `--help`) eines geschlossenen Ziels, an jeder Position: es geht den Pflicht-Flags und Wertprüfern vor (cobra). */
+  help: Extract<ScanError, { kind: "unknown" }> | null;
 }
 interface Step { used: boolean; error: ScanError | null }
 
@@ -174,7 +176,7 @@ function restFrom(spec: ArgSpec, tok: string, i: number): number {
 /** Ein Scan-Fehler: ein echtes, nicht simuliertes Flag eines geschlossenen Ziels wartet in `unsimulated` (echte Fehler gehen vor),
  *  alles andere ist der erste Fehler in Token-Reihenfolge. */
 function noteError(spec: ArgSpec, w: Walk, e: ScanError): void {
-  if (e.kind === "unknown" && isRealFlag(spec, e.name)) w.unsimulated ??= e;
+  if (e.kind === "unknown" && isRealFlag(spec, e.name)) { if (isHelpFlag(e.name)) w.help ??= e; else w.unsimulated ??= e; }
   else w.error ??= e;
 }
 
@@ -183,7 +185,7 @@ function noteError(spec: ArgSpec, w: Walk, e: ScanError): void {
  *  gemerkt, der Scan läuft weiter (so bleiben die Positionsargumente auch bei einem unbekannten Flag lesbar). */
 function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
   const style = styleOf(spec);
-  const w: Walk = { hits: [], entries: [], error: null, dashAt: null, unsimulated: null };
+  const w: Walk = { hits: [], entries: [], error: null, dashAt: null, unsimulated: null, help: null };
   for (let i = from; i < t.length; i++) {
     const tok = t[i];
     const rest = restFrom(spec, tok, i);
@@ -259,7 +261,7 @@ function missingRequired(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
 function firstError(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
   if (w.error) return scanErrorText(host, spec, w.error);
   // cobra wertet das Hilfe-Flag vor den Pflicht-Flags und der Validierung aus
-  if (w.unsimulated && isHelpFlag(w.unsimulated.name)) return scanErrorText(host, spec, w.unsimulated);
+  if (w.help) return scanErrorText(host, spec, w.help);
   const required = missingRequired(host, spec, w);
   if (required) return required;
   for (const h of w.hits) {
