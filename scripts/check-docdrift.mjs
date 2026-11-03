@@ -46,7 +46,7 @@ import { collectHeadingSlugs, leseConfigObjekt, linkStellen, linkZiel, parseNpmR
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
-import { blockSpanne, istGanzeDatei, MANIFEST_PFAD, wirdVerteilt } from "./besitz-lib.mjs";
+import { besitzSpannen, istGanzeDatei, MANIFEST_PFAD, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
 
 // Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
@@ -203,33 +203,18 @@ export function auditDocDrift(rootDir = ROOT) {
   return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations, fortschreibungsFehler: auditFortschreibungen(rootDir), testPfadFehler: auditTestPfade(rootDir, mdFiles, content) };
 }
 
-/** Manifest der Besitz-Einheiten (Vorbild check-factory-drift.mjs). */
-/** Textspannen der verteilten Einheiten für `file`: Ganz-Datei = alles, Block = zwischen den Markern (`blockSpanne`, kaputte Marker: keine Spanne); JSON-Schlüssel entfallen. */
-function einheitSpannen(einheiten, file, text) {
-  const spannen = [];
-  for (const e of einheiten.filter((x) => x.pfad === file)) {
-    if (istGanzeDatei(e)) spannen.push([0, text.length]);
-    else if (e.block !== undefined) {
-      const spanne = blockSpanne(text, e.block);
-      if (spanne) spannen.push(spanne);
-    }
-  }
-  return spannen;
-}
-
 /** Bezieher-Ausnahme (#110): `null` = volle Prüfung (Factory-Repo, kaputter Sync-Stand, fehlendes oder kaputtes Manifest; fail-closed), sonst `{ spannen(file, text), istZiel(pfad) }`. */
 function besitzAusnahme(rootDir) {
   if (liesSyncStand(rootDir).zustand !== "ok") return null;
-  let einheiten;
-  try {
-    const manifest = JSON.parse(readFileSync(join(rootDir, ...MANIFEST_PFAD.split("/")), "utf8"));
-    einheiten = manifest.eintraege.filter(wirdVerteilt); // kein Array: wirft, fail-closed
-    if (!einheiten.every((e) => typeof e.pfad === "string")) return null; // Eintrag ohne Pfad: Manifest kaputt, volle Prüfung
-  } catch {
-    return null;
-  }
+  const voll = join(rootDir, ...MANIFEST_PFAD.split("/"));
+  const geladen = manifestAusText(existsSync(voll) ? readFileSync(voll, "utf8") : null);
+  if (geladen.fehler !== undefined) return null; // fehlt, kein JSON, keine Liste: volle Prüfung (fail-closed)
+  const eintraege = geladen.manifest.eintraege;
+  if (!eintraege.every((e) => e !== null && typeof e === "object")) return null; // kein Objekt: Manifest kaputt, volle Prüfung
+  const einheiten = eintraege.filter(wirdVerteilt);
+  if (!einheiten.every((e) => typeof e.pfad === "string")) return null; // Eintrag ohne Pfad: Manifest kaputt, volle Prüfung
   const istZiel = (pfad) => einheiten.some((e) => (istGanzeDatei(e) && e.pfad === pfad) || e.pfad.startsWith(pfad.endsWith("/") ? pfad : `${pfad}/`));
-  return { spannen: (file, text) => einheitSpannen(einheiten, file, text), istZiel };
+  return { spannen: (file, text) => besitzSpannen(einheiten, file, text), istZiel };
 }
 
 /** 7. Test-Pfade (#97): ein Backtick-Token `test/…` in der Doku muss existieren (Datei oder Ordner). Suffix `#…`/`:<zeile>` wird abgeschnitten, Platzhalter-Tokens (`<`, `*`, `{`) übersprungen. Ausgenommen: ADRs (Historie) und Dateien mit Datum im Namen. Im Bezieher (#110, `besitzAusnahme`) zählt ein Verweis aus verteilter Besitz-Einheit nur, wenn das Ziel selbst Besitz ist; Grenze: nur Ganz-Datei- und Block-Einheiten, JSON-Schlüssel-Einheiten nicht. Grenzen: der Testordner ist fest `test/`, der Datumsausschluss ist eine Heuristik (jedes Datum im Pfad), nackte Dateinamen und Markdown-Links prüft das nicht (Links: deadLinks). */

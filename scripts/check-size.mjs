@@ -21,7 +21,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
-import { ausnahmenAus, ladeProjektConfig, strukturAus } from './projekt-config-lib.mjs'
+import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, strukturAus } from './projekt-config-lib.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -163,7 +163,7 @@ function main() {
 
   for (const s of stale)
     console.error(
-      red(`✖ Ausnahme stale: ${s.datei} liegt nicht mehr über ${LOC_BUDGET} LOC – Eintrag unter ausnahmen.groesse in .factory/projekt.json entfernen.`),
+      red(`✖ Ausnahme stale: ${s.datei} liegt nicht mehr über ${LOC_BUDGET} LOC – Eintrag unter ausnahmen.groesse in ${PROJEKT_CONFIG} entfernen.`),
     )
 
   const deckelMeldungen = pruefeDeckel(collectWorkflowSizes())
@@ -177,7 +177,7 @@ function main() {
   if (violations.length)
     console.error(
       `\n${violations.length} Modul(e) über dem Budget. Aufteilen (siehe #392/#393 als Vorlage) ` +
-        `oder – mit offenem Split-Ticket – bewusst unter ausnahmen.groesse in .factory/projekt.json aufnehmen (datei, grund mit #<nr>).`,
+        `oder – mit offenem Split-Ticket – bewusst unter ausnahmen.groesse in ${PROJEKT_CONFIG} aufnehmen (datei, grund mit #<nr>).`,
     )
   process.exit(1)
 }

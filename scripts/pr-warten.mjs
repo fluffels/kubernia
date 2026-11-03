@@ -11,6 +11,7 @@
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln), auch ein Aufruf-Fehler (unbekanntes Flag, Flag ohne Wert, doppeltes Flag, keine oder falsche PR-Nummer: Meldung und Aufrufzeile auf stderr)
  *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (kein Pflicht-Check, kein Merge-Gate)` je rotem Check außerhalb der Pflicht-Checks (kein ROT, zählt nicht mit).
+ *   Zusatz bei ROT durch CANCELLED ohne laufenden Geschwister-Lauf: `HINWEIS <check> CANCELLED …: kein gh run rerun, leerer Commit mit Push` (ein Rerun behält das Ereignis samt `draft`).
  * Pflicht-Checks: `gh pr checks <pr> --required --json name`; nur sie gaten. Schlägt das Holen fehl oder ist die Liste leer, gatet jeder Check (fail-closed).
  * `KONFLIKT` meldet erst eine zweite Abfrage im Abstand von mindestens 15 s (`mergeable` flackert, auch UNKNOWN).
  * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
@@ -27,9 +28,12 @@ const GRUEN = new Set(["SUCCESS", "SKIPPED", "NEUTRAL"]);
 export const KONFLIKT_ABSTAND_MS = 15_000;
 export const FELDER = "state,mergeable,statusCheckRollup,autoMergeRequest,mergeCommit";
 
+/** Ist der Rollup-Eintrag ein StatusContext (kein CheckRun)? Pur. */
+const istStatusContext = (e) => e?.__typename === "StatusContext" || Boolean(e?.context);
+
 /** Ein Rollup-Eintrag (CheckRun oder StatusContext) → `{ name, art: "rot" | "gruen" | "offen", url }`. */
 function eintrag(e) {
-  if (e?.__typename === "StatusContext" || e?.context) {
+  if (istStatusContext(e)) {
     const s = String(e.state ?? "").toUpperCase();
     return { name: e.context ?? "?", art: ROT.has(s) ? "rot" : s === "SUCCESS" ? "gruen" : "offen", url: e.targetUrl ?? "" };
   }
@@ -49,7 +53,7 @@ const stempel = (e) => (String(e?.status ?? "").toUpperCase() === "COMPLETED" ? 
 export function juengste(rollup) {
   const je = new Map();
   for (const e of rollup ?? []) {
-    const status = e?.__typename === "StatusContext" || e?.context;
+    const status = istStatusContext(e);
     const key = status ? `ctx\u0000${e.context ?? "?"}` : `run\u0000${e?.workflowName ?? ""}\u0000${e?.name ?? "?"}`;
     const alt = je.get(key);
     // Bei gleichem Stempel gewinnt der spätere Eintrag der Liste (gh liefert sie in Startreihenfolge).
@@ -64,9 +68,8 @@ export function juengste(rollup) {
  * (oder gibt es keine), bleibt er rot (fail-closed). Pur.
  */
 function abgeloest(e, rollup) {
-  if (e?.__typename === "StatusContext" || e?.context) return false;
-  if (String(e?.conclusion ?? "").toUpperCase() !== "CANCELLED") return false;
-  return rollup.some((o) => o !== e && !(o?.__typename === "StatusContext" || o?.context) && (o?.workflowName ?? "") === (e?.workflowName ?? "") && String(o?.status ?? "").toUpperCase() !== "COMPLETED");
+  if (String(e?.conclusion ?? "").toUpperCase() !== "CANCELLED") return false; // ein StatusContext trägt keine `conclusion`
+  return rollup.some((o) => o !== e && !istStatusContext(o) && (o?.workflowName ?? "") === (e?.workflowName ?? "") && String(o?.status ?? "").toUpperCase() !== "COMPLETED");
 }
 
 /**
@@ -80,13 +83,17 @@ export function bewerte(pr, pflicht = null) {
   const neueste = juengste(pr?.statusCheckRollup);
   const alle = neueste.map((e) => {
     const c = eintrag(e);
-    return c.art === "rot" && abgeloest(e, neueste) ? { ...c, art: "offen" } : c;
+    if (c.art !== "rot") return c;
+    if (abgeloest(e, neueste)) return { ...c, art: "offen" };
+    return { ...c, abgebrochen: String(e?.conclusion ?? "").toUpperCase() === "CANCELLED" };
   });
   // Nicht-Pflicht-Checks sperren den Merge nicht: sie zählen weder zu rot noch zu grün noch zu wartend.
   const gatet = Array.isArray(pflicht) && pflicht.length ? new Set(pflicht) : null;
   const checks = gatet ? alle.filter((c) => gatet.has(c.name)) : alle;
   const hinweise = alle.filter((c) => c.art === "rot" && !checks.includes(c)).map((c) => `HINWEIS ${c.name} ${c.url} (kein Pflicht-Check, kein Merge-Gate)`);
-  const mit = (exit, zeilen) => ({ exit, zeilen: [...zeilen, ...hinweise] });
+  // Ein CANCELLED ohne laufenden Geschwister-Lauf: ein Rerun behielte Ereignis samt `draft` (ci.yml), ein neuer Kopf löst frisch aus.
+  const rerun = checks.filter((c) => c.abgebrochen).map((c) => `HINWEIS ${c.name} CANCELLED ohne laufenden Geschwister-Lauf: kein \`gh run rerun\` (behält Ereignis samt draft), leerer Commit mit Push`);
+  const mit = (exit, zeilen) => ({ exit, zeilen: [...zeilen, ...rerun, ...hinweise] });
   if (pr?.mergeable === "CONFLICTING") return mit(3, ["KONFLIKT"]);
   const rot = checks.filter((c) => c.art === "rot");
   if (rot.length) return mit(1, rot.map((c) => `ROT ${c.name} ${c.url}`.trim()));

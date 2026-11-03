@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
-import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG, strukturAus } from "./projekt-config-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -110,7 +110,7 @@ function main() {
   const { modules, ghosts, orphans, staleAllowlist } = auditDocMap(ROOT, struktur);
   if (modules.length === 0) {
     // Fail-closed (#1942): ohne Quell-Modul (kein Ordner, keine .ts) prüft das Gate nichts, grün wäre eine Behauptung ohne Beleg.
-    console.error(red(`✖ check:docmap prüft nichts: keine \`${struktur.quelle}/**/*.ts\` gefunden (Quellwurzel struktur.quelle in .factory/projekt.json prüfen).`));
+    console.error(red(`✖ check:docmap prüft nichts: keine \`${struktur.quelle}/**/*.ts\` gefunden (Quellwurzel struktur.quelle in ${PROJEKT_CONFIG} prüfen).`));
     process.exit(1);
   }
 

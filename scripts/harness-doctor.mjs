@@ -16,7 +16,7 @@
  * (die Summenzeile zählt beide getrennt), 2 bei Aufruf-Fehler oder unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf).
  * Die Dateipunkte `Root-Kontextdatei` und `Zeilenenden` (factory#94, harness-doctor-dateien.mjs) prüfen die Projektdateien des Beziehers (keine CLAUDE.md im Root, eol-Regeln und LF im Index), brauchen kein Token und laufen auch im Wochenlauf, nicht in `--einrichten`.
  * Die acht Sicherheitspunkte (Secret Scanning, Push Protection, Non-Provider-Patterns, Validity Checks, PVR, Dependabot Security Updates, Code-Scanning,
- * SHA-Pinning; factory#116, harness-doctor-sicherheit.mjs) stehen immer da; `--einrichten` ändert sie nie, nur `ANLEITUNG … Link: …`. Reines Node-Skript ohne Modell-Tokens; `gh` und
+ * SHA-Pinning; dazu der Punkt `Sicherheits-Module` (factory#119, `modul-wahl-lib.mjs`: fehlender Schlüssel `module` ist eine Lücke, eine Teilauswahl OK mit HINWEIS); factory#116, harness-doctor-sicherheit.mjs) stehen immer da; `--einrichten` ändert sie nie, nur `ANLEITUNG … Link: …`. Reines Node-Skript ohne Modell-Tokens; `gh` und
  * der Langfuse-Aufruf sind injizierbar (Tests laufen ohne Netz). Alles Projektspezifische kommt zur Laufzeit aus `.factory/projekt.json`
  * und den Workflows (`voraussetzungenAus`); der Wächter test/harness/harness-doctor-voraussetzungen.test.ts hält die Ableitung vollständig.
  *
@@ -141,7 +141,17 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   return anleitungen + (fatal ? 1 : 0) + fehler + geplant > 0 ? 1 : 0;
 }
 
-function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv, dateien }) {
+/** Prüfwurzel von `--pruefen`: liegt die Config als `<wurzel>/.factory/projekt.json`, ist `<wurzel>` der Bezieher; sonst bleibt `rootDir`. `pfad` ist die einmal gegen `rootDir` aufgelöste Config (absolut; `undefined` ohne `--config`). */
+function pruefWurzel(rootDir, config) {
+  if (config === undefined) return { wurzel: rootDir, abgeleitet: false, pfad: undefined };
+  const pfad = resolve(rootDir, config);
+  const wurzel = resolve(pfad, "..", "..");
+  return resolve(wurzel, PROJEKT_CONFIG) === pfad ? { wurzel, abgeleitet: true, pfad } : { wurzel: rootDir, abgeleitet: false, pfad };
+}
+
+function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, kernEnv, dateien }) {
+  const { wurzel: rootDir, abgeleitet, pfad: configPfad } = pruefWurzel(aufruferRoot, werte.config);
+  if (abgeleitet) out(`Prüfwurzel: ${rootDir}`);
   let namen;
   try {
     namen = kernEnv(SKRIPTE); // Dateien lesen nur hier am Rand, die Prüflogik bekommt die Namen
@@ -151,7 +161,7 @@ function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv, dateien
   }
   let ergebnis;
   try {
-    ({ ergebnis } = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse, umgebung: { env, namen }, dateien }));
+    ({ ergebnis } = pruefLauf({ rootDir, configPfad, gh, langfuse, umgebung: { env, namen }, dateien }));
   } catch (e) {
     err(konfigFehlerText(e));
     return AUFRUF_EXIT;
