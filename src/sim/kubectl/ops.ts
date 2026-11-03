@@ -12,12 +12,12 @@ import { maxRestartedAt, rolloutRevisions, undoTarget } from "../replicasets";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
-import { FROM_FLAG, isEnvArg, isImagePairArg, LIMITS_FLAG, MISSING_RESOURCE_ERROR, notSimulated, NS, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, splitResourcesAndPairs, UNKNOWN_TARGET, type ResourceList } from "./args";
+import { FROM_FLAG, isEnvArg, isImagePairArg, LIMITS_FLAG, MISSING_RESOURCE_ERROR, notSimulated, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, splitResourcesAndPairs, UNKNOWN_TARGET, type ResourceList } from "./args";
 import { readTargets, targetOutcome } from "./targets";
-import { foreignNamespace } from "./namespace";
+import { foreignNamespace, type KubectlEntry } from "./namespace";
 import { noResourcesIn } from "./inspect";
 import { DEFAULT_NAMESPACE } from "../state";
-import { IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch, type SubEntry } from "../cliargs";
+import { IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch } from "../cliargs";
 
 /** Die NotFound-Zeile eines Deployments (ohne Fehlerrahmen: die Mehrfachziel-Befehle sammeln sie in `failed`). */
 const deploymentNotFound = (name: string): string => 'Error from server (NotFound): deployments.apps "' + name + '" not found';
@@ -95,9 +95,8 @@ export function kubectlExpose(host: KubectlHost, c: Call) {
 
 /** `kubectl set <ziel>` (#1491): ein Eintrag je Aktion mit EIGENEN Flags (`--from` nur bei `env`, `--limits`/`--requests` nur bei
  *  `resources`); `c.args` sind die Argumente hinter der Aktion (`deployment/web web=nginx`). `-n` gilt überall. */
-export const KUBECTL_SET: Dispatch<SubEntry<(host: KubectlHost, c: Call) => string>> = {
+export const KUBECTL_SET: Dispatch<KubectlEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl set",
-  flags: [NS],
   table: {
     image: { run: (host, c) => kubectlSetImage(host, c), maxArgs: IM_HANDLER, unknownFlags: ["--limits"] },
     env: { run: (host, c) => kubectlSetEnv(host, c), maxArgs: IM_HANDLER, flags: [FROM_FLAG], unknownFlags: ["--limits"] },
@@ -250,11 +249,10 @@ function kubectlSetResources(host: KubectlHost, c: Call) {
 
 /** `kubectl rollout <ziel>` (#1491): ein Eintrag je Aktion; `--to-revision` kennt nur `undo`, bei `restart`/`history` lehnt es der
  *  Dispatch ab (wie kubectl: unbekanntes Flag). `c.args` sind die Argumente hinter der Aktion (`deployment web`). */
-export const KUBECTL_ROLLOUT: Dispatch<SubEntry<(host: KubectlHost, c: Call) => string>> = {
+export const KUBECTL_ROLLOUT: Dispatch<KubectlEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl rollout",
-  flags: [NS],
   table: {
-    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE, unknownFlags: ["--to-revision"] },
+    restart: { run: (host, c) => kubectlRolloutRestart(host, c), maxArgs: OFFENE_LISTE, namespace: "liest", unknownFlags: ["--to-revision"] },
     history: { run: (host, c) => kubectlRolloutHistory(host, c), maxArgs: IM_HANDLER, unknownFlags: ["--to-revision"] },
     undo: { run: (host, c) => kubectlRolloutUndo(host, c), maxArgs: IM_HANDLER, flags: [REVISION_FLAG] },
   },
@@ -320,7 +318,8 @@ function kubectlRolloutRestart(host: KubectlHost, c: Call) {
   const failed: string[] = [];
   let missing = false;
   for (const name of names) {
-    const dep = host.deployments.find(d => d.name === name);
+    // Fremder Namespace: dort gibt es kein Deployment (der Simulator kennt nur default).
+    const dep = foreignNamespace(c, true) === null ? host.deployments.find(d => d.name === name) : undefined;
     if (!dep) { failed.push(deploymentNotFound(name)); missing = true; continue; }
     const r = restartDeployment(host, dep);
     if ("ok" in r) ok.push(r.ok); else failed.push(r.denied);

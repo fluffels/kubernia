@@ -1,7 +1,7 @@
 /* Zentrale Arität (`maxArgs`) und Mehrfachziele in allen CLI-Familien (#1490): überzählige Positionsargumente werden
  * nirgends mehr still ignoriert. Pro Eintrag der Tabellen: 0 Argumente, genau maxArgs, maxArgs+1 (abgelehnt mit dem
  * zentralen Text). Dazu die Mehrfachziele (docker stop/rm, helm uninstall) mit einem fehlenden Ziel und die Gruppen
- * `terraform state` / `helm repo`. Prüft über `sim.exec`, nicht über die Interna von `cliargs`. */
+ * `terraform state` / `helm repo`; dazu (#1720) ein Wächter gegen Flag-Dubletten. Prüft über `sim.exec`, nicht über die Interna von `cliargs`. */
 import { describe, test, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
@@ -73,6 +73,20 @@ describe("Wächter: Marker und Vollständigkeit der Tabellen", () => {
       ...[...quelle.matchAll(/parseCall\(\w+,\s*([A-Z_]+)/g)].map(m => m[1]),
     ]);
     expect([...gefunden].sort()).toEqual([...Object.keys(WURZELN), "CURL_ARGS", "NSLOOKUP_ARGS"].sort());
+  });
+});
+
+describe("Wächter: Flag-Tabellen ohne Dubletten (#1720)", () => {
+  test("für jedes Blatt jeder Wurzel baut dispatchSub die Flag-Tabelle ohne Wurf (persistent gegen Blatt, Gruppe gegen Blatt)", () => {
+    const host = { _err: (m: string) => m };
+    for (const [name, wurzel] of Object.entries(WURZELN)) {
+      const bl = blaetter(wurzel);
+      expect(bl.length, name).toBeGreaterThan(0);
+      for (const [cmd] of bl) {
+        const tokens = cmd.split(" ");
+        expect(() => dispatchSub(host, wurzel, [...tokens], wurzel.cmd.split(" ").length), cmd).not.toThrow();
+      }
+    }
   });
 });
 

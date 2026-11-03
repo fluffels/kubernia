@@ -27,7 +27,8 @@ import { OUTPUT_FLAG } from "./kubectl/output";
 import { KUBECTL_CREATE, kubectlApply, kubectlDelete } from "./kubectl/lifecycle";
 import { kubectlScale, kubectlExpose, KUBECTL_SET, KUBECTL_ROLLOUT } from "./kubectl/ops";
 import { KUBECTL_AUTH, kubectlLabel } from "./kubectl/security";
-import { dispatchSub, flag, IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch, type SubEntry } from "./cliargs";
+import { namespaceWache, type KubectlEntry } from "./kubectl/namespace";
+import { dispatchSub, flag, IM_HANDLER, OFFENE_LISTE, type Call, type Dispatch } from "./cliargs";
 import type { KubectlHost } from "./kubectl/host";
 
 // KubectlHost bleibt über den gewohnten Pfad (./sim/kubectl) erreichbar.
@@ -39,26 +40,27 @@ export type { KubectlHost } from "./kubectl/host";
  *  der Dispatcher wächst nicht in der Komplexität, egal wie viele Unterbefehle dazukommen). */
 type SubCommand = (host: KubectlHost, c: Call) => string;
 
-/** Die Dispatch-Tabelle: Handler + die Flags, die die Sim je Unterbefehl auswertet (`-n/--namespace` gilt überall, die
- *  Semantik regelt namespace.ts). `real` (alle echten Top-Level-Befehle) macht „kenne ich, kann ich nicht“ zu
+/** Die Dispatch-Tabelle: Handler + die Flags, die die Sim je Unterbefehl auswertet (`-n/--namespace` ist wie in kubectl ein
+ *  persistentes Flag der Wurzel, #1720; die Semantik regelt namespace.ts: `namespace` je Eintrag, sonst die Wache). `real` (alle echten Top-Level-Befehle) macht „kenne ich, kann ich nicht“ zu
  *  „Nicht simuliert“; alles andere ist ein Tippfehler wie `unknown command` in kubectl. `create`, `set`, `rollout` und
  *  `auth` sind Gruppen (#1491): je Ziel eigene Flags und Arität, `-n` gilt persistent für alle Ziele. */
-export const KUBECTL: Dispatch<SubEntry<SubCommand>> = {
+export const KUBECTL: Dispatch<KubectlEntry<SubCommand>> = {
   cmd: "kubectl",
+  flags: [NS],
   table: {
-    get: { run: kubectlGet, maxArgs: OFFENE_LISTE, flags: [NS, flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG] },
-    describe: { run: kubectlDescribe, maxArgs: OFFENE_LISTE, flags: [NS] },
+    get: { run: kubectlGet, maxArgs: OFFENE_LISTE, namespace: "liest", flags: [flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG] },
+    describe: { run: kubectlDescribe, maxArgs: OFFENE_LISTE },
     create: { group: KUBECTL_CREATE },
-    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [NS, flag(true, "--replicas")] },
-    expose: { run: kubectlExpose, maxArgs: IM_HANDLER, flags: [NS, PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")] },
-    delete: { run: kubectlDelete, maxArgs: OFFENE_LISTE, flags: [NS, FILE] },
-    apply: { run: kubectlApply, maxArgs: 0, flags: [NS, FILE] },
-    logs: { run: kubectlLogs, maxArgs: 1, flags: [NS, flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] },
-    top: { run: kubectlTop, maxArgs: 2, flags: [NS] },
+    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [flag(true, "--replicas")] },
+    expose: { run: kubectlExpose, maxArgs: IM_HANDLER, flags: [PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")] },
+    delete: { run: kubectlDelete, maxArgs: OFFENE_LISTE, flags: [FILE] },
+    apply: { run: kubectlApply, maxArgs: 0, flags: [FILE] },
+    logs: { run: kubectlLogs, maxArgs: 1, flags: [flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] },
+    top: { run: kubectlTop, maxArgs: 2 },
     set: { group: KUBECTL_SET },
     rollout: { group: KUBECTL_ROLLOUT },
     auth: { group: KUBECTL_AUTH },
-    label: { run: kubectlLabel, maxArgs: IM_HANDLER, flags: [NS, flag(false, "--overwrite")] },
+    label: { run: kubectlLabel, maxArgs: IM_HANDLER, namespace: "cluster", flags: [flag(false, "--overwrite")] },
   },
   real: REAL_KUBECTL_COMMANDS,
   hints: FLAG_HINTS,
@@ -82,5 +84,5 @@ export function kubectlCommand(host: KubectlHost, t: string[]): string {
       "The connection to the server localhost:8080 was refused - did you specify the right host or port?",
       "Es läuft noch keine Control-Plane. Zieh sie zuerst mit 'kubeadm init' hoch.");
   }
-  return r.entry.run(host, r.call);
+  return namespaceWache(host, r.cmd, r.entry, r.call) ?? r.entry.run(host, r.call);
 }

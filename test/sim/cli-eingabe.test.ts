@@ -7,7 +7,7 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import {
-  flag, checkedFlag, parseCall, shellTokens, subEntry, notSimulated, dispatchSub, kannOf, OFFENE_LISTE, type ArgSpec, type Dispatch, type FlagStyle, type SubEntry,
+  flag, checkedFlag, parseCall, shellTokens, subEntry, notSimulated, dispatchSub, kannOf, OFFENE_LISTE, type ArgSpec, type Dispatch, type FlagSpec, type FlagStyle, type SubEntry,
 } from "../../src/sim/cliargs";
 
 const NS = "Nicht simuliert:";
@@ -834,7 +834,7 @@ describe("dispatchSub: reiner Helfer", () => {
 describe("Familien-Köpfe: Flag davor, Tippfehler, echter nicht simulierter Unterbefehl, fehlender Unterbefehl", () => {
   interface Fam { cmd: string; flag: [string, string]; tipp: [string, string]; echt: [string, string] }
   const FAMILIEN: Fam[] = [
-    { cmd: "kubectl", flag: ["kubectl -n x get pods", "-n"], tipp: ["kubectl gett", "kubectl get"], echt: ["kubectl exec", "kubectl exec"] },
+    { cmd: "kubectl", flag: ["kubectl --image=x get pods", "--image"], tipp: ["kubectl gett", "kubectl get"], echt: ["kubectl exec", "kubectl exec"] },
     { cmd: "docker", flag: ["docker -H x ps", "-H"], tipp: ["docker pss", "docker ps"], echt: ["docker exec", "docker exec"] },
     { cmd: "helm", flag: ["helm -n x list", "-n"], tipp: ["helm instal", "helm install"], echt: ["helm show", "helm show"] },
     { cmd: "git", flag: ["git -C . status", "-C"], tipp: ["git stauts", "git status"], echt: ["git stash", "git stash"] },
@@ -1023,6 +1023,20 @@ describe("dispatchSub: persistente Flags und Flags je Ziel", () => {
     expect(lauf("b", "--f")).toContain("Familien-Hinweis F.");
     expect(lauf("grp", "mb", "--g")).toContain("Gruppen-Hinweis.");
     expect(lauf("grp", "mb", "--z")).toContain("Familien-Hinweis.");
+  });
+  test("Flag-Dubletten zwischen persistenten und Blatt-Flags werfen (#1720): gleicher Name, nur ein Alias, über eine Gruppe", () => {
+    const mit = (flags: readonly FlagSpec[]) => () => dispatchSub(host, { ...d, table: { e: { run: "e", maxArgs: 0, flags } } }, ["x", "e"], 1);
+    expect(mit([flag(true, "-n")])).toThrow(/'x e'.*-n/);
+    expect(mit([flag(true, "--namespace")])).toThrow(/--namespace/);
+    expect(mit([flag(true, "-q", "-n")])).toThrow("-q/-n");
+    const grpMit = (g: Dispatch<SubEntry<string>>) => () => dispatchSub(host, { ...d, table: { g: { group: g } } }, ["x", "g", "mb"], 1);
+    expect(grpMit({ cmd: "x g", flags: [flag(true, "-n")], table: { mb: MB } })).toThrow(/'x g'.*-n/);
+    expect(grpMit({ cmd: "x g", flags: [d.flags![0]], table: { mb: MB } })).not.toThrow();
+  });
+  test("keine Dublette: dasselbe Objekt oder verschiedene Namen werfen nicht", () => {
+    const mit = (flags: readonly FlagSpec[]) => () => dispatchSub(host, { ...d, table: { e: { run: "e", maxArgs: 0, flags } } }, ["x", "e"], 1);
+    expect(mit([d.flags![0]])).not.toThrow();
+    expect(mit([flag(true, "-m", "--mein")])).not.toThrow();
   });
   test("die Meldung nennt die persistenten Flags nicht doppelt", () => {
     const e = { run: "e", maxArgs: 0, flags: [d.flags![0], flag(true, "--e")] };

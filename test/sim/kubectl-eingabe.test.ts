@@ -179,8 +179,9 @@ describe("Unterbefehle: echte kubectl-Befehle sind „nicht simuliert“, Tippfe
     expect(r.out).toContain('error: unknown command "frobnicate" for "kubectl"');
     expect(r.out).not.toContain(NICHT_SIMULIERT);
   });
-  test("Flag vor dem Unterbefehl ist nicht simuliert", () => {
-    expect(lauf("kubectl -n kube-system get pods").out).toContain(NICHT_SIMULIERT);
+  test("ein Flag vor dem Unterbefehl ist nicht simuliert, nur -n gilt als persistentes Wurzel-Flag (#1720)", () => {
+    expect(lauf("kubectl --image=x get pods").out).toContain(NICHT_SIMULIERT);
+    expect(lauf("kubectl -n kube-system get pods").out).toContain("coredns");
   });
   test("ohne Unterbefehl bleibt der Hinweis", () => {
     expect(lauf("kubectl").out).toContain("Unterbefehl fehlt");
