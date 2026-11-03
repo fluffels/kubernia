@@ -172,7 +172,7 @@ export const progressionBundle = part({
     for (let qi = 0; qi <= Math.min(questIdx, quests.length - 1); qi++) {
       quests[qi].steps.forEach((step, si) => {
         if (step.scenario && (qi < questIdx || si <= this.questStep())) {
-          this.sim.mergeScenario(Object.assign({}, step.scenario));
+          this.sim.mergeScenario(step.scenario);
         }
       });
     }

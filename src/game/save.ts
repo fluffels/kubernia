@@ -420,7 +420,7 @@ export const saveBundle = part({
         const quest = KQContent.QUESTS[qi];
         quest.steps.forEach((step, si) => {
           if (step.scenario && (qi < curIdx || si <= curStep)) {
-            this.sim.mergeScenario(Object.assign({}, step.scenario));
+            this.sim.mergeScenario(step.scenario);
           }
         });
       }

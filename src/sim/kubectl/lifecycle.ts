@@ -534,8 +534,8 @@ const applyApplication: ApplyHandler = (host, eff, out) => {
     ...(isAppOfApps
       ? { childApps: effApp.childApps!.map(c => cloneChildSpec(c)) }
       : { desired: {
-          deployment: Object.assign({}, effApp.deployment!),
-          ...(effApp.service ? { service: Object.assign({}, effApp.service) } : {}),
+          deployment: structuredClone(effApp.deployment!),
+          ...(effApp.service ? { service: structuredClone(effApp.service) } : {}),
         } }),
   };
   host.argoApps.push(app);
@@ -723,7 +723,7 @@ const applyRoleBinding: ApplyHandler = (host, eff, out) => {
     out.push(kind + ".rbac.authorization.k8s.io/" + effRb.name + " unchanged");
     return;
   }
-  host.roleBindings.push({ name: effRb.name, cluster, roleRef: { kind: effRb.roleRef.kind, name: effRb.roleRef.name }, subjects: effRb.subjects.map(s => Object.assign({}, s)), created: host.clock });
+  host.roleBindings.push({ name: effRb.name, cluster, roleRef: { kind: effRb.roleRef.kind, name: effRb.roleRef.name }, subjects: effRb.subjects.map(s => structuredClone(s)), created: host.clock });
   out.push(kind + ".rbac.authorization.k8s.io/" + effRb.name + " created");
 };
 

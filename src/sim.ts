@@ -682,9 +682,9 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
           addDeployment(this, this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy, d)); // #577: über die Workload-Aggregat-SSOT statt roher Push
         }
       }
-      for (const cm of sc.configMaps || []) {
-        if (!this.configMaps.some(x => x.name === cm.name)) this.configMaps.push(structuredClone(cm));
-      }
+      // additiv per Name (#1985): secrets und configMaps; reset klont beide ebenfalls
+      mergeByName(this.secrets, sc.secrets);
+      mergeByName(this.configMaps, sc.configMaps);
     }
 
     _mergeHelm(sc: Scenario) {
