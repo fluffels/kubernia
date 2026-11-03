@@ -3,7 +3,9 @@
 // testbar (execSync/fs injizierbar); Doku zu Waisen, Lens-Worktrees und losen Dateien: Kopf von cleanup-worktrees.mjs.
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { arbeitsplatzAus, standardzweigVon } from "./arbeitsplatz-lib.mjs";
 import { ladeTicketNamen } from "./ticket-namen.mjs";
 import { lensWorktreeName } from "./ticket-refs.mjs";
 
@@ -35,6 +37,54 @@ export function parseWorktreeBloecke(text) {
       return { pfad, head: wert("HEAD") ?? null, branch: branch ? branch.replace(/^refs\/heads\//, "") : null, locked: zeilen.some((z) => z === "locked" || z.startsWith("locked ")) };
     })
     .filter((b) => b.pfad);
+}
+
+/** Der Ordner mit `.factory/projekt.json`, wenn kein anderer genannt wird: das Repo dieses Skripts. */
+const HARNESS_WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * Pur bis auf den Pfad: die Orte, in denen git für Claim, Ticket-Auswahl und Claims-Prüfung fragen muss (ADR 0022 Fortschreibung, #88).
+ * Eingebettet ein Ort mit `cwd: undefined` (git läuft im Arbeitsverzeichnis wie bisher), im Arbeitsplatz je Repo der Config ein Ort mit `cwd` = Repo-Pfad.
+ * `basis` ist der Ordner mit `.factory/projekt.json`. Wirft bei kaputtem Block mit „Fix:“-Zeile (aus `arbeitsplatzAus`).
+ */
+export function gitOrteAus(config, basis = HARNESS_WURZEL) {
+  const aufloesung = arbeitsplatzAus(config, basis);
+  const eingebettet = aufloesung.betriebsart === "eingebettet";
+  const orte = aufloesung.repos.map((r) => ({ name: r.name, cwd: eingebettet ? undefined : r.pfad, pfad: r.pfad, worktreeOrdner: r.worktreeOrdner, standardzweig: standardzweigVon(r) }));
+  return { aufloesung, orte };
+}
+
+/** Ein git-Aufruf in einem Ort. Eingebettet wirft ein Fehler unverändert, im Arbeitsplatz mit Repo-Name und Fix-Zeile (nie still weitermachen). */
+function gitImOrt(ort, args, git) {
+  try {
+    return ort.cwd === undefined ? git(args) : git(args, ort.cwd);
+  } catch (e) {
+    if (ort.cwd === undefined) throw e;
+    const grund = String(e instanceof Error ? e.message : e).split(/\r?\n/).find((z) => z.trim() !== "") ?? "unbekannter Fehler";
+    throw new Error(`git ${args.join(" ")} scheiterte in Repo ${ort.name} (${ort.cwd}): ${grund}\nFix: Pfad in arbeitsplatz.repos prüfen (git -C ${ort.cwd} status)`, { cause: e });
+  }
+}
+
+/** `git <args>` in jedem Ort: `[{ ort, text }]`. `git(args, cwd)` ist injizierbar; ein Mock mit nur `(args)` bleibt gültig. */
+export function gitJeRepo(orte, args, git) {
+  return orte.map((ort) => ({ ort, text: gitImOrt(ort, args, git) }));
+}
+
+/** `git worktree list --porcelain` je Ort: `[{ ort, bloecke }]` (Blöcke wie `parseWorktreeBloecke`; der erste ist der Haupt-Checkout des Repos). */
+export function registrierteWorktreesJeRepo(orte, git) {
+  return gitJeRepo(orte, ["worktree", "list", "--porcelain"], git).map(({ ort, text }) => ({ ort, bloecke: parseWorktreeBloecke(text) }));
+}
+
+/** Branch-Refs je Ort: `[{ ref, ort }]` (lokale und Remote-Zweige, vereinigt über alle Orte). */
+export function refsJeRepo(orte, git, format = "%(refname:short)") {
+  return gitJeRepo(orte, ["for-each-ref", `--format=${format}`, "refs/heads", "refs/remotes"], git).flatMap(({ ort, text }) => text.split(/\r?\n/).filter(Boolean).map((ref) => ({ ref, ort })));
+}
+
+/** Die Belegung über alle Orte vereinigt, Eingabe für `belegteNummern`: `{ refs, worktrees }` (Refs, Worktree-Pfade und -Branches). */
+export function belegungJeRepo(orte, git) {
+  const refs = refsJeRepo(orte, git).map((r) => r.ref);
+  const worktrees = registrierteWorktreesJeRepo(orte, git).flatMap(({ bloecke }) => bloecke.flatMap((b) => [b.pfad, b.branch].filter(Boolean)));
+  return { refs, worktrees };
 }
 
 /** Fragt `git worktree list --porcelain` ab (cwd egal welcher Worktree, gleiche

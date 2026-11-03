@@ -67,7 +67,7 @@ const NACH = "(?![\\p{L}\\p{N}])";
 function wortschatz(sprache) {
   const maengel = spracheMaengel(sprache);
   if (maengel.length > 0) {
-    throw new Error(`sprache fehlt oder ist unvollständig (${maengel.join("; ")}); das Spezifikations-Gate hat keinen stillen Deutsch-Standardwert\nFix: den Schlüssel sprache.spezifikation in .factory/projekt.json eintragen`);
+    throw new Error(`sprache fehlt oder ist unvollständig (${maengel.join("; ")}); das Spezifikations-Gate hat keinen stillen Deutsch-Standardwert\nFix: den Schlüssel sprache.spezifikation in der Projekt-Config eintragen`);
   }
   const s = sprache;
   const muster = (k) => ({ wort: s[k].wort, re: new RegExp(s[k].muster, "i") });

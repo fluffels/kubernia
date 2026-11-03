@@ -27,6 +27,9 @@
  * Ein Board führt die Issues EINES Repos (`boards[].repo` der Projekt-Config, sonst `repo`; ADR 0022 F10): die Auswahl sieht nur Items des eigenen Repos (Nummern verschiedener Repos kollidieren nicht),
  * ein Board eines anderen Repos bleibt leer („fremdes Board“, Hinweis nennt das Repo, in dem die Auswahl läuft), eigene Items darauf stehen als „verwaist“. Ein Blocker darf auch `owner/name#n`
  * heißen: ein fremder Verweis wird per REST geprüft, nicht prüfbar zählt als offen (fail-closed).
+ * Arbeitsplatz (ADR 0022 Fortschreibung, #88): git läuft je Repo aus `arbeitsplatz.repos` der Projekt-Config (`gitOrteAus`), nicht im Arbeitsverzeichnis; Branches und Worktrees werden über alle Repos vereinigt,
+ * ein Worktree `<praefixe.worktree><nr>` in einem Repo belegt die Nummer also für alle. `fetch --prune` bleibt je Repo fail-open; scheitert `for-each-ref` oder `worktree list` in einem Repo, bricht der Lauf mit einer Fix-Zeile ab (Exit 2).
+ * Grenze: offene PRs fragt das Skript nur im Repo `repo` der Config; die Branches der anderen Repos erscheinen nach dem `fetch` als Remote-Refs.
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
@@ -44,7 +47,7 @@ import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
 import { projektOrdner } from "./transkript.mjs";
 import { ladeTicketNamen, ticketNamen } from "./ticket-namen.mjs";
 import { belegteNummern } from "./ticket-refs.mjs";
-import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
+import { belegungJeRepo, gitOrteAus } from "./worktree-aufraeumen.mjs";
 
 /**
  * Zeilen `Messfenster: n ≥ <k> <agent> nach #<nr>` (#1589; am Zeilenanfang, Listenpunkt erlaubt, `≥` oder `>=`, k ≥ 1; eine bloße Erwähnung im
@@ -412,7 +415,7 @@ const fehlerErgebnis = (text) => ({ code: 2, out: "", err: `✖ naechstes-ticket
 /** Branchnamen der offenen PRs aus den REST-Seiten (`gh api --paginate --slurp`); GraphQL-frei und ohne 200er-Deckel. Pur. */
 export const prHeadsAus = (seiten) => seiten.flat().map((p) => `${p.head.ref}`);
 
-const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+const git = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 
 /**
  * Lader für `waehleNaechstes({ messfenster })` (#1589), I/O: `closedAt` von #nach per REST (`holeIssue`) und die gestarteten Läufe des Agent-Typs
@@ -490,16 +493,26 @@ export function fremdStatusLader({ holeIssue = (repo, nr) => ghJson(["api", `rep
   };
 }
 
-/** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
-function ladeBelegung(messfenster) {
-  const offene = new Set(normalizeOffene(loadOpenIssuePages(REPO)).map((i) => i.number));
-  try {
-    git(["fetch", "--prune", "origin"]); // fail-open: ohne Netz zählen die lokalen Remote-Refs
-  } catch {
-    /* lokale Refs genügen */
+/**
+ * Die git-Seite der Belegung (#88): `fetch --prune` je Repo mit dessen `cwd` (fail-open: ohne Netz zählen die lokalen Remote-Refs), dann Branches und Worktrees
+ * über alle Repos vereinigt; scheitert git in einem, bricht der Lauf mit Fix-Zeile ab. `git(args, cwd)` ist injizierbar.
+ */
+export function belegungAusGit(orte, gitFn) {
+  for (const ort of orte) {
+    try {
+      if (ort.cwd === undefined) gitFn(["fetch", "--prune", "origin"]);
+      else gitFn(["fetch", "--prune", "origin"], ort.cwd);
+    } catch {
+      /* lokale Refs genügen */
+    }
   }
-  const refs = git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
-  const worktrees = parseWorktreeBloecke(git(["worktree", "list", "--porcelain"])).flatMap((b) => [b.pfad, b.branch].filter(Boolean));
+  return belegungJeRepo(orte, gitFn);
+}
+
+/** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
+function ladeBelegung(messfenster, orte) {
+  const offene = new Set(normalizeOffene(loadOpenIssuePages(REPO)).map((i) => i.number));
+  const { refs, worktrees } = belegungAusGit(orte, git);
   const prHeads = prHeadsAus(ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/pulls?state=open&per_page=100`]));
   return { offene, refs, worktrees, prHeads, messfenster };
 }
@@ -521,14 +534,15 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   const namen = ticketNamen(cfg);
   spracheAus(cfg); // fail-fast: das Spezifikations-Gate liest Abschnittsnamen und Schlüsselwörter aus der Config
   const messfenster = erzeugeLader({ ladeNamen: () => namen });
+  const { orte } = gitOrteAus(cfg); // wirft bei kaputtem Block `arbeitsplatz` mit Fix-Zeile (Exit 2 über `configFehler`)
   const lade = () => ({
     produkt: normalizeItems(loadItemPages(boardFuerRolle("produkt"))),
     factory: normalizeItems(loadItemPages(boardFuerRolle("factory"))),
-    ...ladeBelegung(messfenster),
+    ...ladeBelegung(messfenster, orte),
     frisch: ladeFrisch(),
   });
   /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
-  const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster) });
+  const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster, orte) });
   const boardRepos = { produkt: boardRepo(boardFuerRolle("produkt"), { repo: REPO }), factory: boardRepo(boardFuerRolle("factory"), { repo: REPO }) };
   return { lade, ladeEinzeln, fuellstand: fuellstandLader(), fremdStatus: fremdStatusLader(), repo: REPO, boardRepos, owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }

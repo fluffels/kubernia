@@ -1,7 +1,7 @@
 // Lib ohne Direktaufruf-Guard; `arbeitsplatz.mjs`, `projekt-config-lib.mjs`, `ticket-namen.mjs` und `mess-lib.mjs` importieren sie (ADR 0022 Fortschreibung, #87).
 /**
- * Betriebsart Arbeitsplatz: der optionale Config-Block `arbeitsplatz` (`wurzel`, `repos[]` mit `name` und `pfad`), der Resolver daraus
- * (Wurzel, Repo-Pfade, Worktree-Ordner je Repo), der Worktree-Befehl und der Parser für Harness-Spuren im Projekt-Repo.
+ * Betriebsart Arbeitsplatz: der optionale Config-Block `arbeitsplatz` (`wurzel`, `repos[]` mit `name`, `pfad` und optional `standardzweig`), der Resolver daraus
+ * (Wurzel, Repo-Pfade, Worktree-Ordner, Standardzweig je Repo, Default `main`), der Worktree-Befehl und der Parser für Harness-Spuren im Projekt-Repo.
  *
  * Eingebettet (ohne Block) liegt der Harness im Repo, der Worktree-Ordner ist `<repo>/.claude/worktrees`. Im Arbeitsplatz liegen die Repos
  * unter einer Wurzel, die Worktrees außerhalb jedes Repos unter `<wurzel>/.claude/worktrees/<name>`.
@@ -23,7 +23,12 @@ export const REPO_NAME_QUELLE = "[A-Za-z0-9][A-Za-z0-9._-]*";
 
 const NAME_MUSTER = new RegExp(`^${REPO_NAME_QUELLE}$`);
 const BLOCK_SCHLUESSEL = ["wurzel", "repos"];
-const REPO_SCHLUESSEL = ["name", "pfad"];
+const REPO_SCHLUESSEL = ["name", "pfad", "standardzweig"];
+
+/** Standardzweig, wenn ein Repo keinen angibt (`arbeitsplatz.repos[].standardzweig`). */
+export const STANDARDZWEIG = "main";
+/** Zweigname, der in einem Befehlstext stehen darf: alphanumerischer Anfang, dann Buchstaben, Ziffern, `.`, `_`, `-`, `/`; kein `..`, `//`, `.lock`-Ende oder `.`/`/` am Ende. */
+const ZWEIG_MUSTER = /^(?!.*\.\.)(?!.*\/\/)(?!.*\.lock$)[A-Za-z0-9][A-Za-z0-9._/-]*(?<![./])$/;
 
 /** Pur: ist `name` ein gültiger Repo-Name? */
 export const istRepoName = (name) => typeof name === "string" && NAME_MUSTER.test(name);
@@ -46,6 +51,12 @@ function pfadMaengel(pfad, wo) {
   if (pfad.startsWith("../")) return [`${wo}.pfad "${pfad}" liegt außerhalb der Wurzel`];
   if (!istRelativPosix(pfad)) return [`${wo}.pfad "${pfad}" muss ein relativer POSIX-Pfad zur Wurzel sein (kein Backslash, Laufwerk, absolut, \`.\`/\`..\`-Segment)`];
   return [];
+}
+
+/** Pur: Mängel eines Standardzweigs (optional; ein gesetzter Wert muss ein einfacher Zweigname sein, weil er in einem Befehlstext steht). */
+function zweigMaengel(zweig, wo) {
+  if (zweig === undefined || (typeof zweig === "string" && ZWEIG_MUSTER.test(zweig))) return [];
+  return [`${wo}.standardzweig "${String(zweig)}" ist ungültig (Zweigname aus Buchstaben, Ziffern, ., _, -, /; ohne Leerraum, .. und .lock-Ende)`];
 }
 
 /** Pur: Mängel eines Repo-Namens (Form, Worktree-Präfix am Anfang). */
@@ -80,7 +91,7 @@ export function arbeitsplatzMaengel(block, { worktreePraefix } = {}) {
       fehler.push(`${wo} muss ein Objekt { name, pfad } sein`);
       return;
     }
-    fehler.push(...unbekannte(repo, REPO_SCHLUESSEL, wo), ...nameMaengel(repo.name, wo, worktreePraefix), ...pfadMaengel(repo.pfad, wo));
+    fehler.push(...unbekannte(repo, REPO_SCHLUESSEL, wo), ...nameMaengel(repo.name, wo, worktreePraefix), ...pfadMaengel(repo.pfad, wo), ...zweigMaengel(repo.standardzweig, wo));
     const schluessel = typeof repo.name === "string" ? repo.name.toLowerCase() : undefined;
     if (schluessel !== undefined && gesehen.has(schluessel)) fehler.push(`${wo}.name "${repo.name}" kommt doppelt vor (ohne Beachtung der Groß-/Kleinschreibung)`);
     if (schluessel !== undefined) gesehen.add(schluessel);
@@ -105,9 +116,17 @@ export function arbeitsplatzAus(config, basis) {
   const maengel = arbeitsplatzMaengel(block, { worktreePraefix: config?.praefixe?.worktree });
   if (maengel.length > 0) throw new Error(`${maengel.join("; ")}\nFix: den Block arbeitsplatz (wurzel, repos[] mit name und pfad) in der Projekt-Config korrigieren`);
   const wurzel = posixAus(isAbsolute(block.wurzel) ? block.wurzel : resolve(basis, block.wurzel));
-  const repos = block.repos.map(({ name, pfad }) => ({ name, pfad: posix.join(wurzel, pfad), worktreeOrdner: `${wurzel}/.claude/worktrees/${name}` }));
+  const repos = block.repos.map(({ name, pfad, standardzweig }) => ({
+    name,
+    pfad: posix.join(wurzel, pfad),
+    worktreeOrdner: `${wurzel}/.claude/worktrees/${name}`,
+    ...(standardzweig === undefined ? {} : { standardzweig }),
+  }));
   return { betriebsart: "arbeitsplatz", wurzel, repos };
 }
+
+/** Pur: der Standardzweig eines Repos aus `arbeitsplatzAus(...).repos` (Default `main`). */
+export const standardzweigVon = (repo) => repo?.standardzweig ?? STANDARDZWEIG;
 
 const anfuehren = (pfad) => (/\s/.test(pfad) ? `"${pfad}"` : pfad);
 
@@ -120,7 +139,7 @@ export function worktreeBefehl({ aufloesung, repo, worktreeName, branchName }) {
     return `git fetch origin && git worktree add .claude/worktrees/${worktreeName} -b ${branchName} origin/main`;
   }
   const c = `git -C ${anfuehren(repo.pfad)}`;
-  return `${c} fetch origin && ${c} worktree add ${anfuehren(`${repo.worktreeOrdner}/${worktreeName}`)} -b ${branchName} origin/main`;
+  return `${c} fetch origin && ${c} worktree add ${anfuehren(`${repo.worktreeOrdner}/${worktreeName}`)} -b ${branchName} origin/${standardzweigVon(repo)}`;
 }
 
 const SPUR_SEGMENTE = new Set([".claude", ".agents", ".factory", ".codex"]);

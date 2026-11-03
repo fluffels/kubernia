@@ -2,6 +2,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
+import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { rollenFuer } from "./codex-rollen.mjs";
 export { rollenFuer } from "./codex-rollen.mjs";
@@ -58,7 +59,7 @@ export function quellDatei(root, pfad) {
   return p;
 }
 export function pruefeQuellen(root, config) {
-  const pfade = [".mcp.json", ".factory/projekt.json", "AGENTS.md", "docs/codex/einstieg.md", ...rollenFuer(config).map(r => `.claude/agents/${r.quelle}.md`)];
+  const pfade = [".mcp.json", PROJEKT_CONFIG, "AGENTS.md", "docs/codex/einstieg.md", ...rollenFuer(config).map(r => `.claude/agents/${r.quelle}.md`)];
   for (const p of pfade) quellDatei(root, p);
 }
 function sichererPfad(root, pfad) {

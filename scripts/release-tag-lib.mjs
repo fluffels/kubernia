@@ -19,3 +19,6 @@ export function vergleiche(a, b) {
 export function vergleicheTags(tags) {
   return tags.filter((t) => teile(t)).reduce((hoechster, t) => (hoechster === null || vergleiche(t, hoechster) > 0 ? t : hoechster), null);
 }
+
+/** Hinweis für den Sync-Schritt (Tag-Ticket und Update-Meldung): das eigene Werkzeug kennt ein neues Manifest-Format womöglich noch nicht. */
+export const WERKZEUG_HINWEIS = "Scheitert das eigene Werkzeug am neuen Manifest („version N unbekannt“), einmal das Werkzeug der Quelle fahren: `node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <tag>`.";

@@ -3,7 +3,7 @@
 > 🧭 **Fachlich geprüft am: 2026-10-05.**
 
 > Lebende Liste: wo die Optik von der Messlatte abweicht und was bewusst so bleibt. Die **Regeln** stehen in [`AGENTS.md` › Grafik-Stil](../AGENTS.md#konventionen), das **Vorbild** in [`stardew-referenz.md`](stardew-referenz.md), die Asset-Tokens in [`assets/pixellab/README.md`](../assets/pixellab/README.md). Der Juni-Schnappschuss [`art-direction-audit.md`](art-direction-audit.md) bleibt als Historie.
-> Der laufende Status der Folge-Tickets steht in GitHub, nicht hier (Kopfzeilen-Konvention: [doku-vorlagen.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.6.0/docs/referenz/doku-vorlagen.md)).
+> Der laufende Status der Folge-Tickets steht in GitHub, nicht hier (Kopfzeilen-Konvention: [doku-vorlagen.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.7.1/docs/referenz/doku-vorlagen.md)).
 
 Gegliedert nach **Bereich bzw. Befund-Klasse**, nicht pro Asset. Wächst das Spiel, kommen Bereiche dazu, die Tabelle wird nicht pro Sprite länger.
 

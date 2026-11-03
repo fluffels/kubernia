@@ -274,6 +274,32 @@ export function codeMaskiert(md) {
 export const SCHNAPPSCHUSS_START = "<!-- schnappschuss:start -->";
 export const SCHNAPPSCHUSS_ENDE = "<!-- schnappschuss:ende -->";
 
+/**
+ * Schnappschuss-Blöcke einer Zeilenliste (Marker zählen nur allein auf der Zeile, getrimmt): eine Auslegung für die Wächter für entfernte Pfade und Factory-Links.
+ * Rückgabe: `{ bloecke: [[startZeile, endZeile]], fehler: [{ zeile, art }] }`, Zeilen 0-basiert; nur geschlossene Blöcke stehen in `bloecke`.
+ * `art`: `verschachtelt` (Start im offenen Block, die Zeile des zweiten Starts), `ende-ohne-start`, `ohne-ende` (die Zeile des offenen Starts; er schließt keinen Block).
+ */
+export function schnappschussBloecke(zeilen) {
+  const bloecke = [];
+  const fehler = [];
+  let start = -1;
+  zeilen.forEach((z, i) => {
+    const marker = z.trim();
+    if (marker === SCHNAPPSCHUSS_START) {
+      if (start >= 0) fehler.push({ zeile: i, art: "verschachtelt" });
+      else start = i;
+    } else if (marker === SCHNAPPSCHUSS_ENDE) {
+      if (start < 0) fehler.push({ zeile: i, art: "ende-ohne-start" });
+      else {
+        bloecke.push([start, i]);
+        start = -1;
+      }
+    }
+  });
+  if (start >= 0) fehler.push({ zeile: start, art: "ohne-ende" });
+  return { bloecke, fehler };
+}
+
 /** Externes Link-Ziel (Protokoll wie http: oder mailto:, oder protokoll-relativ //): die Trennlinie zwischen `linkStellen` (intern) und `externeLinkStellen`. */
 const EXTERN_ZIEL = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 /** Inline-Link und Bild `[t](ziel)` bzw. `[t](<ziel>)` mit optionalem "Titel". */

@@ -14,17 +14,18 @@
 //                   sonst das Board mit Rolle `factory`).
 //   nicht erfasst:  nackte URLs im Text, Referenz-Links (`[t][r]`, `[r]: url`), Links auf `/issues` und `/pull`, die Repo-Wurzel.
 //   ausgenommen:    Dateien, die ein Glob aus `factoryLinks.ausnahmen` trifft (historische Seiten wie ADRs), Schnappschuss-Blöcke, Besitz-Einheiten
-//                   (`sync-stand.einheiten`: ganze `*.md`-Dateien und Blöcke `datei#id` zwischen den Besitz-Markern; JSON-Schlüssel-Einheiten `#/…` tragen
-//                   keine Doku-Links). Marker innerhalb von Code (Fence, Inline-Code) öffnen keinen Block.
+//                   (`sync-stand.einheiten`: ganze `*.md`-Dateien und Blöcke `datei#id` zwischen den Besitz-Markern nach `besitzSpannen`, wie die Doku-Drift-
+//                   Prüfung: erstes Marker-Vorkommen, auch in Code; JSON-Schlüssel-Einheiten `#/…` tragen keine Doku-Links). Schnappschuss-Marker innerhalb
+//                   von Code (Fence, Inline-Code) öffnen keinen Block; ein Schnappschuss-Start ohne Ende maskiert nichts (fail-closed).
 //   rot (`form`):   jede andere URL auf dieses Repo (z.B. ein Commit-Link, oder eine Blob-URL ohne Pfad), damit kein Link ungeprüft bleibt.
 // Bekannte Grenzen: der Index unterscheidet blob und tree nicht; Anker nur bei `blob` auf `*.md` (GitHub-Slugs).
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown } from "./check-basis.mjs";
-import { markerEnde, markerStart } from "./besitz-lib.mjs";
+import { besitzSpannen, einheitAusId } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { SCHNAPPSCHUSS_ENDE, SCHNAPPSCHUSS_START, codeMaskiert, collectHeadingSlugs, externeLinkStellen } from "./docs-gen/markdown.mjs";
+import { codeMaskiert, collectHeadingSlugs, externeLinkStellen, schnappschussBloecke } from "./docs-gen/markdown.mjs";
 import { factoryRepo, factoryUrlTeile } from "./factory-seite.mjs";
 import { leserVomCommit } from "./factory-sync-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
@@ -51,46 +52,24 @@ export function factoryLinkStellen(md, repo) {
   return stellen;
 }
 
-/** Zeilen (0-basiert) im Schnappschuss-Block und in den Besitz-Blöcken `ids` dieser Datei; Marker in Code zählen nicht. */
-function maskierteZeilen(text, ids) {
+/** Zeilen (0-basiert) in den geschlossenen Schnappschuss-Blöcken (`schnappschussBloecke`; ein Start ohne Ende maskiert nichts, fail-closed); Marker in Code zählen nicht. */
+function maskierteZeilen(text) {
   const aus = new Set();
-  const zeilen = codeMaskiert(text).split("\n");
-  const bloecke = [[SCHNAPPSCHUSS_START, SCHNAPPSCHUSS_ENDE], ...ids.map((id) => [markerStart(id), markerEnde(id)])];
-  for (const [start, ende] of bloecke) {
-    let offen = false;
-    zeilen.forEach((z, i) => {
-      const t = z.trim();
-      if (t === start) offen = true;
-      if (offen) aus.add(i);
-      if (t === ende) offen = false;
-    });
-  }
+  for (const [start, ende] of schnappschussBloecke(codeMaskiert(text).split("\n")).bloecke) for (let i = start; i <= ende; i++) aus.add(i);
   return aus;
-}
-
-/** Besitz-Einheiten-IDs aufgeteilt: ganze Markdown-Dateien und Blöcke je Datei. */
-function einheitenAufteilen(einheiten) {
-  const ganz = new Set();
-  const bloecke = new Map();
-  for (const id of einheiten) {
-    const [pfad, block] = id.split("#");
-    if (block === undefined) {
-      if (pfad.endsWith(".md")) ganz.add(pfad);
-    } else if (!block.startsWith("/")) bloecke.set(pfad, [...(bloecke.get(pfad) ?? []), block]);
-  }
-  return { ganz, bloecke };
 }
 
 /** Alle erfassten Links im Umfang: `{ datei, ...stelle }`, sortiert nach Datei und Position. `ausnahmen` sind Pfad-Globs (`factoryLinks.ausnahmen`). */
 export function sammleLinks(rootDir, { repo, einheiten = [], ausnahmen = [] }) {
-  const { ganz, bloecke } = einheitenAufteilen(einheiten);
+  const besitz = einheiten.map(einheitAusId);
   const ausgenommen = ausnahmen.map(globRegex);
   const links = [];
   for (const datei of collectMarkdown(rootDir)) {
-    if (ausgenommen.some((re) => re.test(datei)) || ganz.has(datei)) continue;
+    if (ausgenommen.some((re) => re.test(datei))) continue;
     const text = readFileSync(join(rootDir, ...datei.split("/")), "utf8");
-    const aus = maskierteZeilen(text, bloecke.get(datei) ?? []);
-    for (const s of factoryLinkStellen(text, repo)) if (!aus.has(s.zeile - 1)) links.push({ datei, ...s });
+    const aus = maskierteZeilen(text);
+    const spannen = besitzSpannen(besitz, datei, text);
+    for (const s of factoryLinkStellen(text, repo)) if (!aus.has(s.zeile - 1) && !spannen.some(([von, bis]) => s.start >= von && s.start <= bis)) links.push({ datei, ...s });
   }
   return links;
 }

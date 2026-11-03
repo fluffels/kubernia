@@ -26,6 +26,8 @@
  *                    nie `--force`; der Lock erst nach verifiziertem Entfernen). Ein Lock ohne Worktree und ohne Branch wird auch ohne PR gelöscht (Epic).
  *   behalten         alles andere, mit Grund.
  * Das Skript entfernt nie einen Assignee und ändert nie ein Issue.
+ * Arbeitsplatz (ADR 0022 Fortschreibung, #88): Worktrees, Branches und git-Aufrufe je Repo aus `arbeitsplatz.repos` der Projekt-Config, der Lock-Ort liegt unter `<wurzel>/.claude`; `worktree remove` läuft im Repo des Worktrees und nur für einen
+ * Worktree direkt in dessen Worktree-Ordner (`pfadErlaubt`). Grenze: je Lauf führt ein Claim einen Worktree (den ersten in Config-Reihenfolge), hat ein Ticket Worktrees in mehreren Repos, räumt der nächste Lauf den Rest ab. Scheitert git in einem Repo: Exit 2 mit `Fix:`-Zeile.
  *
  * Exit 0 = ok, 1 = ein Aufräumschritt ist gescheitert (der Rest wird gemeldet), 2 = Aufruf-, git- oder gh-Fehler (nichts aufgeräumt),
  * 5 = GitHub-API-Kontingent knapp.
@@ -40,14 +42,16 @@ import { mitKontingent } from "./kontingent-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istRepoForm, zerlegeRepo } from "./repo-form.mjs";
-import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnis, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
+import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnisFuer, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
 import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
 import { lensWorktreeName, ticketAusRef } from "./ticket-refs.mjs";
-import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
+import { gitOrteAus, parseWorktreeBloecke, refsJeRepo, registrierteWorktreesJeRepo } from "./worktree-aufraeumen.mjs";
 
 /** Standard-Schwelle in Stunden: ohne Lebenszeichen darüber gilt ein offener Claim als verwaist (über `VERWAIST_MS` von 2 h). */
 export const STANDARD_STUNDEN = 3;
 const STUNDE = 60 * 60_000;
+/** Eingebettet fragt git im Arbeitsverzeichnis: ein Ort ohne `cwd`. */
+const EINGEBETTET_ORTE = [{ name: null, cwd: undefined, worktreeOrdner: undefined }];
 /** Höchstzahl Issues je GraphQL-Abfrage. */
 const ALIAS_MAX = 40;
 
@@ -137,25 +141,42 @@ function frageGraphql(deps, query) {
   }
 }
 
-/** Liegt `pfad` unter `<Hauptcheckout>/.claude/worktrees/` und gehört zur Nummer? Pur. */
-export function pfadErlaubt({ pfad, hauptcheckout, nr, namen = ladeTicketNamen() }) {
-  const rel = relative(resolve(hauptcheckout, ".claude", "worktrees"), resolve(pfad));
+/**
+ * Liegt `pfad` direkt im Worktree-Ordner und gehört zur Nummer? Eingebettet ist der Ordner `<Hauptcheckout>/.claude/worktrees/`; im Arbeitsplatz
+ * (#88) übergibt der Aufrufer `worktreeOrdner` des Repos, das den Worktree registriert hat (ein Ordner eines anderen Repos gilt nicht). Pur.
+ */
+export function pfadErlaubt({ pfad, hauptcheckout, nr, namen = ladeTicketNamen(), worktreeOrdner }) {
+  const rel = relative(worktreeOrdner === undefined ? resolve(hauptcheckout, ".claude", "worktrees") : resolve(worktreeOrdner), resolve(pfad));
   return !/[\\/]/.test(rel) && ticketAusRef(`worktrees/${rel}`, namen) === nr && !lensWorktreeName(namen).test(rel);
 }
+
+/** Im Arbeitsplatz trägt der Worktree sein Repo (`ort`), eingebettet bleibt das Objekt unverändert. */
+const mitOrt = (worktree, block) => (block.ort ? { ...worktree, ort: block.ort } : worktree);
+
+/** Erste Zeile einer Fehlermeldung, dazu die `Fix:`-Zeile eines Repo-Fehlers (#88), damit sie nicht abgeschnitten wird. */
+const fehlerZeilen = (e) => {
+  const zeilen = String(e?.message ?? e).split(/\r?\n/);
+  const fix = zeilen.find((z) => z.startsWith("Fix:"));
+  return fix ? `${zeilen[0]}\n${fix}` : zeilen[0];
+};
 
 /** Sammelt Kandidaten und ihre Daten: `{ jetzt, viewer, hauptcheckout, claims }`. Wirft bei git-/gh-Fehlern. */
 export function sammle(deps) {
   const jetzt = deps.jetzt();
   const namen = deps.namen ?? ladeTicketNamen();
   const lensName = lensWorktreeName(namen);
-  const bloecke = parseWorktreeBloecke(deps.git(["worktree", "list", "--porcelain"]));
-  const hauptcheckout = bloecke[0]?.pfad ?? "";
-  const ticketWorktrees = bloecke.slice(1).filter((b) => !lensName.test(basename(b.pfad)) && ticketAusRef(b.pfad, namen) !== null);
-  const refs = deps
-    .git(["for-each-ref", "--format=%(refname)\t%(committerdate:unix)", "refs/heads", "refs/remotes"])
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((z) => {
+  const orte = deps.orte ?? EINGEBETTET_ORTE;
+  const jeRepo = registrierteWorktreesJeRepo(orte, deps.git);
+  const hauptcheckout = jeRepo[0]?.bloecke[0]?.pfad ?? "";
+  // Je Repo ohne den Haupt-Checkout (erster Block); ein Worktree trägt im Arbeitsplatz sein Repo (`ort`), eingebettet nichts.
+  const ticketWorktrees = jeRepo.flatMap(({ ort, bloecke }) =>
+    bloecke
+      .slice(1)
+      .filter((b) => !lensName.test(basename(b.pfad)) && ticketAusRef(b.pfad, namen) !== null)
+      .map((b) => (ort.cwd === undefined ? b : { ...b, ort })),
+  );
+  const refs = refsJeRepo(orte, deps.git, "%(refname)\t%(committerdate:unix)")
+    .map(({ ref: z }) => {
       const [name, sek] = z.split("\t");
       return { nr: ticketAusRef(name, namen), ms: Number(sek) * 1000, lokal: name.startsWith("refs/heads/") };
     })
@@ -206,7 +227,7 @@ export function sammle(deps) {
       prs: issue?.prs ?? [],
       festgefahren: Boolean(deps.festgefahrenLabel && issue && (issue.labels.includes(deps.festgefahrenLabel) || issue.prs.some((p) => p.labels.includes(deps.festgefahrenLabel)))),
       lock,
-      worktree: w && { pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked },
+      worktree: w && mitOrt({ pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked }, w),
       branch: meine.length > 0,
       branchLokal: meine.some((r) => r.lokal),
       lebenszeichenMs: lz.length ? Math.max(...lz) : null,
@@ -244,10 +265,12 @@ export function jsonDokument({ jetzt, viewer, schwelleStunden, urteile }) {
 function raeumeAuf(deps, c, urteil, lockPfad, hauptcheckout) {
   const getan = [];
   if (urteil.aktion.worktree) {
-    if (!pfadErlaubt({ pfad: c.worktree.pfad, hauptcheckout, nr: c.nr, namen: deps.namen ?? ladeTicketNamen() })) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree-Pfad liegt nicht unter dem Worktree-Ordner des Hauptcheckouts, nichts entfernt` };
+    const ort = c.worktree.ort; // Arbeitsplatz: das Repo, dem der Worktree gehört; eingebettet fehlt es (Arbeitsverzeichnis)
+    if (!pfadErlaubt({ pfad: c.worktree.pfad, hauptcheckout, nr: c.nr, namen: deps.namen ?? ladeTicketNamen(), worktreeOrdner: ort?.worktreeOrdner })) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree-Pfad liegt nicht unter dem Worktree-Ordner des Hauptcheckouts, nichts entfernt` };
+    const gitHier = (args) => (ort ? deps.git(args, ort.cwd) : deps.git(args));
     try {
-      deps.git(["worktree", "remove", c.worktree.pfad]);
-      const noch = parseWorktreeBloecke(deps.git(["worktree", "list", "--porcelain"])).some((b) => b.pfad === c.worktree.pfad);
+      gitHier(["worktree", "remove", c.worktree.pfad]);
+      const noch = parseWorktreeBloecke(gitHier(["worktree", "list", "--porcelain"])).some((b) => b.pfad === c.worktree.pfad);
       if (noch || deps.existiert(c.worktree.pfad)) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree ${c.worktree.pfad} ist nach dem Entfernen noch da (Lock bleibt)` };
     } catch (e) {
       return { ok: false, zeile: `FEHLER #${c.nr}: git worktree remove scheiterte (${String(e?.message ?? e).split("\n")[0]}); Lock bleibt` };
@@ -288,7 +311,7 @@ export function fuehreAus(argv, depsOderFabrik) {
   try {
     stand = sammle(deps);
   } catch (e) {
-    return ergebnisAus(2, "", `✖ claims-pruefen: git oder gh fehlgeschlagen, nichts aufgeräumt: ${String(e?.message ?? e).split("\n")[0]}`);
+    return ergebnisAus(2, "", `✖ claims-pruefen: git oder gh fehlgeschlagen, nichts aufgeräumt: ${fehlerZeilen(e)}`);
   }
   const schwelleMs = args.stunden * STUNDE;
   const urteile = stand.claims.map((claim) => ({ claim, urteil: beurteileClaim({ claim, jetzt: stand.jetzt, schwelleMs }) }));
@@ -310,23 +333,30 @@ export function fuehreAus(argv, depsOderFabrik) {
   return ergebnisAus(code, zeilen.join("\n"));
 }
 
+/**
+ * Argumente für die eigenen offenen Zuweisungen (#88): `--repo` nennt das Repo ausdrücklich, damit `gh` im Arbeitsplatz (Arbeitsverzeichnis ist kein Git-Repo)
+ * nicht am cwd hängt und eingebettet dasselbe Repo trifft wie bisher. Pur.
+ */
+export const zugewiesenArgs = (repo = REPO) => ["issue", "list", "--repo", repo, "--assignee", "@me", "--state", "open", "--json", "number", "--limit", "200"];
+
 /** Echte I/O: git und gh über die gemeinsamen Wrapper, Lock-Verzeichnis im gemeinsamen git-Verzeichnis. */
-export function echteDeps({ config: vorgabe } = {}) {
-  const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
-  const gemeinsam = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
+export function echteDeps({ config: vorgabe, basis, ghJson: ghJsonFn = ghJson } = {}) {
+  const git = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   const config = vorgabe ?? ladeProjektConfig();
+  const { aufloesung, orte } = gitOrteAus(config, basis);
   return {
     namen: ticketNamen(config),
     jetzt: () => Date.now(),
     git,
+    orte,
     graphql: (query) => JSON.parse(ghText(["api", "graphql", "-f", `query=${query}`])),
     zugewiesen: () => {
-      const liste = ghJson(["issue", "list", "--assignee", "@me", "--state", "open", "--json", "number", "--limit", "200"]);
+      const liste = ghJsonFn(zugewiesenArgs());
       if (liste.length >= 200) process.stderr.write("Warnung: 200 offene Zuweisungen, die Liste ist an der Grenze und kann unvollständig sein\n");
       return liste.map((i) => i.number);
     },
     festgefahrenLabel: labelAus(config, "festgefahren"),
-    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: worktreePraefix(config) }),
+    lockDir: lockVerzeichnisFuer({ aufloesung, praefixWorktree: worktreePraefix(config), gemeinsam: () => git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() }),
     liste: (d) => readdirSync(d),
     liesDatei: (p) => readFileSync(p, "utf8"),
     loesche: unlinkSync,

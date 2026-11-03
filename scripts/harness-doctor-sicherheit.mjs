@@ -8,6 +8,8 @@
  * Grenze: `secret_scanning_validity_checks` steht nicht in der REST-Doku von „Get a repository“; die Live-Probe mit Admin-Recht zeigt ihn; fehlt er in einem Projekt, ist der Punkt nicht prüfbar.
  */
 
+import { ausFehler as ausFehlerRoh, gut, luecke as lueckeRoh, nichtPruefbar as nichtPruefbarRoh } from "./harness-doctor-ergebnis.mjs";
+
 export const LINK_RULESET = "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository";
 export const LINK_ACTIONS = "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository";
 const DOKU = "https://docs.github.com/en/code-security";
@@ -31,12 +33,11 @@ const FIX_FEHLER = "mit einem Konto mit Admin-Recht prüfen (gh auth status), da
 const FIX_FELD = "Funktion im Plan nicht verfügbar oder Feld unbekannt: in den Einstellungen von Hand prüfen";
 export const GRENZE_PRIVAT = " (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)";
 
-const gut = (punkt, hinweis) => ({ punkt, ok: true, ...(hinweis ? { hinweis } : {}) });
-const luecke = (punkt, befund, fix) => ({ punkt, ok: false, befund, fix, link: LINK_SICHERHEIT[punkt] });
-/** Ein nicht prüfbarer Punkt: `ok: false` ohne belegte Lücke (der Zustand ist unbekannt); `link` hat Vorrang vor dem Sicherheits-Link des Punkts. */
-export const nichtPruefbar = (punkt, grund, fix = FIX_FELD, link = LINK_SICHERHEIT[punkt]) => ({ punkt, ok: false, nichtPruefbar: true, befund: grund, fix, link });
-/** Nicht prüfbar, weil die Quelle selbst fehlschlug; `quelle.fix` (etwa „erst den Token-Punkt beheben“) hat Vorrang. */
-export const ausFehler = (punkt, was, quelle, link) => nichtPruefbar(punkt, `${was} nicht lesbar (${quelle.fehler})`, quelle.fix ?? FIX_FEHLER, link);
+const luecke = (punkt, befund, fix) => lueckeRoh(punkt, befund, fix, LINK_SICHERHEIT[punkt]);
+/** Nicht prüfbar mit den Standardwerten dieses Moduls: Fix `FIX_FELD`, Link des Punkts (`link` hat Vorrang). */
+const nichtPruefbar = (punkt, grund, fix = FIX_FELD, link = LINK_SICHERHEIT[punkt]) => nichtPruefbarRoh(punkt, grund, fix, link);
+/** Quelle fehlgeschlagen; `quelle.fix` (etwa „erst den Token-Punkt beheben“) hat Vorrang vor `FIX_FEHLER`. */
+const ausFehler = (punkt, was, quelle, link = LINK_SICHERHEIT[punkt]) => ausFehlerRoh(punkt, was, quelle, FIX_FEHLER, link);
 
 /** Die fünf Punkte aus `security_and_analysis`: Schlüssel und Klickpfad der Lücke. */
 const SECURITY_AND_ANALYSIS = {
