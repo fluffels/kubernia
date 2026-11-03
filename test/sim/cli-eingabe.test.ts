@@ -120,6 +120,14 @@ describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996
     expect(checkFlags(host, offen, ["x", "make", "--zzz", "-Z"], 2)).toContain(NS + " das Flag '--zzz'");
     expect(checkFlags(host, offen, ["x", "make", "-Z"], 2)).toContain(NS + " das Flag '-Z'");
   });
+  test("mehrere echte, nicht simulierte Flags: das erste wird genannt", () => {
+    expect(run("-R", "--real", ...ok)).toContain(NS + " das Flag '-R'");
+    expect(run("--real", "-R", ...ok)).toContain(NS + " das Flag '--real'");
+  });
+  test("ein geschlossenes Ziel ohne eigene Flags: der Ersatz-Tipp nennt „ohne Flags“", () => {
+    const leer: ArgSpec = { cmd: "x make", maxArgs: OFFENE_LISTE, flags: [], realFlags: [] };
+    expect(checkFlags(host, leer, ["x", "make", "--zzz"], 2)).toBe("error: unknown flag: --zzz\nDer Simulator kann: 'x make' ohne Flags");
+  });
   test("goflag: der Wortlaut der Go-Bibliothek", () => {
     const go: ArgSpec = { cmd: "t plan", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-out")], realFlags: ["-real"] };
     expect(checkFlags(host, go, ["t", "plan", "-zzz"], 2)).toContain("flag provided but not defined: -zzz");
@@ -1127,6 +1135,11 @@ describe("cliargs: Dispatch.realFlags erreicht das geschlossene Blatt, die Famil
   test("Familien- und Ebenen-Flags gelten zwei Ebenen tiefer im geschlossenen Blatt als „Nicht simuliert“", () => {
     for (const f of ["--fam", "--mid", "--leaf"]) expect(lauf("mid", "deep", "g", f)).toContain(NS + " das Flag '" + f + "'");
     expect(lauf("mid", "deep", "g", "--zzz")).toContain("error: unknown flag: --zzz");
+  });
+  test("ein geschlossenes Blatt unter einer Ebene ohne eigene Liste: nur seine Liste gilt", () => {
+    const ohne: Dispatch<SubEntry<typeof run>> = { cmd: "y", table: { g: geschlossen } };
+    expect(dispatchSub(host, ohne, ["y", "g", "--leaf"], 1)).toContain(NS + " das Flag '--leaf'");
+    expect(dispatchSub(host, ohne, ["y", "g", "--fam"], 1)).toContain("error: unknown flag: --fam");
   });
   test("ein Blatt ohne eigene Liste bleibt offen, auch mit Familien-Liste", () => {
     expect(lauf("mid", "deep", "o", "--zzz")).toContain(NS + " das Flag '--zzz'");
