@@ -105,6 +105,8 @@ const HOST_HTML = "dist/index.html";
  *     Spielcode 591_000 → 592_000 (Ist 591_669 B in der CI, zusammen mit dem Stand von main nach #1530).
  *   • #1693 (gemeinsames esc() für HTML-Attribute in der Präsentation, Sicherheitsfix für CodeQL-Alerts; bewusst und legitim):
  *     Spielcode 592_000 → 593_000 (Ist 592_027 B).
+ *   • #1720 (-n als persistentes kubectl-Wurzel-Flag, zentrale Namespace-Wache, Flag-Dubletten-Prüfung; neuer Domänen-Code, bewusst und legitim):
+ *     Spielcode 593_000 → 594_000 (Ist 593_151 B in der CI, zusammen mit dem Stand von main nach #1678).
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -120,7 +122,7 @@ export const BUNDLE_BUDGETS = [
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 593_000, // #1693: gemeinsames esc() für HTML-Attribute (src/core/html-escape.ts, maskiert auch " und '), Messwert 592027 B; #1667: Mehrfachziele und Aktionsgruppen auf der #1530-Prüfung (zusammen Messwert 591669 B in der CI); #1530: kubectl-Eingabeprüfung, Messwert 590135 B
+    maxBytes: 594_000, // #1720: Namespace-Wache und Flag-Dubletten-Prüfung, Messwert 593151 B in der CI; #1693: gemeinsames esc() für HTML-Attribute (src/core/html-escape.ts, maskiert auch " und '), Messwert 592027 B; #1667: Mehrfachziele und Aktionsgruppen auf der #1530-Prüfung (zusammen Messwert 591669 B in der CI); #1530: kubectl-Eingabeprüfung, Messwert 590135 B
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",

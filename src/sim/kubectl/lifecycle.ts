@@ -21,10 +21,11 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
 import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { exactlyOneName, literalKeysChecked, LITERAL_FLAG, notSimulated, NS, replicasArg, resolveRoleResources, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
+import { exactlyOneName, literalKeysChecked, LITERAL_FLAG, notSimulated, replicasArg, resolveRoleResources, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
 import { containerNameFromImage } from "../util";
 import { readTargets, targetOutcome, type Target } from "./targets";
-import { flag, IM_HANDLER, type Call, type Dispatch, type FlagSpec, type SubEntry } from "../cliargs";
+import { flag, IM_HANDLER, type Call, type Dispatch, type FlagSpec } from "../cliargs";
+import type { KubectlEntry } from "./namespace";
 import { applyDeployment } from "./apply-deployment";
 import { applyGateway, applyGatewayClass, applyHttpRoute } from "./apply-gateway";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
@@ -222,21 +223,21 @@ const ohneBefehl = (art: string, run: CreateHandler): CreateHandler => (host, c)
   return vorDash ?? notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + art + "'.", ["'kubectl create " + art + "' ohne '--'"]);
 };
 
-type CreateOptionen = Pick<SubEntry<CreateHandler>, "hints" | "unknownFlags" | "requiredFlags">;
-const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], opt: CreateOptionen = {}): SubEntry<CreateHandler> =>
+type CreateOptionen = Pick<KubectlEntry<CreateHandler>, "hints" | "unknownFlags" | "requiredFlags">;
+const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], opt: CreateOptionen = {}): KubectlEntry<CreateHandler> =>
   ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, ...opt });
 
 const CREATE_DEPLOYMENT = createEntry("deployment", createDeployment, [flag(true, "--image"), flag(true, "--replicas")]);
 const CREATE_SERVICEACCOUNT = createEntry("serviceaccount", createServiceAccount);
 const CREATE_ROLE = createEntry("role", createRoleOf(false), [flag(true, "--verb"), flag(true, "--resource")]);
-const CREATE_CLUSTERROLE = createEntry("clusterrole", createRoleOf(true), [flag(true, "--verb"), flag(true, "--resource")]);
+const CREATE_CLUSTERROLE = { ...createEntry("clusterrole", createRoleOf(true), [flag(true, "--verb"), flag(true, "--resource")]), namespace: "cluster" } as const;
 const CREATE_ROLEBINDING = createEntry("rolebinding", createRoleBindingOf(false), [flag(true, "--role"), flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG]);
-const CREATE_CLUSTERROLEBINDING = createEntry("clusterrolebinding", createRoleBindingOf(true), [flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG],
-  { unknownFlags: ["--role"], requiredFlags: ["--clusterrole"], hints: { "--role": "Ein ClusterRoleBinding verweist nur auf eine ClusterRole: nutze '--clusterrole=<name>'." } });
+const CREATE_CLUSTERROLEBINDING = { ...createEntry("clusterrolebinding", createRoleBindingOf(true), [flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG],
+  { unknownFlags: ["--role"], requiredFlags: ["--clusterrole"], hints: { "--role": "Ein ClusterRoleBinding verweist nur auf eine ClusterRole: nutze '--clusterrole=<name>'." } }), namespace: "cluster" } as const;
 const CREATE_CONFIGMAP = createEntry("configmap", createConfigMap, [LITERAL_FLAG]);
 
 /** `create secret <art>`: eine eigene Ebene, damit `tls` und `generic` je ihre Flags haben. */
-const KUBECTL_CREATE_SECRET: Dispatch<SubEntry<CreateHandler>> = {
+const KUBECTL_CREATE_SECRET: Dispatch<KubectlEntry<CreateHandler>> = {
   cmd: "kubectl create secret",
   table: {
     generic: createEntry("secret generic", createSecretGeneric, [LITERAL_FLAG]),
@@ -247,9 +248,8 @@ const KUBECTL_CREATE_SECRET: Dispatch<SubEntry<CreateHandler>> = {
 };
 
 /** Die Ziele von `kubectl create` (Aliase teilen den Eintrag, der volle Name steht zuerst). */
-export const KUBECTL_CREATE: Dispatch<SubEntry<CreateHandler>> = {
+export const KUBECTL_CREATE: Dispatch<KubectlEntry<CreateHandler>> = {
   cmd: "kubectl create",
-  flags: [NS],
   table: {
     deployment: CREATE_DEPLOYMENT, deploy: CREATE_DEPLOYMENT,
     serviceaccount: CREATE_SERVICEACCOUNT, sa: CREATE_SERVICEACCOUNT,
