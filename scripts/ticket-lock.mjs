@@ -17,7 +17,7 @@
  * aktiv), 2 = falscher Aufruf oder Fehler.
  *
  * Mechanik: die Lock-Datei `<git-common-dir>/<praefixe.worktree>locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
- * `.claude/worktrees/`) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt, sandbox }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig; `sandbox` = `AGENT_SANDBOX` oder `null`) plus bei Bedarf `zuletzt: { zeit, quelle: "commit"|"schritt" }` (+ `schritt`), `uebergabe`, `gestoppt`. Das Format (Pfad, Parser, `lebenszeichenMs`) steht in `ticket-lock-lib.mjs`.
+ * `.claude/worktrees/`; im Arbeitsplatz `<wurzel>/.claude/<praefixe.worktree>locks/<nr>.json`, weil ein Ticket nicht an ein Repo gebunden ist und das Arbeitsverzeichnis kein Repo ist, #88) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt, sandbox }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig; `sandbox` = `AGENT_SANDBOX` oder `null`) plus bei Bedarf `zuletzt: { zeit, quelle: "commit"|"schritt" }` (+ `schritt`), `uebergabe`, `gestoppt`. Das Format (Pfad, Parser, `lebenszeichenMs`) steht in `ticket-lock-lib.mjs`.
  * `claim` prüft vorher, ob ein Worktree `<praefixe.worktree><nr>` oder ein Branch `<praefixe.branch><nr>-*` (lokal oder remote) existiert (Exit 4). Ein
  * fremder Lock, dessen jüngstes Lebenszeichen (`lebenszeichenMs`) jünger als `VERWAIST_MS` (2 h) ist, gilt (Exit 4); ein älterer wird per `renameSync` auf `<nr>.json.verwaist-<Hash-Präfix>`
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
@@ -31,6 +31,8 @@
  * kein Freigabeweg ohne Nonce (Absicht);
  * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer; aus der Lock-Datei ist sie nicht lesbar). Jede Exit-4-Ausgabe nennt: den Lock nie von Hand lösen.
  *
+ * Arbeitsplatz (ADR 0022 Fortschreibung, #88): git läuft je Repo aus `arbeitsplatz.repos` der Projekt-Config (`gitOrteAus`), Branches und Worktrees werden über alle Repos vereinigt: ein Worktree `<praefixe.worktree><nr>` in einem Repo
+ * belegt die Nummer für alle, das Lebenszeichen ist das Maximum über alle Worktrees und Branch-Köpfe der Nummer. Scheitert git in einem Repo, endet der Lauf mit Exit 2 und einer `Fix:`-Zeile, statt mit den übrigen Repos weiterzumachen.
  * Reines Node-Skript (nur Builtins + git). Die Entscheidungen sind pur exportiert, git und Dateisystem injizierbar.
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -40,10 +42,10 @@ import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, 
 import { join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnis, parseLock } from "./ticket-lock-lib.mjs";
+import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnisFuer, parseLock } from "./ticket-lock-lib.mjs";
 import { ticketNamen, ladeTicketNamen } from "./ticket-namen.mjs";
 import { belegteNummern, ticketAusRef } from "./ticket-refs.mjs";
-import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
+import { gitOrteAus, refsJeRepo, registrierteWorktreesJeRepo } from "./worktree-aufraeumen.mjs";
 
 export { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS };
 
@@ -120,47 +122,53 @@ function legeAn(deps, nr, nonce) {
 /** Namen aus den Deps (Test) oder aus der echten Projekt-Config; ein fehlender Schlüssel wirft (kein Standardwert). */
 const namenVon = (deps) => deps.namen ?? ladeTicketNamen();
 
-/** Gibt es einen Worktree `<praefixe.worktree><nr>` oder einen Branch `<praefixe.branch><nr>-*`? */
+/** Die Orte, in denen git fragt: aus den Deps (Arbeitsplatz: ein Ort je Repo der Config) oder eingebettet der eine Ort ohne `cwd` (Arbeitsverzeichnis). */
+const orteVon = (deps) => deps.orte ?? [{ name: null, cwd: undefined }];
+
+/** Gibt es einen Worktree `<praefixe.worktree><nr>` oder einen Branch `<praefixe.branch><nr>-*`, in irgendeinem Repo? `refs` tragen ihren Ort (für `git log` im richtigen Repo), `wtPfade` alle Worktrees der Nummer. */
 function ermittleBelegung(deps, nr) {
   const namen = namenVon(deps);
-  const refs = deps.git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
-  const bloecke = parseWorktreeBloecke(deps.git(["worktree", "list", "--porcelain"]));
+  const orte = orteVon(deps);
+  const refEintraege = refsJeRepo(orte, deps.git);
+  const bloecke = registrierteWorktreesJeRepo(orte, deps.git).flatMap((r) => r.bloecke);
   const worktrees = bloecke.flatMap((b) => [b.pfad, b.branch].filter(Boolean));
-  const belegt = belegteNummern({ refs, worktrees }, namen).has(nr);
-  const wtPfad = bloecke.find((b) => ticketAusRef(b.pfad, namen) === nr)?.pfad ?? null;
-  return { belegt, refs: refs.filter((r) => ticketAusRef(r, namen) === nr), wtPfad };
+  const belegt = belegteNummern({ refs: refEintraege.map((r) => r.ref), worktrees }, namen).has(nr);
+  const wtPfade = bloecke.filter((b) => ticketAusRef(b.pfad, namen) === nr).map((b) => b.pfad);
+  return { belegt, refs: refEintraege.filter((r) => ticketAusRef(r.ref, namen) === nr), wtPfade };
 }
 
-/** Sammelt die Aktivitäts-Zeitpunkte (ms) zu Branch-Köpfen, Reflog, geänderten Dateien und `node_modules`. */
-function sammleAktivitaet(deps, { refs, wtPfad }) {
+/** Aktivitäts-Zeitpunkte (ms) eines Worktrees: Reflog, geänderte Dateien, `node_modules`. */
+function sammleWorktreeAktivitaet(deps, wtPfad, sek) {
+  const reflogMs = [];
+  const dateiMs = [];
+  try {
+    reflogMs.push(sek(deps.git(["-C", wtPfad, "reflog", "-1", "--format=%ct", "HEAD"])));
+  } catch {
+    /* kein Reflog */
+  }
+  try {
+    for (const z of deps.git(["-C", wtPfad, "status", "--porcelain", "-uall"]).split(/\r?\n/).filter(Boolean)) {
+      const pfad = z.slice(3).replace(/^.* -> /, "").replace(/^"|"$/g, "");
+      dateiMs.push(deps.mtime(join(wtPfad, pfad)));
+    }
+  } catch {
+    /* kein status */
+  }
+  return { reflogMs, dateiMs, nodeModulesMs: deps.mtime(join(wtPfad, "node_modules")) };
+}
+
+/** Sammelt die Aktivitäts-Zeitpunkte (ms) zu Branch-Köpfen, Reflog, geänderten Dateien und `node_modules` (über alle Worktrees der Nummer). */
+function sammleAktivitaet(deps, { refs, wtPfade }) {
   const sek = (text) => Number(String(text).trim()) * 1000;
   const commitMs = refs.map((r) => {
     try {
-      return sek(deps.git(["log", "-1", "--format=%ct", r]));
+      return sek(r.ort.cwd === undefined ? deps.git(["log", "-1", "--format=%ct", r.ref]) : deps.git(["log", "-1", "--format=%ct", r.ref], r.ort.cwd));
     } catch {
       return Number.NaN;
     }
   });
-  const reflogMs = [];
-  const dateiMs = [];
-  let nodeModulesMs = null;
-  if (wtPfad) {
-    try {
-      reflogMs.push(sek(deps.git(["-C", wtPfad, "reflog", "-1", "--format=%ct", "HEAD"])));
-    } catch {
-      /* kein Reflog */
-    }
-    try {
-      for (const z of deps.git(["-C", wtPfad, "status", "--porcelain", "-uall"]).split(/\r?\n/).filter(Boolean)) {
-        const pfad = z.slice(3).replace(/^.* -> /, "").replace(/^"|"$/g, "");
-        dateiMs.push(deps.mtime(join(wtPfad, pfad)));
-      }
-    } catch {
-      /* kein status */
-    }
-    nodeModulesMs = deps.mtime(join(wtPfad, "node_modules"));
-  }
-  return { commitMs, reflogMs, dateiMs, nodeModulesMs };
+  const teile = wtPfade.map((p) => sammleWorktreeAktivitaet(deps, p, sek));
+  return { commitMs, reflogMs: teile.flatMap((t) => t.reflogMs), dateiMs: teile.flatMap((t) => t.dateiMs), nodeModulesMs: Math.max(...teile.map((t) => t.nodeModulesMs).filter((w) => Number.isFinite(w)), Number.NEGATIVE_INFINITY) };
 }
 
 const ergebnis = (code, out = "", err = "") => ({ code, out: out ? `${out}\n` : "", err: err ? `${err}\n` : "" });
@@ -182,10 +190,13 @@ function raeumeAuf(deps) {
 }
 
 function claim(deps, nr, wiederaufnahme = false) {
-  try {
-    deps.git(["fetch", "-q", "--prune", "origin"]);
-  } catch {
-    /* fail-open: ohne Netz zählen die lokalen Refs */
+  for (const ort of orteVon(deps)) {
+    try {
+      if (ort.cwd === undefined) deps.git(["fetch", "-q", "--prune", "origin"]);
+      else deps.git(["fetch", "-q", "--prune", "origin"], ort.cwd);
+    } catch {
+      /* fail-open je Repo: ohne Netz zählen die lokalen Refs */
+    }
   }
   const b = ermittleBelegung(deps, nr);
   if (b.belegt) {
@@ -350,16 +361,21 @@ export function fuehreAus(argv, deps) {
   }
 }
 
-/** Echte I/O: git per `execFileSync`, Lock-Verzeichnis im gemeinsamen git-Verzeichnis aller Worktrees. */
-export function echteDeps({ config } = {}) {
-  const namen = ticketNamen(config ?? ladeProjektConfig());
-  const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
-  const gemeinsam = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
+/**
+ * Echte I/O: git per `execFileSync` (im Arbeitsplatz je Repo mit `cwd`), Lock-Verzeichnis eingebettet im gemeinsamen git-Verzeichnis aller Worktrees,
+ * im Arbeitsplatz unter der Wurzel. `basis` ist der Ordner mit `.factory/projekt.json` (Standard: das Repo dieses Skripts).
+ */
+export function echteDeps({ config: vorgabe, basis } = {}) {
+  const config = vorgabe ?? ladeProjektConfig();
+  const namen = ticketNamen(config);
+  const git = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+  const { aufloesung, orte } = gitOrteAus(config, basis);
   return {
     git,
+    orte,
     jetzt: () => Date.now(),
     nonce: () => randomUUID(),
-    lockDir: lockVerzeichnis({ gemeinsam, praefixWorktree: namen.praefixe.worktree }),
+    lockDir: lockVerzeichnisFuer({ aufloesung, praefixWorktree: namen.praefixe.worktree, gemeinsam: () => git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() }),
     namen,
     sandbox: process.env.AGENT_SANDBOX ?? null,
     liesDatei: (p) => readFileSync(p, "utf8"),

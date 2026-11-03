@@ -18,6 +18,7 @@ import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { istRelativPosix } from "./relativ-pfad.mjs";
 import { globMaengel } from "./pfad-glob.mjs";
+import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
@@ -518,6 +519,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.factoryLinks !== undefined) fehler.push(...pruefeFactoryLinks(wert.factoryLinks));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
+  fehler.push(...modulFormFehler(wert));
   if (wert.arbeitsplatz !== undefined) fehler.push(...arbeitsplatzMaengel(wert.arbeitsplatz, { worktreePraefix: wert.praefixe?.worktree }));
   return fehler;
 }

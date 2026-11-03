@@ -45,23 +45,12 @@ import { dirname, join } from "node:path";
 // Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
-import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { CONTEXT_BUDGETS, countChars } from "./kontext-budget-lib.mjs";
+import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Zeichen-Budget je Root-Kontextdatei (repo-relativer Pfad, #1064). Kalibriert am Bestand
- *  bei der Umstellung von Zeilen auf Zeichen (AGENTS.md 73.612, CLAUDE.md 18.068 Zeichen) +
- *  kleine Kopffreiheit. Das ist KEIN Aufweichen: das alte Zeilen-Budget hat die Größe nie
- *  gemessen. Im zweiten #1064-Slice wurde AGENTS.md auf ~24k Zeichen gekürzt
- *  (Langbegründung nach Factory-Seite docs/agent-harness.md §3a) und das Budget auf 28.000 gezogen
- *  (Ist + ~15 %, wie beim ersten Kalibrieren; Ratchet nach unten). Mit #1078 (Slice A1) sind
- *  die Nachschlage-Tabellen der CLAUDE.md on-demand nach docs/referenz/ gezogen; seit #1087 ist
- *  CLAUDE.md gelöscht (AGENTS.md wird nativ geladen) und ihr Eintrag entfallen – dass sie nicht
- *  zurückkehrt, bewacht (im Factory-Repo) test/harness/agents-md-native.test.ts.
- *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
-export const CONTEXT_BUDGETS = [
-  { file: "AGENTS.md", budget: 28_000 },
-];
+// CONTEXT_BUDGETS/countChars nicht weiterreichen: das Blatt gehört `kontext-budget-lib.mjs`, Abnehmer importieren dort (factory#114).
 
 /** Default-Zeichen-Budget je modul-lokaler AGENTS.md ohne eigenen Eintrag in
  *  CONTEXT_BUDGETS (#1088). Kalibriert wie die Wurzel: größte modul-lokale AGENTS.md
@@ -71,11 +60,6 @@ export const MODULE_AGENTS_BUDGET = 12_000;
 /** Grobe Umrechnung nur für die INFO-Ausgabe (deutscher Markdown-Text, ~4,2 Zeichen/Token).
  *  Modellabhängig und damit bewusst kein Budget-Maßstab. */
 export const CHARS_PER_TOKEN = 4.2;
-
-/** Zeichen eines Textes, zeilenenden-neutral (CRLF zählt wie LF). */
-export function countChars(text) {
-  return text.replace(/\r/g, "").length;
-}
 
 /** Alle AGENTS.md im Repo (repo-relativer POSIX-Pfad, sortiert). */
 export function collectAgentsFiles(rootDir = ROOT) {
@@ -144,7 +128,7 @@ function main() {
   for (const s of stale)
     console.error(
       red(
-        `✖ Ausnahme stale: ${s.datei} liegt nicht mehr über Budget – Eintrag unter ausnahmen.kontext in .factory/projekt.json entfernen.`,
+        `✖ Ausnahme stale: ${s.datei} liegt nicht mehr über Budget – Eintrag unter ausnahmen.kontext in ${PROJEKT_CONFIG} entfernen.`,
       ),
     );
 
@@ -163,7 +147,7 @@ function main() {
       `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
         `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md ` +
         `bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
-        `ausnahmen.kontext in .factory/projekt.json aufnehmen (datei, grund mit #<nr>).`,
+        `ausnahmen.kontext in ${PROJEKT_CONFIG} aufnehmen (datei, grund mit #<nr>).`,
     );
   process.exit(1);
 }

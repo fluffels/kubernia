@@ -14,6 +14,16 @@ export function lockVerzeichnis({ gemeinsam, praefixWorktree }) {
   return join(gemeinsam, `${praefixWorktree}locks`);
 }
 
+/**
+ * Lock-Verzeichnis je Betriebsart (ADR 0022 Fortschreibung, #88). Eingebettet wie `lockVerzeichnis` im gemeinsamen git-Verzeichnis (`gemeinsam` ist ein Thunk
+ * und läuft nur dort, weil im Arbeitsplatz kein Repo das Arbeitsverzeichnis ist); im Arbeitsplatz `<wurzel>/.claude/<Worktree-Präfix>locks`, weil ein Ticket
+ * nicht an ein Repo gebunden ist. `aufloesung` kommt aus `arbeitsplatzAus`. Pur.
+ */
+export function lockVerzeichnisFuer({ aufloesung, praefixWorktree, gemeinsam }) {
+  if (aufloesung.betriebsart === "arbeitsplatz") return join(aufloesung.wurzel, ".claude", `${praefixWorktree}locks`);
+  return lockVerzeichnis({ gemeinsam: gemeinsam(), praefixWorktree });
+}
+
 /** Lock-Inhalt aus Text oder `null` (kein JSON, kein Objekt, weder `nonce` noch `nonceHash`). Pur. */
 export function parseLock(text) {
   try {

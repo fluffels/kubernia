@@ -5,7 +5,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { altEnvPraefix } from "./projekt-config-lib.mjs";
+import { altEnvPraefix, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { modulFehler } from "./modul-wahl-lib.mjs";
+import { artFehler } from "./sync-abgleich-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 
@@ -58,6 +60,43 @@ export function einheitId(e) {
   return e.pfad;
 }
 
+/** Gegenstück zu `einheitId`: `pfad`, `pfad#block` oder `pfad#/schluessel` -> Einheit (`{ pfad }`, `{ pfad, block }`, `{ pfad, schluessel }`). */
+export function einheitAusId(id) {
+  const i = id.indexOf("#");
+  if (i < 0) return { pfad: id };
+  const rest = id.slice(i + 1);
+  return rest.startsWith("/") ? { pfad: id.slice(0, i), schluessel: rest.slice(1) } : { pfad: id.slice(0, i), block: rest };
+}
+
+/** Zeichenspannen `[a, b]` der Einheiten von `pfad` in `text`: ganze Datei `[0, Länge]`, Block per `blockSpanne` (erstes Marker-Vorkommen; kaputte Marker: keine Spanne), JSON-Schlüssel keine (kein Doku-Text). */
+export function besitzSpannen(einheiten, pfad, text) {
+  const spannen = [];
+  for (const e of einheiten.filter((x) => x.pfad === pfad)) {
+    if (istGanzeDatei(e)) spannen.push([0, text.length]);
+    else if (e.block !== undefined) {
+      const s = blockSpanne(text, e.block);
+      if (s) spannen.push(s);
+    }
+  }
+  return spannen;
+}
+
+/** Besitz-Manifest aus dem Dateitext (`null` = Datei fehlt): `{ manifest }` oder `{ fehler: "fehlt"|"json"|"eintraege", text }` mit der einheitlichen Meldung; die Fehlerpolitik bleibt beim Aufrufer. */
+export function manifestAusText(text) {
+  if (text === null) return { fehler: "fehlt", text: `${MANIFEST_PFAD} fehlt` };
+  let manifest;
+  try {
+    manifest = JSON.parse(text);
+  } catch {
+    return { fehler: "json", text: `${MANIFEST_PFAD} ist kein gültiges JSON` };
+  }
+  if (!Array.isArray(manifest?.eintraege)) return { fehler: "eintraege", text: `${MANIFEST_PFAD} hat keine Liste 'eintraege'` };
+  return { manifest };
+}
+
+/** Ist die Einheit eine ganze Workflow-Datei (`.github/workflows/<name>.yml|yaml`)? */
+export const istWorkflowEinheit = (e) => istGanzeDatei(e) && /^\.github\/workflows\/[^/]+\.ya?ml$/.test(e.pfad);
+
 const zaehleVorkommen = (text, s) => text.split(s).length - 1;
 
 /** Text der Einheit oder `null`, wenn Block/Schlüssel nicht auflösbar ist. */
@@ -86,7 +125,7 @@ export function pfadSicher(pfad) {
 /** Fehler des optionalen Felds `pflichtChecks` einer Einheit (leer = gültig oder nicht gesetzt): nur an ganzen Workflow-Dateien, eine nicht leere Liste nicht leerer Texte (die Job-Namen, die ein Bezieher als Required Check braucht, factory#117). */
 export function pflichtChecksFehler(e) {
   if (e.pflichtChecks === undefined) return [];
-  if (!istGanzeDatei(e) || !/^\.github\/workflows\/[^/]+\.ya?ml$/.test(e.pfad)) return ["pflichtChecks nur an einer ganzen Workflow-Datei (.github/workflows/<name>.yml)"];
+  if (!istWorkflowEinheit(e)) return ["pflichtChecks nur an einer ganzen Workflow-Datei (.github/workflows/<name>.yml)"];
   const l = e.pflichtChecks;
   if (!Array.isArray(l) || l.length === 0 || l.some((n) => typeof n !== "string" || n.trim() === "")) return ["pflichtChecks muss eine nicht leere Liste nicht leerer Texte sein"];
   return [];
@@ -95,7 +134,11 @@ export function pflichtChecksFehler(e) {
 /** Manifest-Fehler (leer = gültig). `lies` liefert den Dateitext oder `null`. */
 export function pruefeManifest(m, lies) {
   const out = [];
-  if (m.version !== 1) out.push(`version ${String(m.version)} unbekannt (erwartet 1)`);
+  if (![1, 2, 3].includes(m.version)) out.push(`version ${String(m.version)} unbekannt (erwartet 1, 2 oder 3)`);
+  else {
+    if (m.version === 1 && m.eintraege.some((e) => e.art !== undefined)) out.push("art braucht version 2 (ein altes Sync-Werkzeug kennt art nicht und bräche sonst nicht ab)");
+    if (m.version < 3 && m.eintraege.some((e) => e.modul !== undefined)) out.push("modul braucht version 3 (ein altes Sync-Werkzeug kennt modul nicht und verteilte sonst jedes Modul)");
+  }
   const ids = new Set();
   const ganze = new Set();
   const teile = new Set();
@@ -110,7 +153,7 @@ export function pruefeManifest(m, lies) {
     if (!RINGE.includes(e.ring)) out.push(`${id}: unbekannter Ring '${e.ring}'`);
     if (e.quelle.trim() === "") out.push(`${id}: quelle fehlt`);
     if (e.block !== undefined && e.schluessel !== undefined) out.push(`${id}: block und schluessel zugleich`);
-    out.push(...pflichtChecksFehler(e).map((f) => `${id}: ${f}`));
+    out.push(...[...pflichtChecksFehler(e), ...artFehler(e), ...modulFehler(e)].map((f) => `${id}: ${f}`));
     if (istGanzeDatei(e)) ganze.add(e.pfad);
     else teile.add(e.pfad);
     const text = lies(e.pfad);
@@ -333,7 +376,7 @@ export function normalisierterEinheitText(e, text, erg = leereErgaenzung()) {
   if (istErgaenzbar(e)) return JSON.stringify(kernAnteilVon(e, JSON.parse(t), erg));
   if (e.schluessel !== undefined) return t;
   try {
-    return leereProjektwerte(normalisiereEol(t));
+    return leereProjektwerte(normalisiereEol(t), e.pfad);
   } catch {
     return null;
   }
@@ -460,20 +503,24 @@ export const PROJEKTWERT_ENDE = "<!-- factory:projektwerte:end -->";
 const PROJEKTWERT_KENNUNG = "factory:projektwert";
 const PROJEKTWERT_ZEILE = /^# factory:projektwert (\S+)$/;
 const PROJEKTWERT_FOLGE = /^(\s*)([A-Za-z_][\w-]*):/;
-export const PROJEKTWERT_GRUPPEN = ["praefixe", "agenten", "labels", "skills"];
+/** Gruppen der Block-Tabelle und der Platzhalter (Werte sind Texte). */
+export const TABELLEN_GRUPPEN = ["praefixe", "agenten", "labels", "skills"];
+/** Gruppen, die ein Zeilen-Marker nutzen darf: die Tabellen-Gruppen und `codeql` (Liste der Sprachen, factory#119). */
+export const PROJEKTWERT_GRUPPEN = [...TABELLEN_GRUPPEN, "codeql"];
 /** Muster für `<gruppe.schluessel>`-Platzhalter der Projektwert-Gruppen; frische Instanz (Flag `g`, eigener `lastIndex`) je Aufruf. */
 export function platzhalterMuster() {
-  return new RegExp(`<(${PROJEKTWERT_GRUPPEN.join("|")})\\.(\\w+)>`, "g");
+  return new RegExp(`<(${TABELLEN_GRUPPEN.join("|")})\\.(\\w+)>`, "g");
 }
 const YAML_BLANK = /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/;
-const CONFIG_PFAD = ".factory/projekt.json";
+const CONFIG_PFAD = PROJEKT_CONFIG;
 
 /** Stellen eines LF-Textes: `{ bloecke: [{ start, ende }], zeilen: [{ marker, folge, schluessel, einrueckung, name }] }` (Zeilenindizes ab 0).
  *  Ein Markdown-Marker zählt nur allein auf seiner Zeile, ein Zeilen-Marker nur im führenden Frontmatter direkt vor einer `key:`-Zeile.
  *  Wirft mit allen Funden (`pfad:zeile: ...`) bei Start ohne Ende, Ende ohne Start, verschachteltem Start und kaputtem Zeilen-Marker. */
 export function projektwertStellen(text, pfad = "<text>") {
   const zeilen = text.split("\n");
-  const fmEnde = zeilen[0].trimEnd() === "---" ? zeilen.findIndex((z, i) => i > 0 && z.trimEnd() === "---") : -1;
+  const yaml = /\.ya?ml$/.test(pfad); // eine YAML-Datei ist als Ganzes Marker-Fläche, der Marker steht in Spalte 0
+  const fmEnde = yaml ? zeilen.length : zeilen[0].trimEnd() === "---" ? zeilen.findIndex((z, i) => i > 0 && z.trimEnd() === "---") : -1;
   const fehler = [];
   const bloecke = [];
   const stellen = [];
@@ -497,7 +544,8 @@ export function projektwertStellen(text, pfad = "<text>") {
         continue;
       }
       const folge = i + 1 < zeilen.length ? PROJEKTWERT_FOLGE.exec(zeilen[i + 1]) : null;
-      if (fmEnde < 0 || i >= fmEnde) melde(i, "Projektwert-Zeilen-Marker steht außerhalb des führenden Frontmatters");
+      if (!PROJEKTWERT_GRUPPEN.includes(m[1].split(".")[0])) melde(i, `unbekannte Projektwert-Gruppe in '${m[1]}' (erlaubt: ${PROJEKTWERT_GRUPPEN.join(", ")})`);
+      else if (fmEnde < 0 || i >= fmEnde) melde(i, "Projektwert-Zeilen-Marker steht außerhalb des führenden Frontmatters");
       else if (i + 1 >= fmEnde || folge === null) melde(i, "auf den Projektwert-Zeilen-Marker muss im Frontmatter eine Zeile `schlüssel:` folgen");
       else stellen.push({ marker: i, folge: i + 1, schluessel: m[1], einrueckung: folge[1], name: folge[2] });
     }
@@ -520,10 +568,11 @@ export function leereProjektwerte(text, pfad = "<text>") {
 /** Wert zum Schlüssel (`gruppe.name`) aus der Config; wirft bei fehlendem oder nicht-textlichem Wert und bei Zeichen, die den Block brechen. */
 export function projektwertWert(config, schluessel) {
   const wert = schluessel.split(".").reduce((o, k) => (o !== null && typeof o === "object" ? o[k] : undefined), config);
-  if (typeof wert !== "string" || wert === "") {
-    throw new Error(`Projektwert '${schluessel}' fehlt oder ist kein nichtleerer Text in ${CONFIG_PFAD}\nFix: Schlüssel in ${CONFIG_PFAD} ergänzen oder den Marker korrigieren`);
+  const liste = Array.isArray(wert) && wert.length > 0 && wert.every((w) => typeof w === "string" && w !== "");
+  if (!liste && (typeof wert !== "string" || wert === "")) {
+    throw new Error(`Projektwert '${schluessel}' fehlt oder ist kein nichtleerer Text (oder keine nicht leere Liste von Texten) in ${CONFIG_PFAD}\nFix: Schlüssel in ${CONFIG_PFAD} ergänzen oder den Marker korrigieren`);
   }
-  if (/[`|\r\n]/.test(wert)) {
+  if ((liste ? wert : [wert]).some((w) => /[`|\r\n]/.test(w))) {
     throw new Error(`Projektwert '${schluessel}' enthält Backtick, '|' oder Zeilenumbruch und lässt sich nicht einsetzen\nFix: Wert in ${CONFIG_PFAD} ändern`);
   }
   return wert;
@@ -532,7 +581,7 @@ export function projektwertWert(config, schluessel) {
 function blockZeilen(config) {
   const kopf = `Projektwerte aus \`${CONFIG_PFAD}\` (generiert von \`node scripts/projektwerte.mjs --write\`, nicht von Hand ändern).`;
   const out = [PROJEKTWERT_START, kopf, "", "| Schlüssel | Wert |", "| --- | --- |"];
-  for (const g of PROJEKTWERT_GRUPPEN) {
+  for (const g of TABELLEN_GRUPPEN) {
     if (config?.[g] === null || typeof config?.[g] !== "object") {
       throw new Error(`Projektwert-Gruppe '${g}' fehlt in ${CONFIG_PFAD}\nFix: Gruppe in ${CONFIG_PFAD} ergänzen`);
     }
@@ -543,7 +592,8 @@ function blockZeilen(config) {
 }
 
 const YAML_WORT = /^(true|false|null|yes|no|on|off|y|n|~|[0-9].*)$/i;
-const yamlWert = (w) => (YAML_BLANK.test(w) && !YAML_WORT.test(w) ? w : JSON.stringify(w));
+const yamlSkalar = (w) => (YAML_BLANK.test(w) && !YAML_WORT.test(w) ? w : JSON.stringify(w));
+const yamlWert = (w) => (Array.isArray(w) ? `[${w.map(yamlSkalar).join(", ")}]` : yamlSkalar(w));
 const zeilenSoll = (z, config) => `${z.einrueckung}${z.name}: ${yamlWert(projektwertWert(config, z.schluessel))}`;
 const mitOrt = (pfad, zeile, fn) => {
   try {
@@ -614,7 +664,7 @@ const PROJEKTWERT_FLAECHEN = [/^\.claude\/agents\/[^/]+\.md$/, /^\.claude\/skill
 /** Geschlossene Prüf-Fläche: `.md`-Pfade des Manifests plus Agenten- und Skill-Markdown aus `liste` (alle Projektpfade, Schrägstrich-Form). Sortiert, ohne Doppelte. */
 export function projektwertDateien(manifestPfade, liste) {
   const aus = liste.filter((p) => PROJEKTWERT_FLAECHEN.some((r) => r.test(p)));
-  return [...new Set([...manifestPfade.filter((p) => pfadSicher(p) && p.endsWith(".md")), ...aus])].sort();
+  return [...new Set([...manifestPfade.filter((p) => pfadSicher(p) && /\.(md|ya?ml)$/.test(p)), ...aus])].sort();
 }
 
 /** Alle Agenten-, Skill-Zeiger- und Skill-Quell-Dateien (`.claude/agents`, `.claude/skills`, `.agents/skills`) unter `wurzel` (Schrägstrich-Form, unsortiert). */
@@ -643,12 +693,8 @@ export function projektwertLauf(wurzel, ladeConfig, { schreiben = false } = {}) 
     const voll = join(wurzel, ...rel.split("/"));
     return existsSync(voll) ? readFileSync(voll, "utf8") : null;
   };
-  let manifestPfade = [];
-  try {
-    manifestPfade = JSON.parse(lies(MANIFEST_PFAD) ?? "{}").eintraege?.map((e) => e.pfad) ?? [];
-  } catch {
-    // ein kaputtes Manifest meldet das Drift-Gate selbst
-  }
+  // ein fehlendes oder kaputtes Manifest meldet das Drift-Gate selbst
+  const manifestPfade = manifestAusText(lies(MANIFEST_PFAD)).manifest?.eintraege.map((e) => e?.pfad) ?? [];
   let config;
   const configLaden = () => {
     if (config === undefined) {

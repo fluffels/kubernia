@@ -12,6 +12,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
 /** Memory-Dateien im Root, deren Existenz das native Laden von AGENTS.md abschaltet; `~/.claude/CLAUDE.md` und Unterordner zählen nicht. */
@@ -80,9 +81,6 @@ function textPfade(eolAusgabe) {
 const istStreng = (pfad) => STRENG.some((p) => pfad.startsWith(p));
 const kurz = (pfade) => (pfade.length > MAX_PFADE ? `${pfade.slice(0, MAX_PFADE).join(", ")} (+${pfade.length - MAX_PFADE} weitere)` : pfade.join(", "));
 
-const gut = (punkt) => ({ punkt, ok: true });
-const luecke = (punkt, befund, fix) => ({ punkt, ok: false, befund, fix });
-const nichtPruefbar = (punkt, grund, fix) => ({ punkt, ok: false, nichtPruefbar: true, befund: grund, fix });
 
 /** Git-Aufruf im Bezieher (`rootDir`); `input` geht über stdin (Windows begrenzt die Kommandozeile). Wirft mit der ersten Fehlerzeile. */
 export function gitStandard(rootDir) {

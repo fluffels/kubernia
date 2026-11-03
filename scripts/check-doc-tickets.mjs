@@ -36,7 +36,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
 import { ghText } from "./gh-cli.mjs";
 import { dirname, join } from "node:path";
-import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -73,8 +73,8 @@ export function parseOpenHarnessTickets(md) {
 export function ausnahmeListen(config = ladeProjektConfig()) {
   const { groesse, kontext } = ausnahmenAus(config);
   return [
-    { skript: ".factory/projekt.json › ausnahmen.groesse", eintraege: groesse },
-    { skript: ".factory/projekt.json › ausnahmen.kontext", eintraege: kontext },
+    { skript: `${PROJEKT_CONFIG} › ausnahmen.groesse`, eintraege: groesse },
+    { skript: `${PROJEKT_CONFIG} › ausnahmen.kontext`, eintraege: kontext },
   ];
 }
 
