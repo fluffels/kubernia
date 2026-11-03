@@ -21,10 +21,11 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
 import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { exactlyOneName, literalKeysChecked, LITERAL_FLAG, notSimulated, parseServiceAccount, replicasArg, resolveRoleResources, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
+import { exactlyOneName, literalKeysChecked, LITERAL_FLAG, notSimulated, parseServiceAccount, replicasArg, REPLICAS_TIP, resolveRoleResources, SERVICEACCOUNT_FLAG, UNKNOWN_TARGET } from "./args";
 import { containerNameFromImage } from "../util";
 import { readTargets, targetOutcome, type Target } from "./targets";
-import { flag, IM_HANDLER, type Call, type Dispatch, type FlagSpec } from "../cliargs";
+import { REAL_CREATE_CLUSTERROLE, REAL_CREATE_CLUSTERROLEBINDING, REAL_CREATE_CONFIGMAP, REAL_CREATE_DEPLOYMENT, REAL_CREATE_ROLE, REAL_CREATE_ROLEBINDING, REAL_CREATE_SECRET_GENERIC, REAL_CREATE_SECRET_TLS, REAL_CREATE_SERVICEACCOUNT } from "./real-flags";
+import { flag, intFlag, IM_HANDLER, type Call, type Dispatch, type FlagSpec } from "../cliargs";
 import type { KubectlEntry } from "./namespace";
 import { applyDeployment } from "./apply-deployment";
 import { applyGateway, applyGatewayClass, applyHttpRoute } from "./apply-gateway";
@@ -205,10 +206,8 @@ const createDeployment: CreateHandler = (host, c) => {
   // `--image` ist Pflicht-Flag (Tabelle); ein leerer Wert zählt für cobra als gesetzt und scheitert erst am apiserver.
   if (images.length === 0) return host._err('error: failed to create deployment: Deployment.apps "' + n.name + '" is invalid: spec.template.spec.containers: Required value');
   if (images.length > 1) return notSimulated(host, "mehrere Container (mehrfaches '--image').", ["kubectl create deployment <name> --image=<image>"], "Ein Deployment hat in der Sim genau einen Container.");
-  const rep = replicasArg(host, c);
-  if ("error" in rep) return rep.error;
-  const replicas = rep.replicas ?? 1;
-  if (replicas < 0) return host._err('error: invalid argument "' + replicas + '" for "--replicas" flag', "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.");
+  const replicas = replicasArg(c) ?? 1;
+  if (replicas < 0) return host._err('error: invalid argument "' + replicas + '" for "--replicas" flag', REPLICAS_TIP);
   if (host.deployments.some(d => d.name === n.name)) return host._err('error: deployment "' + n.name + '" already exists');
   // Pod-Security-Admission: ein imperativ erzeugtes Deployment hat keinen securityContext.
   // Unter baseline/restricted wird es deshalb abgelehnt (privileged = keine Prüfung).
@@ -226,25 +225,26 @@ const ohneBefehl = (art: string, run: CreateHandler): CreateHandler => (host, c)
   return vorDash ?? notSimulated(host, "ein Befehl hinter '--' bei 'kubectl create " + art + "'.", ["'kubectl create " + art + "' ohne '--'"]);
 };
 
-type CreateOptionen = Pick<KubectlEntry<CreateHandler>, "hints" | "unknownFlags" | "requiredFlags">;
-const createEntry = (art: string, run: CreateHandler, flags: readonly FlagSpec[] = [], opt: CreateOptionen = {}): KubectlEntry<CreateHandler> =>
-  ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, ...opt });
+type CreateOptionen = Pick<KubectlEntry<CreateHandler>, "hints" | "requiredFlags">;
+/** Ein `create`-Ziel: Flags, die die Sim auswertet, plus die echten Flags aus real-flags.ts (macht das Ziel zur geschlossenen Welt). */
+const createEntry = (art: string, run: CreateHandler, realFlags: readonly string[], flags: readonly FlagSpec[] = [], opt: CreateOptionen = {}): KubectlEntry<CreateHandler> =>
+  ({ run: ohneBefehl(art, run), maxArgs: IM_HANDLER, flags, realFlags, ...opt });
 
-const CREATE_DEPLOYMENT = createEntry("deployment", createDeployment, [flag(true, "--image"), flag(true, "--replicas")], { unknownFlags: ["--verb"], requiredFlags: ["--image"] });
-const CREATE_SERVICEACCOUNT = createEntry("serviceaccount", createServiceAccount, [], { unknownFlags: ["--image"] });
-const CREATE_ROLE = createEntry("role", createRoleOf(false), [flag(true, "--verb"), flag(true, "--resource")], { unknownFlags: ["--role"] });
-const CREATE_CLUSTERROLE = { ...createEntry("clusterrole", createRoleOf(true), [flag(true, "--verb"), flag(true, "--resource")]), namespace: "cluster" } as const;
-const CREATE_ROLEBINDING = createEntry("rolebinding", createRoleBindingOf(false), [flag(true, "--role"), flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG], { unknownFlags: ["--verb"] });
-const CREATE_CLUSTERROLEBINDING = { ...createEntry("clusterrolebinding", createRoleBindingOf(true), [flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG],
-  { unknownFlags: ["--role"], requiredFlags: ["--clusterrole"], hints: { "--role": "Ein ClusterRoleBinding verweist nur auf eine ClusterRole: nutze '--clusterrole=<name>'." } }), namespace: "cluster" } as const;
-const CREATE_CONFIGMAP = createEntry("configmap", createConfigMap, [LITERAL_FLAG], { unknownFlags: ["--image"] });
+const CREATE_DEPLOYMENT = createEntry("deployment", createDeployment, REAL_CREATE_DEPLOYMENT, [flag(true, "--image"), intFlag(REPLICAS_TIP, "-r", "--replicas")], { requiredFlags: ["--image"] });
+const CREATE_SERVICEACCOUNT = createEntry("serviceaccount", createServiceAccount, REAL_CREATE_SERVICEACCOUNT);
+const CREATE_ROLE = createEntry("role", createRoleOf(false), REAL_CREATE_ROLE, [flag(true, "--verb"), flag(true, "--resource")]);
+const CREATE_CLUSTERROLE = { ...createEntry("clusterrole", createRoleOf(true), REAL_CREATE_CLUSTERROLE, [flag(true, "--verb"), flag(true, "--resource")]), namespace: "cluster" } as const;
+const CREATE_ROLEBINDING = createEntry("rolebinding", createRoleBindingOf(false), REAL_CREATE_ROLEBINDING, [flag(true, "--role"), flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG]);
+const CREATE_CLUSTERROLEBINDING = { ...createEntry("clusterrolebinding", createRoleBindingOf(true), REAL_CREATE_CLUSTERROLEBINDING, [flag(true, "--clusterrole"), flag(true, "--user"), SERVICEACCOUNT_FLAG],
+  { requiredFlags: ["--clusterrole"], hints: { "--role": "Ein ClusterRoleBinding verweist nur auf eine ClusterRole: nutze '--clusterrole=<name>'." } }), namespace: "cluster" } as const;
+const CREATE_CONFIGMAP = createEntry("configmap", createConfigMap, REAL_CREATE_CONFIGMAP, [LITERAL_FLAG]);
 
 /** `create secret <art>`: eine eigene Ebene, damit `tls` und `generic` je ihre Flags haben. */
 const KUBECTL_CREATE_SECRET: Dispatch<KubectlEntry<CreateHandler>> = {
   cmd: "kubectl create secret",
   table: {
-    generic: createEntry("secret generic", createSecretGeneric, [LITERAL_FLAG], { unknownFlags: ["--cert"] }),
-    tls: createEntry("secret tls", createSecretTls, [flag(true, "--cert"), flag(true, "--key")], { unknownFlags: ["--from-literal"] }),
+    generic: createEntry("secret generic", createSecretGeneric, REAL_CREATE_SECRET_GENERIC, [LITERAL_FLAG]),
+    tls: createEntry("secret tls", createSecretTls, REAL_CREATE_SECRET_TLS, [flag(true, "--cert"), flag(true, "--key")]),
   },
   real: ["docker-registry"],
   unknown: UNKNOWN_TARGET,

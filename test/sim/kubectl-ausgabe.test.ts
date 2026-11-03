@@ -83,9 +83,9 @@ describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
     expect(r.out).toContain("NOMINATED NODE");
   });
   test("kubectl get pods -o json -w: der unbekannte Schalter wird zuerst gemeldet, nicht das Format", () => {
-    const r = lauf("kubectl get pods -o json -w");
+    const r = lauf("kubectl get pods -o json --zzz");
     expect(r.error).toBe(true);
-    expect(r.out).toContain("das Flag '-w'");
+    expect(r.out).toContain("error: unknown flag: --zzz");
   });
   test("-Ao json in einer Kette: das Format wird geprüft und abgelehnt", () => {
     const r = lauf("kubectl get pods -Ao json");
@@ -121,7 +121,7 @@ describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
   test("bei anderen Unterbefehlen bleibt -o abgelehnt (mit dem neuen Hinweis)", () => {
     const r = lauf("kubectl describe pod x -o wide");
     expect(r.error).toBe(true);
-    expect(r.out).toContain("'-o'");
+    expect(r.out).toContain("error: unknown shorthand flag: 'o' in -o");
     expect(r.out).toContain("nur bei 'kubectl get'");
   });
 });

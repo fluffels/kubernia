@@ -282,7 +282,7 @@ describe("kubectl rollout/set/auth als Gruppen (#1667 a): Flags vor dem Blatt, B
     const s = web();
     const a = lauf("kubectl set image deployment/web web=nginx:2 --from=configmap/x", s);
     expect(a.error).toBe(true);
-    expect(a.out).toContain("das Flag '--from' bei 'kubectl set image'");
+    expect(a.out).toContain("error: unknown flag: --from");
     expect(s.deployments[0].image).toBe("nginx");
     expect(lauf("kubectl set env deployment/web --from=configmap/x --limits=memory=1Gi", s).out).toContain("error: unknown flag: --limits");
     const vorher = pods(s);

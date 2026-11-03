@@ -14,6 +14,7 @@ import type { KubectlHost } from "./host";
 import { notSimulated, UNKNOWN_TARGET } from "./args";
 import { resolveKind } from "./resources";
 import { flag, IM_HANDLER, type Call, type Dispatch } from "../cliargs";
+import { REAL_AUTH_CANI } from "./real-flags";
 import type { KubectlEntry } from "./namespace";
 
 /* ---- RBAC-Auswertung (#126) ---- */
@@ -82,7 +83,7 @@ function authCanI(host: KubectlHost, c: Call): string {
 /** `kubectl auth <ziel>` (#1491): `can-i` mit `--as`; `c.args` sind die Argumente hinter der Aktion (`get pods`). */
 export const KUBECTL_AUTH: Dispatch<KubectlEntry<(host: KubectlHost, c: Call) => string>> = {
   cmd: "kubectl auth",
-  table: { "can-i": { run: authCanI, maxArgs: IM_HANDLER, flags: [flag(true, "--as")], unknownFlags: ["--image"] } },
+  table: { "can-i": { run: authCanI, maxArgs: IM_HANDLER, flags: [flag(true, "--as")], realFlags: REAL_AUTH_CANI } },
   real: ["reconcile", "whoami"],
   unknown: UNKNOWN_TARGET,
 };

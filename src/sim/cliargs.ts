@@ -6,7 +6,9 @@
  * verschiedenen „nicht simuliert“-Texte der Familien.
  *
  * Die Tabelle nennt NUR Flags, die die Sim wirklich auswertet (echte CLIs haben Hunderte; „was wir können“
- * ist endlich und ehrlich). Ausnahmen sind im Tabellen-Eintrag kommentiert.
+ * ist endlich und ehrlich). Ein Ziel mit `realFlags` (#1996) ist eine geschlossene Welt: `flags` + `realFlags` + Hilfe-Flags
+ * sind „Nicht simuliert“, jedes andere Flag meldet den echten Unbekannt-Fehler. Ziele ohne `realFlags` sind offen
+ * (jedes unbekannte Flag ist „Nicht simuliert“). Ausnahmen sind im Tabellen-Eintrag kommentiert.
  *
  * Zwei Schreibweisen-Stile: `pflag` (kubectl, docker, helm, argocd, glab: `--x=v`, `--x v`, kurz `-xv`,
  * Ketten kurzer Bool-Flags `-aq`) und `goflag` (terraform, Go-Paket `flag`: `-x=v`, `-x v`, `--x` ≙ `-x`,
@@ -32,6 +34,10 @@ export interface FlagSpec {
   /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `parseCall`
    *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`, in einer Kette `-Ao wide`). */
   readonly check?: (host: ErrHost, value: string) => string | null;
+  /** Ganzzahl-Flag (#1996, pflag `Int*Var`): ein Wert, der keine ganze Zahl ist, meldet schon im Scan den Parse-Fehler
+   *  (`tip` = der Lerntipp dazu), vor Pflicht-Flag, Wertprüfern und Namensprüfung. Grenzen: pflag liest die Basis 0
+   *  (`0x2`, `1_000`), die Sim lehnt das ab; ein Überlauf des Wertebereichs wird nicht geprüft. */
+  readonly int?: { readonly tip: string };
 }
 
 /** Ein Flag der Tabelle (`flag(true, "-n", "--namespace")`). */
@@ -39,6 +45,9 @@ export const flag = (takesValue: boolean, ...names: string[]): FlagSpec => ({ na
 
 /** Ein Wert-Flag mit Wertprüfung. */
 export const checkedFlag = (check: NonNullable<FlagSpec["check"]>, ...names: string[]): FlagSpec => ({ names, takesValue: true, check });
+
+/** Ein Ganzzahl-Flag (`intFlag("Die Zahl ist ganz, z.B. '--n=2'.", "-n", "--n")`). */
+export const intFlag = (tip: string, ...names: string[]): FlagSpec => ({ names, takesValue: true, int: { tip } });
 
 /** Die Flag-Tabelle EINES Unterbefehls. */
 export interface ArgSpec {
@@ -48,10 +57,10 @@ export interface ArgSpec {
   readonly style?: FlagStyle;
   /** Lernhinweise je Flag-Name (`-o`) für Flags, die Spieler aus dem echten Werkzeug kennen. */
   readonly hints?: Readonly<Record<string, string>>;
-  /** Lange Flag-Namen, die das echte Werkzeug bei genau diesem Befehl nicht kennt (gegen die Quelle belegt): die Sim meldet
-   *  den pflag-Text `error: unknown flag: --x` (plus Tipp aus `hints`) statt „Nicht simuliert“. Ein nicht gelistetes
-   *  unbekanntes Flag bleibt „Nicht simuliert“ (die Sim kennt nicht jedes echte Flag). */
-  readonly unknownFlags?: readonly string[];
+  /** Echte Flags, die die Sim nicht auswertet (gegen die Quelle belegt, #1996): „Nicht simuliert“. Mit dieser Liste ist das Ziel eine
+   *  geschlossene Welt: ein Flag außerhalb von `flags`, `realFlags` und `-h/--help` meldet den pflag-Text `error: unknown flag: --x`
+   *  (Tipp aus `hints`, sonst „Der Simulator kann: …“). Ohne die Liste bleibt das Ziel offen: jedes unbekannte Flag ist „Nicht simuliert“. */
+  readonly realFlags?: readonly string[];
   /** Pflicht-Flags (cobra `MarkFlagRequired`): fehlt eines, meldet `parseCall` `error: required flag(s) "x" not set`
    *  (alphabetisch). Ein Alias oder ein leerer Wert zählt als gesetzt. Grenze: die Arität (`tooMany`) wird nach den Flags
    *  geprüft, cobra prüft ValidateArgs davor. */
@@ -113,10 +122,17 @@ function findSpec(specs: readonly FlagSpec[], name: string): FlagSpec | undefine
 
 interface Hit { readonly spec: FlagSpec; readonly value: string | null }
 type ScanError =
-  | { kind: "unknown"; name: string }
+  | { kind: "unknown"; name: string; shorthands?: string }
   | { kind: "missing"; name: string }
-  | { kind: "bool"; label: string; value: string };
-interface Walk { hits: Hit[]; entries: { tok: string; at: number }[]; error: ScanError | null; dashAt: number | null }
+  | { kind: "bool"; label: string; value: string }
+  | { kind: "int"; name: string; label: string; value: string; tip: string };
+interface Walk {
+  hits: Hit[]; entries: { tok: string; at: number }[]; error: ScanError | null; dashAt: number | null;
+  /** Das erste echte, nicht simulierte Flag eines geschlossenen Ziels: meldet erst `firstError`, nach allen echten Fehlern. */
+  unsimulated: Extract<ScanError, { kind: "unknown" }> | null;
+  /** Das erste Hilfe-Flag (`-h`, `--help`) eines geschlossenen Ziels, an jeder Position: es geht den Pflicht-Flags und Wertprüfern vor (cobra). */
+  help: Extract<ScanError, { kind: "unknown" }> | null;
+}
 interface Step { used: boolean; error: ScanError | null }
 
 /** Ein benanntes Flag lesen: Wert-Flags nehmen den angeklebten Wert oder den nächsten Token, Bool-Flags nur `=bool`. */
@@ -126,6 +142,7 @@ function take(flags: readonly FlagSpec[], name: string, attached: string | null,
   if (s.takesValue) {
     const v = attached ?? next;
     if (v === undefined) return { used: false, error: { kind: "missing", name } };
+    if (s.int && !/^[+-]?\d+$/.test(v)) return { used: attached === null, error: { kind: "int", name, label: s.names.join(", "), value: v, tip: s.int.tip } };
     w.hits.push({ spec: s, value: v });
     return { used: attached === null, error: null };
   }
@@ -139,7 +156,7 @@ function scanChain(flags: readonly FlagSpec[], tok: string, next: string | undef
   for (let k = 1; k < tok.length; k++) {
     const name = "-" + tok[k];
     const s = findSpec(flags, name);
-    if (!s) return { used: false, error: { kind: "unknown", name } };
+    if (!s) return { used: false, error: { kind: "unknown", name, shorthands: tok.slice(k) } };
     const rest = tok.slice(k + 1);
     if (s.takesValue || rest === "" || rest.startsWith("=")) {
       const attached = rest === "" ? null : rest.startsWith("=") ? rest.slice(1) : rest;
@@ -156,12 +173,19 @@ function restFrom(spec: ArgSpec, tok: string, i: number): number {
   return !isFlagToken(tok) && spec.stopAtPositional ? i : -1;
 }
 
+/** Ein Scan-Fehler: ein echtes, nicht simuliertes Flag eines geschlossenen Ziels wartet in `unsimulated` (echte Fehler gehen vor),
+ *  alles andere ist der erste Fehler in Token-Reihenfolge. */
+function noteError(spec: ArgSpec, w: Walk, e: ScanError): void {
+  if (e.kind === "unknown" && isRealFlag(spec, e.name)) { if (isHelpFlag(e.name)) w.help ??= e; else w.unsimulated ??= e; }
+  else w.error ??= e;
+}
+
 /** Der EINE Scanner hinter Prüfung und Auslesen. `--` beendet die Flags; mit `stopAtPositional` gehört alles ab
  *  dem ersten Nicht-Flag (der Container-Befehl hinter dem Image) zu den Positionsargumenten. Der erste Fehler wird
  *  gemerkt, der Scan läuft weiter (so bleiben die Positionsargumente auch bei einem unbekannten Flag lesbar). */
 function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
   const style = styleOf(spec);
-  const w: Walk = { hits: [], entries: [], error: null, dashAt: null };
+  const w: Walk = { hits: [], entries: [], error: null, dashAt: null, unsimulated: null, help: null };
   for (let i = from; i < t.length; i++) {
     const tok = t[i];
     const rest = restFrom(spec, tok, i);
@@ -171,7 +195,7 @@ function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
     const step = style === "pflag" && !tok.startsWith("--")
       ? scanChain(spec.flags, tok, t[i + 1], w)
       : take(spec.flags, flagNameOf(tok, style), tok.includes("=") ? tok.slice(tok.indexOf("=") + 1) : null, t[i + 1], w);
-    if (step.error) { w.error ??= step.error; if (step.error.kind === "missing") break; continue; }
+    if (step.error) { noteError(spec, w, step.error); if (step.error.kind === "missing") break; continue; }
     if (step.used) i++;
   }
   return w;
@@ -189,17 +213,38 @@ function flagList(specs: readonly FlagSpec[]): string[] {
 const isHelpFlag = (name: string) => name === "-h" || name === "--help" || name === "-help";
 const helpHint = (cli: string) => "Hilfe zeigt der Simulator mit 'help " + cli + "'.";
 
-function rejectFlag(host: ErrHost, spec: ArgSpec, name: string): string {
-  if (spec.unknownFlags?.includes(name)) return host._err("error: unknown flag: " + name, spec.hints?.[name]);
+/** Ist `name` ein echtes, nicht simuliertes Flag eines GESCHLOSSENEN Ziels (`realFlags` gesetzt; Hilfe-Flags gelten immer)? */
+function isRealFlag(spec: ArgSpec, name: string): boolean {
+  return spec.realFlags !== undefined && (spec.realFlags.includes(name) || isHelpFlag(name));
+}
+
+const flagsKann = (spec: ArgSpec) => spec.flags.length ? "Flags: " + flagList(spec.flags).join(", ") : "'" + spec.cmd + "' ohne Flags";
+
+/** Der Unbekannt-Fehler eines geschlossenen Ziels im Wortlaut der Bibliothek: pflag `unknown flag: --x` bzw.
+ *  `unknown shorthand flag: 'x' in -xq`, goflag `flag provided but not defined: -x`. */
+function unknownFlag(host: ErrHost, spec: ArgSpec, e: { name: string; shorthands?: string }): string {
+  const tip = spec.hints?.[e.name] ?? "Der Simulator kann: " + flagsKann(spec);
+  if (styleOf(spec) === "goflag") return host._err("flag provided but not defined: " + e.name, tip);
+  if (e.shorthands) return host._err("error: unknown shorthand flag: '" + e.shorthands[0] + "' in -" + e.shorthands, tip);
+  return host._err("error: unknown flag: " + e.name, tip);
+}
+
+function rejectFlag(host: ErrHost, spec: ArgSpec, e: { name: string; shorthands?: string }): string {
+  if (spec.realFlags !== undefined && !isRealFlag(spec, e.name)) return unknownFlag(host, spec, e);
   const cli = spec.cmd.split(" ")[0];
-  const hint = spec.hints?.[name] ?? (isHelpFlag(name) ? helpHint(cli) : undefined);
-  const kann = spec.flags.length ? "Flags: " + flagList(spec.flags).join(", ") : "'" + spec.cmd + "' ohne Flags";
-  return notSimulated(host, "das Flag '" + name + "' bei '" + spec.cmd + "'.", [kann], hint);
+  const hint = spec.hints?.[e.name] ?? (isHelpFlag(e.name) ? helpHint(cli) : undefined);
+  return notSimulated(host, "das Flag '" + e.name + "' bei '" + spec.cmd + "'.", [flagsKann(spec)], hint);
+}
+
+function intError(host: ErrHost, spec: ArgSpec, e: Extract<ScanError, { kind: "int" }>): string {
+  if (styleOf(spec) === "goflag") return host._err('invalid value "' + e.value + '" for flag ' + e.name + ": parse error", e.tip);
+  return host._err('error: invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseInt: parsing "' + e.value + '": invalid syntax', e.tip);
 }
 
 function scanErrorText(host: ErrHost, spec: ArgSpec, e: ScanError): string {
-  if (e.kind === "unknown") return rejectFlag(host, spec, e.name);
+  if (e.kind === "unknown") return rejectFlag(host, spec, e);
   if (e.kind === "missing") return missingValue(host, e.name, styleOf(spec));
+  if (e.kind === "int") return intError(host, spec, e);
   return host._err('invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseBool: parsing "' + e.value + '": invalid syntax');
 }
 
@@ -211,16 +256,19 @@ function missingRequired(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
   return host._err("error: required flag(s) " + missing.map(n => '"' + n + '"').join(", ") + " not set", "Häng '" + strich + missing[0] + "=<wert>' an.");
 }
 
-/** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool), dann ein fehlendes Pflicht-Flag, dann der erste Wertprüfer, der anschlägt. */
+/** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool oder Ganzzahl), dann ein fehlendes Pflicht-Flag, dann der erste
+ *  Wertprüfer, der anschlägt, zuletzt ein echtes, nicht simuliertes Flag („Nicht simuliert“); das Hilfe-Flag geht den Pflicht-Flags und Wertprüfern vor (cobra). */
 function firstError(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
   if (w.error) return scanErrorText(host, spec, w.error);
+  // cobra wertet das Hilfe-Flag vor den Pflicht-Flags und der Validierung aus
+  if (w.help) return scanErrorText(host, spec, w.help);
   const required = missingRequired(host, spec, w);
   if (required) return required;
   for (const h of w.hits) {
     const invalid = h.value !== null && h.spec.check?.(host, h.value);
     if (invalid) return invalid;
   }
-  return null;
+  return w.unsimulated ? scanErrorText(host, spec, w.unsimulated) : null;
 }
 
 /** Die ausgelesene Eingabe EINES Unterbefehls: Positionsargumente und Flag-Werte (alle Aliase eines Flags zählen
@@ -333,6 +381,9 @@ export interface Dispatch<E extends SubEntry<unknown>> {
   /** Persistente Flags der Ebene (cobra PersistentFlags, #1491): dürfen vor dem Unterbefehl stehen (`kubectl create -n x deployment`)
    *  und gelten in jedem Ziel darunter; alle anderen Flags kennt nur das Ziel, das sie in seiner eigenen Tabelle nennt. */
   readonly flags?: readonly FlagSpec[];
+  /** Echte, nicht simulierte Flags der Ebene (#1996, kubectl: `kubectl options`): gelten wie `flags` in jedem Ziel darunter, schließen aber
+   *  nur Ziele mit eigener `realFlags`-Liste (`SubEntry.realFlags`): die Familien-Liste allein macht kein Ziel zur geschlossenen Welt. */
+  readonly realFlags?: readonly string[];
 }
 
 /** Die Flag-Tabelle eines Dispatch-Eintrags als `ArgSpec` (`cmd` = der volle Befehl für Meldungen): die persistenten
@@ -340,7 +391,7 @@ export interface Dispatch<E extends SubEntry<unknown>> {
  *  der Eintrag gewinnt). */
 function specOfSub(cmd: string, e: SubEntry<unknown>, d: Dispatch<SubEntry<unknown>>): ArgSpec {
   const { run: _run, flags, ...eigen } = e;
-  return { ...eigen, cmd, flags: mergeFlags(cmd, d.flags, flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints) };
+  return { ...eigen, cmd, flags: mergeFlags(cmd, d.flags, flags) ?? [], style: e.style ?? d.style ?? "pflag", hints: mergeHints(d.hints, e.hints), realFlags: e.realFlags && [...(d.realFlags ?? []), ...e.realFlags] };
 }
 
 /** Persistente Flags (außen) und Flags des Eintrags (innen) zusammen. Dasselbe Objekt zählt einmal; ein gleicher Flag-Name (auch nur
@@ -410,7 +461,7 @@ function locateSub(host: ErrHost, d: Dispatch<SubEntry<unknown>>, t: readonly st
 
 /** Die Ebene einer Gruppe: erbt Flags, Stil und Hinweise der Eltern (der eigene Wert gewinnt; Hinweise je Schlüssel). */
 function inherit<E extends SubEntry<unknown>>(d: Dispatch<E>, g: Dispatch<E>): Dispatch<E> {
-  return { ...g, flags: mergeFlags(g.cmd, d.flags, g.flags), style: g.style ?? d.style, hints: mergeHints(d.hints, g.hints) };
+  return { ...g, flags: mergeFlags(g.cmd, d.flags, g.flags), realFlags: d.realFlags || g.realFlags ? [...(d.realFlags ?? []), ...(g.realFlags ?? [])] : undefined, style: g.style ?? d.style, hints: mergeHints(d.hints, g.hints) };
 }
 
 /** Der EINE Kopf jeder Befehlsfamilie: wählt den Eintrag zu `t[at]` und liest dessen Eingabe (`parseCall`).

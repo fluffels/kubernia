@@ -107,7 +107,7 @@ describe("(a) nicht simulierte Flags werden abgelehnt", () => {
   test.each([
     ["get pods -l app=web", "-l"], ["get pods --selector=app=web", "--selector"], ["get pods -w", "-w"],
     ["get pods --watch", "--watch"], ["get pods --show-labels", "--show-labels"], ["get pods --sort-by=.metadata.name", "--sort-by"],
-    ["describe pod x -o yaml", "-o"], ["logs web-x -c app", "-c"], ["delete pod web-x --force", "--force"], ["describe pod x --show-events", "--show-events"],
+    ["logs web-x -c app", "-c"], ["delete pod web-x --force", "--force"], ["describe pod x --show-events", "--show-events"],
     ["create deployment x --image=nginx --dry-run=client", "--dry-run"], ["scale deployment web --replicas=2 --timeout=5s", "--timeout"],
   ])("kubectl %s → Nicht simuliert (%s)", (cmd, flag) => {
     const r = lauf("kubectl " + cmd);
@@ -458,8 +458,61 @@ describe("create deployment --replicas", () => {
     const sim = freshSim();
     const r = sim.exec(`kubectl create deployment web --image=nginx --replicas=${v}`);
     expect(r.error).toBe(true);
-    expect(r.output).toContain('invalid argument "' + v + '" for "--replicas" flag');
+    expect(r.output).toContain('invalid argument "' + v + '" for "' + (v === "-1" ? "--replicas" : "-r, --replicas") + '" flag');
     expect(sim.deployments).toHaveLength(0);
+  });
+  test("Int-Parsefehler kommen vor Pflicht-Flag und Namensprüfung (#1996): ohne Name und ohne Image, auch mit -r", () => {
+    const sim = freshSim();
+    const erwartet = 'error: invalid argument "abc" for "-r, --replicas" flag: strconv.ParseInt: parsing "abc": invalid syntax';
+    expect(sim.exec("kubectl create deployment --replicas=abc").output?.split("\n")[0]).toBe(erwartet);
+    expect(sim.exec("kubectl create deployment web -r abc").output?.split("\n")[0]).toBe(erwartet);
+    expect(sim.exec("kubectl create deployment web -rabc").output?.split("\n")[0]).toBe(erwartet);
+    expect(sim.deployments).toHaveLength(0);
+  });
+  test("--help an einem Ziel mit Pflicht-Flag zeigt den Hilfe-Hinweis, nicht den Pflicht-Fehler (#1996)", () => {
+    for (const cmd of ["kubectl create deployment --help", "kubectl create deployment web -h", "kubectl create clusterrolebinding b --help"]) {
+      const r = freshSim().exec(cmd);
+      expect(r.output).toContain("Hilfe zeigt der Simulator mit 'help kubectl'.");
+      expect(r.output).not.toContain("required flag");
+    }
+  });
+  test("--help hinter einem echten, nicht simulierten Flag: weiter der Hilfe-Hinweis (#1996)", () => {
+    for (const cmd of ["kubectl create deployment web --kubeconfig=x --help", "kubectl create deployment web --dry-run=client -h"]) {
+      const r = freshSim().exec(cmd);
+      expect(r.output).toContain("Hilfe zeigt der Simulator mit 'help kubectl'.");
+    }
+  });
+  test("der Wert eines echten Wert-Flags mit Leerzeichen bleibt folgenlos: „Nicht simuliert“ vor tooMany (#1996)", () => {
+    expect(freshSim().exec("kubectl create secret tls t --kubeconfig cfg").output).toContain("Nicht simuliert: das Flag '--kubeconfig' bei 'kubectl create secret tls'");
+  });
+  test("Top-Level-Ziele sind geschlossen (Abnahme #1996): ein fremdes Flag oder ein Tippfehler meldet unknown flag, ein echtes bleibt „Nicht simuliert“", () => {
+    for (const [cmd, erwartet] of [
+      ["kubectl scale deployment web --replicas=2 --image=nginx", "error: unknown flag: --image"],
+      ["kubectl get pods --replicas=2", "error: unknown flag: --replicas"],
+      ["kubectl get pods --kubeconfg=/tmp/k", "error: unknown flag: --kubeconfg"],
+      ["kubectl get pods --image=nginx", "error: unknown flag: --image"],
+      ["kubectl describe pod x -o yaml", "error: unknown shorthand flag: 'o' in -o"],
+      ["kubectl delete pod x --verb=get", "error: unknown flag: --verb"],
+      ["kubectl logs web-x --image=nginx", "error: unknown flag: --image"],
+      ["kubectl top pods --image=nginx", "error: unknown flag: --image"],
+    ] as const) {
+      const r = freshSim().exec(cmd);
+      expect(r.error, cmd).toBe(true);
+      expect(r.output?.split("\n")[0], cmd).toBe(erwartet);
+    }
+    for (const cmd of ["kubectl get pods --kubeconfig=/tmp/k", "kubectl get pods --show-labels", "kubectl scale deployment web --replicas=2 --timeout=5s", "kubectl top pods --sort-by=cpu", "kubectl expose deployment web --port=80 --overrides={}", "kubectl expose deployment web --port=80 --override-type=json"]) {
+      expect(freshSim().exec(cmd).output, cmd).toContain("Nicht simuliert: das Flag");
+    }
+  });
+  test("scale: das Label ist \"--replicas\" (ohne Kurzform), der Fehler kommt vor „So nicht ganz“ (#1996)", () => {
+    const r = freshSim().exec("kubectl scale --replicas=abc");
+    expect(r.error).toBe(true);
+    expect(r.output?.split("\n")[0]).toBe('error: invalid argument "abc" for "--replicas" flag: strconv.ParseInt: parsing "abc": invalid syntax');
+    expect(r.output).not.toContain("So nicht ganz");
+  });
+  test("rollout undo --to-revision=abc: der Scan meldet den Parse-Fehler (#1996)", () => {
+    const r = freshSim().exec("kubectl rollout undo deployment web --to-revision=abc");
+    expect(r.output?.split("\n")[0]).toBe('error: invalid argument "abc" for "--to-revision" flag: strconv.ParseInt: parsing "abc": invalid syntax');
   });
 });
 
@@ -509,7 +562,7 @@ describe("args: parseKubectlCall (Positionsargumente, Flag-Werte, Prüfung)", ()
   });
   test("Prüfung: bekannt → Call, unbekannt → Text, Wert fehlt → Text", () => {
     expect(typeof parseKubectlCall(host, ["kubectl", "get", "pods", "-A"])).toBe("object");
-    expect(parseKubectlCall(host, ["kubectl", "get", "pods", "-x"])).toContain(NICHT_SIMULIERT);
+    expect(parseKubectlCall(host, ["kubectl", "get", "pods", "-x"])).toContain("error: unknown shorthand flag: 'x' in -x");
     expect(parseKubectlCall(host, ["kubectl", "get", "-n"])).toContain("flag needs an argument");
     expect(typeof parseKubectlCall(host, ["kubectl", "get", "-n", "x", "pods"])).toBe("object");
   });

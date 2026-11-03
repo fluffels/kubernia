@@ -4,11 +4,11 @@
  * aus dem echten kubectl kennen) und `REAL_KUBECTL_COMMANDS`. Parser und `notSimulated` sind generisch in ../cliargs.
  *
  * Die Tabelle nennt NUR Flags, die die Sim wirklich auswertet (echtes kubectl hat Hunderte; „was wir
- * können“ ist endlich und ehrlich). `-n/--namespace` gilt überall, die Semantik regelt namespace.ts.
+ * können“ ist endlich und ehrlich); die echten, nicht simulierten Flags je Ziel stehen als `realFlags` in ./real-flags. `-n/--namespace` gilt überall, die Semantik regelt namespace.ts.
  *
  * Blattmodul der kubectl-Mappe (pure Domäne): importiert den Host-Typ, die Registry (./resources), die Mengen-Parser aus ../util und das Blattmodul ../cliargs. */
 import type { KubectlHost } from "./host";
-import { flag, checkedFlag, notSimulated, subEntry, type Call } from "../cliargs";
+import { flag, checkedFlag, intFlag, notSimulated, subEntry, type Call } from "../cliargs";
 export { notSimulated } from "../cliargs";
 import { parseMem, parseCpuMilli } from "../util";
 import { RESOURCE_KINDS, resolveKind } from "./resources";
@@ -33,7 +33,10 @@ export const NS = flag(true, "-n", "--namespace");
 export const FILE = flag(true, "-f", "--filename");
 
 /* Flags mit Wertprüfer (unten): die Tabelle in ../kubectl.ts baut daraus die Flag-Listen je Unterbefehl. */
-export const REVISION_FLAG = checkedFlag(checkRevision, "--to-revision");
+export const REVISION_FLAG = intFlag("Die Revision ist eine ganze Zahl, z.B. '--to-revision=1'.", "--to-revision");
+/** `--replicas`: eine ganze Zahl (der Scan prüft das, den Wertebereich der Handler). */
+export const REPLICAS_TIP = "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.";
+export const REPLICAS_FLAG = intFlag(REPLICAS_TIP, "--replicas");
 export const PORT_FLAG = checkedFlag(checkPort, "--port");
 export const LITERAL_FLAG = checkedFlag(checkLiteral, "--from-literal");
 /** Ohne Wertprüfer: kubectl prüft das Format erst nach Validate (`parseServiceAccount`, vom Handler gerufen). */
@@ -58,14 +61,10 @@ export const FLAG_HINTS: Readonly<Record<string, string>> = {
 };
 
 /** `--replicas`: `null` = nicht angegeben, sonst die ganze Zahl (auch negativ: den Wertebereich prüft der Aufrufer, die
- *  Meldung unterscheidet sich je Befehl). Keine ganze Zahl: der pflag-Fehler wie bei echtem kubectl. */
-export function replicasArg(host: Pick<KubectlHost, "_err">, c: Call): { replicas: number | null } | { error: string } {
+ *  Meldung unterscheidet sich je Befehl). Dass es eine ganze Zahl ist, hat der Scan schon geprüft (`intFlag`). */
+export function replicasArg(c: Call): number | null {
   const v = c.value("--replicas");
-  if (v === null) return { replicas: null };
-  if (!/^[+-]?\d+$/.test(v)) {
-    return { error: host._err('error: invalid argument "' + v + '" for "--replicas" flag: strconv.ParseInt: parsing "' + v + '": invalid syntax', "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.") };
-  }
-  return { replicas: parseInt(v, 10) };
+  return v === null ? null : parseInt(v, 10);
 }
 
 /** Der Builder-Fehler ohne jede Ressource und ohne `-f` (`kubectl set image nginx=nginx:2`), wörtlich wie `NoResourceError` in `builder.go`. */
@@ -102,11 +101,6 @@ function checkPort(host: ErrOnly, v: string): string | null {
   const parts = v.split(",");
   for (const p of parts) if (!/^[+-]?\d+$/.test(p)) return host._err('error: strconv.Atoi: parsing "' + p + '": invalid syntax', "Der Port ist eine ganze Zahl, z.B. '--port=80'.");
   return parts.length > 1 ? notSimulated(host, "mehrere Ports in '--port=" + v + "'.", ["kubectl expose deployment <name> --port=80"]) : null;
-}
-
-/** `--to-revision=<n>`: eine ganze Zahl (negativ ist gültig, findet aber keine Revision). */
-function checkRevision(host: ErrOnly, v: string): string | null {
-  return /^[+-]?\d+$/.test(v) ? null : host._err('error: invalid argument "' + v + '" for "--to-revision" flag: strconv.ParseInt: parsing "' + v + '": invalid syntax', "Die Revision ist eine ganze Zahl, z.B. '--to-revision=1'.");
 }
 
 /** `--from-literal=<key>=<value>`: ohne `=` oder mit leerem Schlüssel lehnt kubectl die Angabe ab. */

@@ -1,14 +1,19 @@
-/* Konsistenz der Flag-Tabellen aller CLI-Familien (#1989): `requiredFlags` müssen in `flags` (eigene oder persistente der
- * Ebenen darüber) stehen, `unknownFlags` dürfen sich nicht mit den Flags des Ziels überschneiden, und bei kubectl nennt
- * `unknownFlags` nie ein globales Flag (`kubectl options`: `--user`, `--as`, `--context` … gelten an jedem Ziel).
+/* Konsistenz der Flag-Tabellen aller Befehlsfamilien (#1989, #1996): `requiredFlags` müssen in `flags` (eigene oder persistente
+ * der Ebenen darüber) stehen; Ziele mit `realFlags` sind eine geschlossene Welt: ein echtes Flag meldet nie `unknown flag`,
+ * ein anderes immer. Die Orakel-Listen unten sind aus den kubectl-Quellen abgeschrieben (kubernetes/kubernetes, Tag v1.37.1,
+ * `kubectl/pkg/cmd/<gruppe>/<datei>.go`, die `cmd.Flags()`-Aufrufe samt `cmdutil.Add*Flag*` und `PrintFlags.AddFlags`) und
+ * bewusst NICHT aus `src/sim/kubectl/real-flags.ts` gebildet: ein Tippfehler dort fällt hier auf.
+ *   (a) Regeln über alle Dispatch-Tabellen, (b) Ratchet: welche kubectl-Ziele noch offen sind, (c) Orakel je Ziel,
+ *   (d) die kuratierte Unbekannt-Liste gibt es nicht mehr, (e) Scan-Wächter.
  *
- * Grenze: gefunden werden nur Tabellen, die als `export const X: Dispatch<…>` in `src/sim/**` stehen; der Scan-Wächter
+ * Grenze (e): gefunden werden nur Tabellen, die als `export const X: Dispatch<…>` in `src/sim/**` stehen; der Scan-Wächter
  * verlangt, dass jede davon über einen Familien-Kopf erreichbar ist. Eine Tabelle ohne diese Schreibweise sieht der Test nicht. */
 import { describe, test, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { flag, OFFENE_LISTE, type Dispatch, type SubEntry } from "../../src/sim/cliargs";
+import { dispatchSub, flag, OFFENE_LISTE, type Dispatch, type FlagSpec, type SubEntry } from "../../src/sim/cliargs";
 import { KUBECTL } from "../../src/sim/kubectl";
+import { KUBECTL_OPTIONS } from "../../src/sim/kubectl/real-flags";
 import { DOCKER } from "../../src/sim/docker";
 import { HELM } from "../../src/sim/helm";
 import { ARGOCD } from "../../src/sim/argocd";
@@ -18,79 +23,233 @@ import { KUBEADM } from "../../src/sim/kubeadm";
 import { AWS } from "../../src/sim/s3";
 import { TERRAFORM } from "../../src/sim/terraform";
 
-type Tab = Dispatch<SubEntry<unknown>>;
-const KOEPFE: Record<string, Tab> = { KUBECTL, DOCKER, HELM, ARGOCD, GLAB, GIT, KUBEADM, AWS, TERRAFORM };
+const host = { _err: (m: string, tip?: string) => m + (tip ? "\n" + tip : "") };
+type D = Dispatch<SubEntry<unknown>>;
+const KOEPFE: Record<string, D> = { KUBECTL, DOCKER, HELM, ARGOCD, GLAB, GIT, KUBEADM, AWS, TERRAFORM };
 
-/** Die globalen kubectl-Flags (https://kubernetes.io/docs/reference/kubectl/generated/kubectl_options/): geschlossene Liste. */
-const KUBECTL_GLOBALE_FLAGS = [
-  "--as", "--as-group", "--as-uid", "--cache-dir", "--certificate-authority", "--client-certificate", "--client-key", "--cluster",
-  "--context", "--disable-compression", "--insecure-skip-tls-verify", "--kubeconfig", "--match-server-version", "-n", "--namespace",
-  "--password", "--profile", "--profile-output", "--request-timeout", "-s", "--server", "--tls-server-name", "--token", "--user",
-  "--username", "-v", "--v", "--vmodule", "--warnings-as-errors",
-];
-
-interface Eintrag { pfad: string; entry: SubEntry<unknown>; flags: readonly string[]; kubectl: boolean }
-
-/** Alle Blätter samt der Flag-Namen, die dort gelten (persistente Flags der Ebenen darüber plus die eigenen), und alle besuchten Ebenen. */
-function besuche(d: Tab, kubectl: boolean, geerbt: readonly string[] = [], ebenen: Set<Tab> = new Set(), blaetter: Eintrag[] = []): { blaetter: Eintrag[]; ebenen: Set<Tab> } {
-  ebenen.add(d);
-  const hier = [...geerbt, ...(d.flags ?? []).flatMap(f => f.names)];
-  for (const [key, e] of Object.entries(d.table)) {
-    if ("group" in e) { besuche(e.group, kubectl, hier, ebenen, blaetter); continue; }
-    blaetter.push({ pfad: d.cmd + " " + key, entry: e, flags: [...hier, ...(e.flags ?? []).flatMap(f => f.names)], kubectl });
-  }
-  return { blaetter, ebenen };
+interface Blatt {
+  ziel: string[]; entry: SubEntry<unknown>; wirksam: FlagSpec[]; eigene: FlagSpec[]; real: readonly string[] | undefined; style: string | undefined;
+  /** Die `realFlags` der Ebenen darüber (kubectl: `KUBECTL_OPTIONS`): sie gelten an jedem Ziel und stehen nur dort. */
+  familie: readonly string[];
 }
 
-function verstoesse(b: Eintrag): string[] {
-  const v: string[] = [];
-  for (const n of b.entry.requiredFlags ?? []) if (!b.flags.includes(n)) v.push(b.pfad + ": requiredFlags '" + n + "' steht nicht in flags");
-  for (const n of b.entry.unknownFlags ?? []) {
-    if (b.flags.includes(n)) v.push(b.pfad + ": unknownFlags '" + n + "' ist zugleich ein Flag des Ziels");
-    if (b.kubectl && KUBECTL_GLOBALE_FLAGS.includes(n)) v.push(b.pfad + ": unknownFlags '" + n + "' ist ein globales kubectl-Flag");
+/** Alle Blätter einer Tabelle (Aliase einmal) mit den geerbten persistenten Flags; `ebenen` sammelt jede besuchte Ebene. */
+function blaetter(d: D, ebenen: Set<D> = new Set(), ziel: string[] = [], flags: readonly FlagSpec[] = [], style?: string, familie: readonly string[] = []): Blatt[] {
+  ebenen.add(d);
+  const fl = [...flags, ...(d.flags ?? [])];
+  const fam = [...familie, ...(d.realFlags ?? [])];
+  const st = d.style ?? style;
+  const seen = new Set<unknown>();
+  const out: Blatt[] = [];
+  for (const [key, e] of Object.entries(d.table)) {
+    if (seen.has(e)) continue;
+    seen.add(e);
+    if ("group" in e) out.push(...blaetter(e.group, ebenen, [...ziel, key], fl, st, fam));
+    else out.push({ ziel: [...ziel, key], entry: e, wirksam: [...fl, ...(e.flags ?? [])], eigene: [...(e.flags ?? [])], real: e.realFlags, style: e.style ?? st, familie: fam });
   }
+  return out;
+}
+const namen = (fs: readonly FlagSpec[]) => fs.flatMap(f => f.names);
+const dubletten = (l: readonly string[]) => l.filter((n, i) => l.indexOf(n) !== i);
+
+/** Die Regelverstöße eines Blatts (leer = in Ordnung). */
+function verstoesse(b: Blatt): string[] {
+  const v: string[] = [];
+  const wo = b.ziel.join(" ");
+  const wirksam = namen(b.wirksam);
+  for (const r of b.entry.requiredFlags ?? []) if (!wirksam.includes(r)) v.push(wo + ": requiredFlags '" + r + "' steht nicht in flags");
+  for (const n of dubletten(b.real ?? [])) v.push(wo + ": realFlags '" + n + "' doppelt");
+  for (const n of (b.real ?? []).filter(x => wirksam.includes(x))) v.push(wo + ": realFlags '" + n + "' ist zugleich ein Flag des Ziels");
+  for (const n of (b.real ?? []).filter(x => b.familie.includes(x))) v.push(wo + ": realFlags '" + n + "' steht schon in der Familien-Liste");
+  const form = b.style === "goflag" ? /^-[A-Za-z0-9][A-Za-z0-9-]*$/ : /^(-[A-Za-z0-9]|--[A-Za-z0-9][A-Za-z0-9-]+)$/;
+  for (const n of b.real ?? []) if (!form.test(n)) v.push(wo + ": realFlags '" + n + "' hat keine Flag-Form");
   return v;
 }
 
-const alle = Object.entries(KOEPFE).map(([name, d]) => ({ name, ...besuche(d, name === "KUBECTL") }));
+const alle = Object.entries(KOEPFE).map(([name, d]) => { const ebenen = new Set<D>(); return { name, d, ebenen, blaetter: blaetter(d, ebenen) }; });
 const alleBlaetter = alle.flatMap(a => a.blaetter);
 
+// Die Titel der drei Tests aus #1989 bleiben (Merge-Testabgleich); seit #1996 gilt ihre Regel für `realFlags` statt der alten Unbekannt-Liste.
 describe("Flag-Tabellen aller Familien: requiredFlags und unknownFlags sind konsistent", () => {
-  test.each(alle.map(a => [a.name, a.blaetter] as const))("%s", (_name, blaetter) => {
-    expect(blaetter.flatMap(verstoesse)).toEqual([]);
+  describe("(a) Regeln über alle Dispatch-Tabellen", () => test.each(alle.map(a => [a.name, a] as const))("%s: requiredFlags sind Flags des Ziels, realFlags ohne Dubletten, ohne Überschneidung, in Flag-Form", (_n, a) => {
+    expect(dubletten(a.d.realFlags ?? [])).toEqual([]);
+    expect(a.blaetter.flatMap(verstoesse)).toEqual([]);
+  }));
+  test("KUBECTL_OPTIONS: ohne Dubletten, in der Familien-Liste der Wurzel", () => {
+    expect(dubletten(KUBECTL_OPTIONS)).toEqual([]);
+    expect(KUBECTL.realFlags).toBe(KUBECTL_OPTIONS);
   });
-
   test("nicht vakuös: der Besuch findet die Einträge mit unknownFlags und requiredFlags", () => {
     expect(alleBlaetter.length).toBeGreaterThan(80);
-    expect(alleBlaetter.filter(b => b.entry.unknownFlags?.length).length).toBeGreaterThanOrEqual(15);
+    expect(alleBlaetter.filter(b => b.real !== undefined).length).toBeGreaterThanOrEqual(15);
     expect(alleBlaetter.filter(b => b.entry.requiredFlags?.length).length).toBeGreaterThanOrEqual(2);
-    expect(alleBlaetter.some(b => b.pfad === "kubectl create secret tls")).toBe(true);
+    expect(alleBlaetter.some(b => b.ziel.join(" ") === "create secret tls")).toBe(true);
   });
-
   test("Negativfall: eine kaputte Tabelle liefert beide Verstöße", () => {
-    const kaputt: Tab = {
+    const kaputt: D = {
       cmd: "x",
       flags: [flag(true, "-n")],
       table: {
-        a: { run: () => "", maxArgs: OFFENE_LISTE, flags: [flag(true, "--aa")], requiredFlags: ["--fehlt"], unknownFlags: ["--aa"] },
-        b: { run: () => "", maxArgs: OFFENE_LISTE, unknownFlags: ["--user", "-n"] },
+        a: { run: () => "", maxArgs: OFFENE_LISTE, flags: [flag(true, "--aa")], requiredFlags: ["--fehlt"], realFlags: ["--aa"] },
       },
     };
-    const v = besuche(kaputt, true).blaetter.flatMap(verstoesse);
-    expect(v).toEqual([
-      "x a: requiredFlags '--fehlt' steht nicht in flags",
-      "x a: unknownFlags '--aa' ist zugleich ein Flag des Ziels",
-      "x b: unknownFlags '--user' ist ein globales kubectl-Flag",
-      "x b: unknownFlags '-n' ist zugleich ein Flag des Ziels",
-      "x b: unknownFlags '-n' ist ein globales kubectl-Flag",
+    expect(blaetter(kaputt).flatMap(verstoesse)).toEqual([
+      "a: requiredFlags '--fehlt' steht nicht in flags",
+      "a: realFlags '--aa' ist zugleich ein Flag des Ziels",
     ]);
   });
-
-  test("ein persistentes Flag der Ebene zählt als Flag des Ziels (requiredFlags darf darauf zeigen)", () => {
-    const d: Tab = { cmd: "x", flags: [flag(true, "-n")], table: { a: { run: () => "", maxArgs: OFFENE_LISTE, requiredFlags: ["-n"] } } };
-    expect(besuche(d, false).blaetter.flatMap(verstoesse)).toEqual([]);
+  test("Negativfall: ein Flag der Familien-Liste (global) in der Liste eines Ziels wird gemeldet, auch zwei Ebenen tief und aus einer mittleren Ebene", () => {
+    const tief: D = { cmd: "x mid", realFlags: ["--mitte"], table: { a: { run: () => "", maxArgs: OFFENE_LISTE, flags: [flag(true, "--fam")], realFlags: ["--fam", "--mitte", "--eigen"] } } };
+    const kaputt: D = { cmd: "x", realFlags: ["--fam"], table: { mid: { group: tief }, b: { run: () => "", maxArgs: OFFENE_LISTE, realFlags: ["--fam"] } } };
+    expect(blaetter(kaputt).flatMap(verstoesse)).toEqual([
+      "mid a: realFlags '--fam' ist zugleich ein Flag des Ziels",
+      "mid a: realFlags '--fam' steht schon in der Familien-Liste",
+      "mid a: realFlags '--mitte' steht schon in der Familien-Liste",
+      "b: realFlags '--fam' steht schon in der Familien-Liste",
+    ]);
   });
+  test("KUBECTL: kein Ziel wiederholt ein globales Flag aus KUBECTL_OPTIONS in seiner Liste (K2: einmal hinterlegt)", () => {
+    const doppelt = blaetter(KUBECTL).flatMap(b => (b.real ?? []).filter(n => KUBECTL_OPTIONS.includes(n)).map(n => b.ziel.join(" ") + " " + n));
+    expect(doppelt).toEqual([]);
+  });
+  test("Negativfall: eine Dublette und eine falsche Flag-Form in realFlags werden gemeldet", () => {
+    const kaputt: D = { cmd: "x", table: { a: { run: () => "", maxArgs: OFFENE_LISTE, realFlags: ["--bb", "--bb", "-xx", "--y"] } } };
+    expect(blaetter(kaputt).flatMap(verstoesse)).toEqual([
+      "a: realFlags '--bb' doppelt",
+      "a: realFlags '-xx' hat keine Flag-Form",
+      "a: realFlags '--y' hat keine Flag-Form",
+    ]);
+  });
+  test("ein persistentes Flag der Ebene zählt als Flag des Ziels (requiredFlags darf darauf zeigen)", () => {
+    const d: D = { cmd: "x", flags: [flag(true, "-n")], table: { a: { run: () => "", maxArgs: OFFENE_LISTE, requiredFlags: ["-n"] } } };
+    expect(blaetter(d).flatMap(verstoesse)).toEqual([]);
+  });
+});
 
+describe("(b) Ratchet: die kubectl-Ziele, die noch offen sind", () => {
+  // Seit der Abnahme von #1996 sind alle kubectl-Ziele geschlossen. Ein neues Ziel ohne `realFlags` macht den Test rot; eine bewusste
+  // Ausnahme gehört mit offenem Ticket hierher (die Liste darf nur schrumpfen).
+  const OFFENE_ZIELE: string[] = [];
+  test("offen ist genau das, was die Liste nennt", () => {
+    const offen = blaetter(KUBECTL).filter(b => b.real === undefined).map(b => b.ziel.join(" ")).sort();
+    expect(offen).toEqual(OFFENE_ZIELE);
+  });
+});
+
+/* ---- (c) Orakel: die Flags je Ziel laut kubectl-Quelle (ohne die globalen Flags und -n) ---- */
+const PRINT = ["-o", "--output", "--show-managed-fields", "--template", "--allow-missing-template-keys"];
+const DATEI = ["-f", "--filename", "-R", "--recursive", "-k", "--kustomize"];
+const SELEKTOR = ["-l", "--selector"];
+const BASIS = [...PRINT, "--save-config", "--validate", "--dry-run", "--field-manager"];
+/** Pfad → Flags des Ziels; Quelle je Eintrag im Kommentar. */
+const ORAKEL: Record<string, string[]> = {
+  // create/create_deployment.go
+  "create deployment": [...BASIS, "--image", "--port", "-r", "--replicas"],
+  // create/create_serviceaccount.go
+  "create serviceaccount": [...BASIS],
+  // create/create_role.go
+  "create role": [...BASIS, "--verb", "--resource", "--resource-name"],
+  // create/create_clusterrole.go
+  "create clusterrole": [...BASIS, "--verb", "--non-resource-url", "--resource", "--resource-name", "--aggregation-rule"],
+  // create/create_rolebinding.go
+  "create rolebinding": [...BASIS, "--clusterrole", "--role", "--user", "--group", "--serviceaccount"],
+  // create/create_clusterrolebinding.go (kein --role)
+  "create clusterrolebinding": [...BASIS, "--clusterrole", "--user", "--group", "--serviceaccount"],
+  // create/create_configmap.go
+  "create configmap": [...BASIS, "--from-file", "--from-literal", "--from-env-file", "--append-hash"],
+  // create/create_secret.go
+  "create secret generic": [...BASIS, "--from-file", "--from-literal", "--from-env-file", "--type", "--append-hash"],
+  // create/create_secret_tls.go
+  "create secret tls": [...BASIS, "--cert", "--key", "--append-hash"],
+  // set/set_image.go (PrintFlags, RecordFlags, Filename, --all, --local, --dry-run, --field-manager, Selektor)
+  "set image": [...PRINT, "--record", ...DATEI, "--all", "--local", "--dry-run", "--field-manager", ...SELEKTOR],
+  // set/set_env.go
+  "set env": [...DATEI, "-c", "--containers", "--from", "--prefix", "-e", "--env", "--keys", "--list", "--resolve", "--local", "--all", "--overwrite", "--field-manager", ...SELEKTOR, ...PRINT, "--dry-run"],
+  // set/set_resources.go
+  "set resources": [...PRINT, "--record", ...DATEI, "--all", ...SELEKTOR, "-c", "--containers", "--local", "--dry-run", "--limits", "--requests", "--field-manager"],
+  // rollout/rollout_restart.go
+  "rollout restart": [...DATEI, "--field-manager", ...SELEKTOR, ...PRINT],
+  // rollout/rollout_history.go
+  "rollout history": ["--revision", ...SELEKTOR, ...DATEI, ...PRINT],
+  // rollout/rollout_undo.go
+  "rollout undo": ["--to-revision", ...DATEI, "--dry-run", ...SELEKTOR, ...PRINT],
+  // get/get.go, get_flags.go (PrintFlags samt Human-Readable-Flags, --no-headers), humanreadable_flags.go
+  "get": [...PRINT, "--show-labels", "--sort-by", "-L", "--label-columns", "--show-kind", "--no-headers", "--raw", "-w", "--watch", "--watch-only", "--output-watch-events", "--ignore-not-found", "--field-selector", "-A", "--all-namespaces", ...DATEI, "--chunk-size", ...SELEKTOR, "--subresource", "--server-print"],
+  // describe/describe.go (kein Drucker)
+  "describe": [...DATEI, ...SELEKTOR, "-A", "--all-namespaces", "--show-events", "--chunk-size"],
+  // scale/scale.go
+  "scale": [...PRINT, "--record", "--all", "--resource-version", "--current-replicas", "--replicas", "--timeout", ...DATEI, "--dry-run", ...SELEKTOR],
+  // expose/expose.go (-l ist hier --labels), --overrides/--override-type aus util/override_options.go (AddOverrideFlags)
+  "expose": [...PRINT, "--record", "--protocol", "--port", "--type", "--load-balancer-ip", "--selector", "-l", "--labels", "--target-port", "--external-ip", "--name", "--session-affinity", "--cluster-ip", "--field-manager", "--dry-run", "--save-config", "--overrides", "--override-type", ...DATEI],
+  // delete/delete.go, delete_flags.go (NewDeleteCommandFlags)
+  "delete": [...DATEI, ...SELEKTOR, "--field-selector", "--all", "-A", "--all-namespaces", "--force", "--cascade", "--now", "--grace-period", "--timeout", "--ignore-not-found", "--wait", "-o", "--output", "--raw", "-i", "--interactive", "--dry-run"],
+  // apply/apply.go, delete_flags.go (NewDeleteFlags: Datei, cascade, grace-period, force, timeout, wait); --applyset nur mit Feature-Gate
+  "apply": [...DATEI, "--cascade", "--grace-period", "--force", "--timeout", "--wait", "--record", ...PRINT, "--validate", "--dry-run", "--server-side", "--force-conflicts", "--field-manager", ...SELEKTOR, "--prune-allowlist", "--all", "--prune", "--overwrite", "--openapi-patch", "--subresource"],
+  // logs/logs.go
+  "logs": ["--all-pods", "--all-containers", "-f", "--follow", "--timestamps", "--limit-bytes", "-p", "--previous", "--tail", "--ignore-errors", "--since-time", "--since", "-c", "--container", "--insecure-skip-tls-verify-backend", "--pod-running-timeout", ...SELEKTOR, "--max-log-requests", "--prefix"],
+  // top/top_pod.go und top/top_node.go: die Sim hat EIN Ziel für beide, also die Vereinigung
+  "top": [...SELEKTOR, "--field-selector", "--sort-by", "--containers", "-A", "--all-namespaces", "--no-headers", "--use-protocol-buffers", "--sum", "--show-swap", "--show-capacity"],
+  // label/label.go
+  "label": [...PRINT, "--record", "--overwrite", "--list", "--local", "--field-selector", "--all", "-A", "--all-namespaces", "--resource-version", ...DATEI, "--dry-run", "--field-manager", ...SELEKTOR],
+  // auth/cani.go
+  "auth can-i": ["-A", "--all-namespaces", "-q", "--quiet", "--subresource", "--list", "--no-headers"],
+};
+/** Die globalen kubectl-Flags (`kubectl options`) laut Quelle, unabhängig von KUBECTL_OPTIONS abgeschrieben:
+ *  cli-runtime/pkg/genericclioptions/config_flags.go (AddFlags), kubectl/pkg/cmd/cmd.go (PersistentFlags: Profiling, --warnings-as-errors,
+ *  --kuberc, MatchVersionFlags), component-base/logs (-v/--v, --vmodule, --log-flush-frequency). `-n/--namespace` ist die persistente `NS` der Wurzel. */
+const GLOBALE_ORAKEL = [
+  "--kubeconfig", "--cache-dir", "--client-certificate", "--client-key", "--token", "--as", "--as-uid", "--as-group", "--as-user-extra",
+  "--username", "--password", "--cluster", "--user", "--context", "-s", "--server", "--tls-server-name", "--insecure-skip-tls-verify",
+  "--certificate-authority", "--request-timeout", "--disable-compression", "--proxy-url", "--profile", "--profile-output",
+  "--warnings-as-errors", "--kuberc", "--match-server-version", "-v", "--v", "--vmodule", "--log-flush-frequency",
+];
+const GLOBAL = [...GLOBALE_ORAKEL, "-n", "--namespace"];
+const lauf = (...t: string[]) => dispatchSub(host, KUBECTL, ["kubectl", ...t], 1);
+const text = (r: ReturnType<typeof lauf>) => (typeof r === "string" ? r : "");
+const UNBEKANNT = /unknown (shorthand )?flag/;
+const geschlossene = blaetter(KUBECTL).filter(b => b.real !== undefined);
+
+describe("(c) Orakel je geschlossenem kubectl-Ziel", () => {
+  test("jedes geschlossene Ziel hat ein Orakel und umgekehrt", () => {
+    expect(geschlossene.map(b => b.ziel.join(" ")).sort()).toEqual(Object.keys(ORAKEL).sort());
+  });
+  test.each(geschlossene.map(b => [b.ziel.join(" "), b] as const))("%s: flags ∪ realFlags = Orakel (ohne globale Flags)", (wo, b) => {
+    const ist = [...namen(b.eigene), ...(b.real ?? [])].filter(n => !GLOBAL.includes(n));
+    expect([...new Set(ist)].sort()).toEqual([...new Set(ORAKEL[wo].filter(n => !GLOBAL.includes(n)))].sort());
+  });
+  test.each(Object.entries(ORAKEL))("%s: kein echtes Flag meldet „unknown flag“", (wo, flags) => {
+    for (const n of flags) expect(text(lauf(...wo.split(" "), n + "=1")), wo + " " + n).not.toMatch(UNBEKANNT);
+  });
+  test.each(Object.keys(ORAKEL))("%s: ein fremdes Flag meldet den pflag-Text", wo => {
+    expect(text(lauf(...wo.split(" "), "--gibts-nicht=1"))).toMatch(/^error: unknown flag: --gibts-nicht\n/);
+    expect(text(lauf(...wo.split(" "), "-Z"))).toMatch(/^error: unknown shorthand flag: 'Z' in -Z\n/);
+  });
+  test("KUBECTL_OPTIONS = die globalen Flags laut Quelle (Mengengleichheit mit dem Orakel)", () => {
+    expect([...KUBECTL_OPTIONS].sort()).toEqual([...GLOBALE_ORAKEL].sort());
+  });
+  test.each(GLOBALE_ORAKEL)("das globale Flag %s meldet an jedem geschlossenen Ziel nie „unknown flag“", n => {
+    for (const wo of Object.keys(ORAKEL)) expect(text(lauf(...wo.split(" "), n + "=1")), wo + " " + n).not.toMatch(UNBEKANNT);
+  });
+  test("ein globales Flag zwei Ebenen tief: „Nicht simuliert“", () => {
+    expect(text(lauf("create", "secret", "tls", "t", "--kubeconfig=x"))).toContain("Nicht simuliert: das Flag '--kubeconfig' bei 'kubectl create secret tls'");
+  });
+  test("ein Flag eines Geschwister-Ziels meldet den echten Fehler (create clusterrolebinding --role)", () => {
+    expect(text(lauf("create", "clusterrolebinding", "b", "--clusterrole=c", "--role=x"))).toMatch(/^error: unknown flag: --role\n/);
+  });
+});
+
+describe("(d) die kuratierte Unbekannt-Liste gibt es nicht mehr", () => {
+  // Grenze: gesucht wird nur in src/**/*.ts und docs/**/*.md; der alte Name steht auch nirgends sonst.
+  const alt = new RegExp("\\bunknown" + "Flags\\b");
+  const dateien = (dir: string, ext: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? dateien(join(dir, e.name), ext) : e.name.endsWith(ext) ? [join(dir, e.name)] : []);
+  test("kein Treffer in src und docs", () => {
+    const treffer = [...dateien("src", ".ts"), ...dateien("docs", ".md")].filter(f => alt.test(readFileSync(f, "utf8")));
+    expect(treffer).toEqual([]);
+  });
+});
+
+describe("(e) Scan-Wächter", () => {
   test("Scan-Wächter: jede `export const X: Dispatch<…>` unter src/sim ist über einen Familien-Kopf erreichbar", () => {
     const wurzel = join(__dirname, "..", "..", "src", "sim");
     const dateien: string[] = [];
@@ -106,11 +265,11 @@ describe("Flag-Tabellen aller Familien: requiredFlags und unknownFlags sind kons
       for (const m of readFileSync(f, "utf8").matchAll(/export const (\w+): Dispatch</g)) gefunden.push(relative(wurzel, f).replace(/\\/g, "/") + ":" + m[1]);
     }
     expect(gefunden.length).toBeGreaterThanOrEqual(13);
-    const besucht = new Set<Tab>(alle.flatMap(a => [...a.ebenen]));
+    const besucht = new Set<D>(alle.flatMap(a => [...a.ebenen]));
     const unerreichbar: string[] = [];
     for (const eintrag of gefunden) {
       const [datei, name] = eintrag.split(":");
-      const modul = (MODULE_CACHE[datei] ?? {}) as Record<string, Tab>;
+      const modul = (MODULE_CACHE[datei] ?? {}) as Record<string, D>;
       if (!(name in modul)) unerreichbar.push(eintrag + " (nicht ladbar)");
       else if (!besucht.has(modul[name])) unerreichbar.push(eintrag);
     }
