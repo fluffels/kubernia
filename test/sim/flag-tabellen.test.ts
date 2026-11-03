@@ -29,20 +29,23 @@ const KOEPFE: Record<string, D> = { KUBECTL, DOCKER, HELM, ARGOCD, GLAB, GIT, KU
 
 interface Blatt {
   ziel: string[]; entry: SubEntry<unknown>; wirksam: FlagSpec[]; eigene: FlagSpec[]; real: readonly string[] | undefined; style: string | undefined;
+  /** Die `realFlags` der Ebenen darüber (kubectl: `KUBECTL_OPTIONS`): sie gelten an jedem Ziel und stehen nur dort. */
+  familie: readonly string[];
 }
 
 /** Alle Blätter einer Tabelle (Aliase einmal) mit den geerbten persistenten Flags; `ebenen` sammelt jede besuchte Ebene. */
-function blaetter(d: D, ebenen: Set<D> = new Set(), ziel: string[] = [], flags: readonly FlagSpec[] = [], style?: string): Blatt[] {
+function blaetter(d: D, ebenen: Set<D> = new Set(), ziel: string[] = [], flags: readonly FlagSpec[] = [], style?: string, familie: readonly string[] = []): Blatt[] {
   ebenen.add(d);
   const fl = [...flags, ...(d.flags ?? [])];
+  const fam = [...familie, ...(d.realFlags ?? [])];
   const st = d.style ?? style;
   const seen = new Set<unknown>();
   const out: Blatt[] = [];
   for (const [key, e] of Object.entries(d.table)) {
     if (seen.has(e)) continue;
     seen.add(e);
-    if ("group" in e) out.push(...blaetter(e.group, ebenen, [...ziel, key], fl, st));
-    else out.push({ ziel: [...ziel, key], entry: e, wirksam: [...fl, ...(e.flags ?? [])], eigene: [...(e.flags ?? [])], real: e.realFlags, style: e.style ?? st });
+    if ("group" in e) out.push(...blaetter(e.group, ebenen, [...ziel, key], fl, st, fam));
+    else out.push({ ziel: [...ziel, key], entry: e, wirksam: [...fl, ...(e.flags ?? [])], eigene: [...(e.flags ?? [])], real: e.realFlags, style: e.style ?? st, familie: fam });
   }
   return out;
 }
@@ -57,6 +60,7 @@ function verstoesse(b: Blatt): string[] {
   for (const r of b.entry.requiredFlags ?? []) if (!wirksam.includes(r)) v.push(wo + ": requiredFlags '" + r + "' steht nicht in flags");
   for (const n of dubletten(b.real ?? [])) v.push(wo + ": realFlags '" + n + "' doppelt");
   for (const n of (b.real ?? []).filter(x => wirksam.includes(x))) v.push(wo + ": realFlags '" + n + "' ist zugleich ein Flag des Ziels");
+  for (const n of (b.real ?? []).filter(x => b.familie.includes(x))) v.push(wo + ": realFlags '" + n + "' steht schon in der Familien-Liste");
   const form = b.style === "goflag" ? /^-[A-Za-z0-9][A-Za-z0-9-]*$/ : /^(-[A-Za-z0-9]|--[A-Za-z0-9][A-Za-z0-9-]+)$/;
   for (const n of b.real ?? []) if (!form.test(n)) v.push(wo + ": realFlags '" + n + "' hat keine Flag-Form");
   return v;
@@ -93,6 +97,18 @@ describe("Flag-Tabellen aller Familien: requiredFlags und unknownFlags sind kons
       "a: requiredFlags '--fehlt' steht nicht in flags",
       "a: realFlags '--aa' ist zugleich ein Flag des Ziels",
     ]);
+  });
+  test("Negativfall: ein Flag der Familien-Liste (global) in der Liste eines Ziels wird gemeldet, auch zwei Ebenen tief", () => {
+    const tief: D = { cmd: "x mid", table: { a: { run: () => "", maxArgs: OFFENE_LISTE, realFlags: ["--fam", "--eigen"] } } };
+    const kaputt: D = { cmd: "x", realFlags: ["--fam"], table: { mid: { group: tief }, b: { run: () => "", maxArgs: OFFENE_LISTE, realFlags: ["--fam"] } } };
+    expect(blaetter(kaputt).flatMap(verstoesse)).toEqual([
+      "mid a: realFlags '--fam' steht schon in der Familien-Liste",
+      "b: realFlags '--fam' steht schon in der Familien-Liste",
+    ]);
+  });
+  test("KUBECTL: kein Ziel wiederholt ein globales Flag aus KUBECTL_OPTIONS in seiner Liste (K2: einmal hinterlegt)", () => {
+    const doppelt = blaetter(KUBECTL).flatMap(b => (b.real ?? []).filter(n => KUBECTL_OPTIONS.includes(n)).map(n => b.ziel.join(" ") + " " + n));
+    expect(doppelt).toEqual([]);
   });
   test("Negativfall: eine Dublette und eine falsche Flag-Form in realFlags werden gemeldet", () => {
     const kaputt: D = { cmd: "x", table: { a: { run: () => "", maxArgs: OFFENE_LISTE, realFlags: ["--bb", "--bb", "-xx", "--y"] } } };
