@@ -12,7 +12,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar, leereErgaenzung, MANIFEST_PFAD, manifestAusText, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 import { istVorlage } from "./sync-abgleich-lib.mjs";
-import { modulFormFehler, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
+import { manifestKenntModule, modulAufteilung, modulFormFehler, modulWahl } from "./modul-wahl-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `" + PROJEKT_CONFIG + "` auslagern";
@@ -71,7 +71,7 @@ export function pruefeErgaenzung(lies) {
  * unlesbare Config macht die Wahl `unbestimmt` (fail-closed, genau ein Fehler statt einem je Einheit); unbekannte Namen und Formfehler sind Fehler mit Fix.
  */
 function modulWahlAus(manifest, lies) {
-  if (!(manifest.eintraege ?? []).some((e) => e.modul !== undefined)) return { gewaehlt: [], fehler: [], unbestimmt: false };
+  if (!manifestKenntModule(manifest)) return { gewaehlt: [], fehler: [], unbestimmt: false };
   let config = null;
   try {
     config = JSON.parse(lies(PROJEKT_CONFIG) ?? "null");
@@ -85,25 +85,64 @@ function modulWahlAus(manifest, lies) {
   return { gewaehlt: w.gewaehlt, fehler: [...modulFormFehler(config), ...w.fehler].map((f) => `Modul-Wahl: ${f}`), unbestimmt: false };
 }
 
-/**
- * Prüft den Besitz gegen den Sync-Stand. `lies(pfad)` liefert den Dateitext (relativ zur Projektwurzel) oder `null`.
- * Rückgabe: `{ entfaellt, fehler, einheiten }`; jeder Fehler nennt den Weg.
- */
-export function pruefeDrift(lies) {
+const STAND_KAPUTT = (stand) => (stand.version !== 1 && stand.version !== 2) || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object";
+
+/** Lädt Sync-Stand und Manifest: `{ ergebnis }` (frühes Ergebnis: entfällt oder rot) oder `{ stand, manifest }`. */
+function ladeStandUndManifest(lies) {
   const { zustand, stand } = syncStandAusText(lies(STAND_PFAD));
-  if (zustand === "fehlt") return { entfaellt: true, fehler: [], einheiten: 0 };
-  const rot = (msg) => ({ entfaellt: false, fehler: [`${msg}. ${WEG}`], einheiten: 0 });
+  if (zustand === "fehlt") return { ergebnis: { entfaellt: true, fehler: [], einheiten: 0 } };
+  const rot = (msg) => ({ ergebnis: { entfaellt: false, fehler: [`${msg}. ${WEG}`], einheiten: 0 } });
   if (zustand === "kaputt") return rot(`${STAND_PFAD} ist kein gültiges JSON-Objekt`);
-  if ((stand.version !== 1 && stand.version !== 2) || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object") {
-    return rot(`${STAND_PFAD} ist kaputt (Version, Manifest-Hash oder Einheiten fehlen)`);
-  }
+  if (STAND_KAPUTT(stand)) return rot(`${STAND_PFAD} ist kaputt (Version, Manifest-Hash oder Einheiten fehlen)`);
   const manifestText = lies(MANIFEST_PFAD);
   const geladen = manifestAusText(manifestText);
   if (geladen.fehler === "fehlt") return rot(geladen.text);
   if (textHash(manifestText) !== stand.manifest) return rot(`${MANIFEST_PFAD} weicht vom Sync-Stand ab (Besitz-Liste verändert)`);
   if (geladen.fehler !== undefined) return rot(geladen.text);
-  const { manifest } = geladen;
-  const fehler = [];
+  return { stand, manifest: geladen.manifest };
+}
+
+/** Herkunft (quellprojekt#1871): nur ein Sync von einem sauberen Tag gilt, auch ein Stand der Version 1 ist rot. */
+function herkunftFehler(stand) {
+  const tag = stand.quelle?.tag;
+  if (typeof tag !== "string" || tag === "") return [`Sync-Stand stammt nicht von einem Tag (tag fehlt, Version ${stand.version})`];
+  return stand.quelle.sauber !== true ? ["Sync-Stand stammt von einem unsauberen Quellstand (sauber: false)"] : [];
+}
+
+/** Fehler einer aktiven Einheit gegen den Sync-Stand (leer = unverändert); `ctx`: `{ lies, stand, ergaenzung, configKaputt }`. */
+function einheitFehler(e, { lies, stand, ergaenzung, configKaputt }) {
+  const id = einheitId(e);
+  if (!(id in stand.einheiten)) return [`${id}: im Manifest, aber nicht im Sync-Stand`];
+  if (configKaputt && istErgaenzbar(e)) return [];
+  const text = pfadSicher(e.pfad) ? lies(e.pfad) : null;
+  const hash = text === null ? null : einheitHash(e, text, ergaenzung);
+  const hinweis = e.block !== undefined ? BLOCK_HINWEIS : istErgaenzbar(e) ? ergaenzungHinweis(e) : "";
+  if (hash === null) return [`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt, Projektwert-Marker kaputt)`];
+  return hash !== stand.einheiten[id] ? [`${id}: Besitz wurde im Projekt verändert${hinweis}`] : [];
+}
+
+/** Fehler der Sync-Stand-Einheiten ohne aktive Einheit: `{ fehler, modulRot }` (Modul abgewählt wird getrennt gemeldet). */
+function restFehler(manifest, stand, ids, { wahl, abgewaehlt, modulIds }) {
+  const nichtVerteilt = new Map(manifest.eintraege.filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
+  const vorlagen = new Set(manifest.eintraege.filter((e) => wirdVerteilt(e) && istVorlage(e)).map(einheitId));
+  const out = { fehler: [], modulRot: [] };
+  for (const id of Object.keys(stand.einheiten).filter((i) => !ids.has(i) && !(wahl.unbestimmt && modulIds.has(i)))) {
+    if (abgewaehlt.has(id)) out.modulRot.push(`${id}: im Sync-Stand, Modul '${abgewaehlt.get(id)}' ist aber nicht gewählt (module in ${PROJEKT_CONFIG}). ${TAG_WEG} oder das Modul wieder wählen`);
+    else if (vorlagen.has(id)) out.fehler.push(`${id}: im Sync-Stand, ist aber Vorlage (Vorlagen stehen nicht im Stand)`);
+    else if (nichtVerteilt.has(id)) out.fehler.push(`${id}: im Sync-Stand, wird aber nicht verteilt (Ring ${nichtVerteilt.get(id)})`);
+    else out.fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
+  }
+  return out;
+}
+
+/**
+ * Prüft den Besitz gegen den Sync-Stand. `lies(pfad)` liefert den Dateitext (relativ zur Projektwurzel) oder `null`.
+ * Rückgabe: `{ entfaellt, fehler, einheiten }`; jeder Fehler nennt den Weg.
+ */
+export function pruefeDrift(lies) {
+  const geladen = ladeStandUndManifest(lies);
+  if (geladen.ergebnis) return geladen.ergebnis;
+  const { stand, manifest } = geladen;
   const wahl = modulWahlAus(manifest, lies);
   let ergaenzung = leereErgaenzung();
   let configKaputt = false;
@@ -112,40 +151,14 @@ export function pruefeDrift(lies) {
   } catch {
     configKaputt = true; // die Ergänzungs-Prüfung (pruefeErgaenzung) meldet die kaputte Config mit Weg; ihr Hash wäre hier nicht aussagekräftig.
   }
-  // Herkunft (#1871): nur ein Sync von einem sauberen Tag gilt, auch ein Stand der Version 1 ist rot.
-  const tag = stand.quelle?.tag;
-  if (typeof tag !== "string" || tag === "") fehler.push(`Sync-Stand stammt nicht von einem Tag (tag fehlt, Version ${stand.version})`);
-  else if (stand.quelle.sauber !== true) fehler.push("Sync-Stand stammt von einem unsauberen Quellstand (sauber: false)");
-  const herkunftFehler = fehler.length;
-  const ids = new Set();
-  const modulRot = [];
-  const verteilt = (manifest.eintraege ?? []).filter((e) => wirdVerteilt(e) && !istVorlage(e));
-  const abgewaehlt = new Map(verteilt.filter((e) => e.modul !== undefined && !wahl.unbestimmt && !modulGewaehlt(e, wahl.gewaehlt)).map((e) => [einheitId(e), e.modul]));
-  const modulIds = new Set(verteilt.filter((e) => e.modul !== undefined).map(einheitId));
-  for (const e of verteilt.filter((e) => !abgewaehlt.has(einheitId(e)) && !(wahl.unbestimmt && e.modul !== undefined))) {
-    const id = einheitId(e);
-    ids.add(id);
-    if (!(id in stand.einheiten)) {
-      fehler.push(`${id}: im Manifest, aber nicht im Sync-Stand`);
-      continue;
-    }
-    if (configKaputt && istErgaenzbar(e)) continue;
-    const text = pfadSicher(e.pfad) ? lies(e.pfad) : null;
-    const hash = text === null ? null : einheitHash(e, text, ergaenzung);
-    const hinweis = e.block !== undefined ? BLOCK_HINWEIS : istErgaenzbar(e) ? ergaenzungHinweis(e) : "";
-    if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt, Projektwert-Marker kaputt)`);
-    else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert${hinweis}`);
-  }
-  const nichtVerteilt = new Map(manifest.eintraege.filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
-  const vorlagen = new Set(manifest.eintraege.filter((e) => wirdVerteilt(e) && istVorlage(e)).map(einheitId));
-  for (const id of Object.keys(stand.einheiten)) {
-    if (ids.has(id) || (wahl.unbestimmt && modulIds.has(id))) continue;
-    if (abgewaehlt.has(id)) modulRot.push(`${id}: im Sync-Stand, Modul '${abgewaehlt.get(id)}' ist aber nicht gewählt (module in ${PROJEKT_CONFIG}). ${TAG_WEG} oder das Modul wieder wählen`);
-    else if (vorlagen.has(id)) fehler.push(`${id}: im Sync-Stand, ist aber Vorlage (Vorlagen stehen nicht im Stand)`);
-    else if (nichtVerteilt.has(id)) fehler.push(`${id}: im Sync-Stand, wird aber nicht verteilt (Ring ${nichtVerteilt.get(id)})`);
-    else fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
-  }
-  return { entfaellt: false, fehler: [...fehler.map((f, i) => `${f}. ${i < herkunftFehler ? TAG_WEG : WEG}`), ...modulRot, ...wahl.fehler], einheiten: ids.size };
+  const herkunft = herkunftFehler(stand);
+  const verteilt = manifest.eintraege.filter((e) => wirdVerteilt(e) && !istVorlage(e));
+  const aufteilung = modulAufteilung(verteilt, einheitId, wahl);
+  const ids = new Set(aufteilung.aktiv.map(einheitId));
+  const fehler = aufteilung.aktiv.flatMap((e) => einheitFehler(e, { lies, stand, ergaenzung, configKaputt }));
+  const rest = restFehler(manifest, stand, ids, { wahl, ...aufteilung });
+  const alle = [...herkunft, ...fehler, ...rest.fehler];
+  return { entfaellt: false, fehler: [...alle.map((f, i) => `${f}. ${i < herkunft.length ? TAG_WEG : WEG}`), ...rest.modulRot, ...wahl.fehler], einheiten: ids.size };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */

@@ -55,10 +55,15 @@ function syncTag(wurzel) {
  * `undefined`, wenn nichts davon gesetzt ist, die Config fehlt oder ungültig ist.
  */
 export function factoryRepo(wurzel) {
-  const ausStand = liesSyncStand(wurzel).stand?.quelle?.repo;
+  return factoryRepoAus(liesSyncStand(wurzel).stand, () => ladeProjektConfig({ rootDir: wurzel, pruefen: false }));
+}
+
+/** Pur: wie `factoryRepo`, aber auf einem gegebenen Sync-Stand (`quelle.repo`) und einem Lader der Projekt-Config (`ladeConfig`, nur gerufen, wenn der Stand kein Repo trägt; wirft er, ist das Ergebnis `undefined`). */
+export function factoryRepoAus(stand, ladeConfig) {
+  const ausStand = stand?.quelle?.repo;
   if (istRepoForm(ausStand)) return ausStand;
   try {
-    const repo = boardDerRolle("factory", ladeProjektConfig({ rootDir: wurzel, pruefen: false }))?.repo;
+    const repo = boardDerRolle("factory", ladeConfig())?.repo;
     return istRepoForm(repo) ? repo : undefined;
   } catch {
     return undefined;

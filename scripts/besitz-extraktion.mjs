@@ -2,7 +2,7 @@
 // Bezug eines Tests zum Besitz und die Test-Hülle. Node-Builtins, projekt-config-lib und besitz-lib (Ringe); besitz-lib importiert diese Datei nie (zyklenfrei).
 import { posix } from "node:path";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
-import { NUR_FACTORY, RINGE } from "./besitz-lib.mjs";
+import { normalisiereEol, NUR_FACTORY, RINGE } from "./besitz-lib.mjs";
 
 // ── Extraktionsliste (ADR 0022 F10) ──────────────────────────────────────────
 // `.factory/extraktion.json` legt geschlossen fest, was außer dem Besitz ins Factory-Repo zieht (Kern-Tests, Test-Hilfen,
@@ -38,6 +38,28 @@ export const extraktionsArten = (quelle) => {
     "nur-factory": null,
   };
 };
+
+/**
+ * Hinweise auf Projektkopien von Test-Hilfen (`art: "test-hilfe"`, ohne Glob), die von der Quelle abweichen: die Hilfe wird nicht verteilt (sie zieht erst ins Factory-Repo),
+ * eine veraltete Kopie im Ziel fällt sonst erst im Kern-Test auf. Zeilenenden egal; fehlt die Kopie, die Liste oder ist sie kaputt, gibt es nichts zu melden.
+ */
+export function testHilfeKopienAbweichend({ quelleLies, zielLies }) {
+  const text = quelleLies(EXTRAKTION_PFAD);
+  let eintraege;
+  try {
+    eintraege = text === null ? [] : JSON.parse(text).eintraege;
+  } catch {
+    return [];
+  }
+  const pfade = (Array.isArray(eintraege) ? eintraege : []).filter((e) => e?.art === "test-hilfe" && typeof e.muster === "string" && !e.muster.includes("*")).map((e) => e.muster);
+  return pfade
+    .filter((pfad) => {
+      const ziel = zielLies(pfad);
+      const quelle = quelleLies(pfad);
+      return ziel !== null && quelle !== null && normalisiereEol(ziel) !== normalisiereEol(quelle);
+    })
+    .map((pfad) => `Projektkopie ${pfad} weicht von der Quelle ab (Test-Hilfe, nicht verteilt; von Hand abgleichen oder entfernen)`);
+}
 
 /** Namen der Arten (hängen nicht von der Quellwurzel ab). */
 const ART_NAMEN = Object.keys(extraktionsArten(""));

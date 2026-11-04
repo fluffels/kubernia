@@ -370,13 +370,20 @@ function pruefeInboxZiel(wert) {
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
 }
 
-/** Pur: prüft `skills` (Name → nicht-leerer String); `abschluss` ist Pflicht (der Skill, den ein Ticketlauf am Ende fährt). */
+/** Der Skill-Schlüssel, dessen Wert `null` sein darf (kein Abschluss-Skill, factory#139). */
+export const NULLBARER_SKILL = "abschluss";
+
+/**
+ * Pur: prüft `skills` (Name → nicht-leerer String); `abschluss` ist Pflichtschlüssel (der Skill, den ein Ticketlauf am Ende fährt),
+ * sein Wert darf `null` sein (kein Abschluss-Skill, factory#139); der Schlüssel selbst fehlt nie.
+ */
 function pruefeSkills(s) {
   if (!istObjekt(s)) return ["skills muss ein Objekt (Name → String) mit dem Pflichtschlüssel abschluss sein"];
   const fehler = [];
-  if (!Object.hasOwn(s, "abschluss")) fehler.push("skills.abschluss fehlt (Pflichtschlüssel)");
+  if (!Object.hasOwn(s, NULLBARER_SKILL)) fehler.push("skills.abschluss fehlt (Pflichtschlüssel)");
   for (const [k, v] of Object.entries(s)) {
-    if (!istText(v)) fehler.push(`skills.${k} muss ein nicht-leerer String sein`);
+    if (k === NULLBARER_SKILL && v === null) continue;
+    if (!istText(v)) fehler.push(`skills.${k} muss ein nicht-leerer String${k === NULLBARER_SKILL ? " oder null (kein Abschluss-Skill)" : ""} sein`);
   }
   return fehler;
 }
@@ -590,7 +597,7 @@ export function ladeProjektConfig({ rootDir, pfad, pruefen = true, env = process
   try {
     roh = readFileSync(abs, "utf8");
   } catch {
-    throw new Error(`Projekt-Config fehlt oder ist nicht lesbar: ${abs}\nFix: ${PROJEKT_CONFIG} anlegen (Pflichtschlüssel: version, repo, boards[], praefixe, labels, agenten, skills.abschluss)`);
+    throw new Error(`Projekt-Config fehlt oder ist nicht lesbar: ${abs}\nFix: ${PROJEKT_CONFIG} anlegen (Pflichtschlüssel: version, repo, boards[], praefixe, labels, agenten, skills.abschluss als Name oder null)`);
   }
   let wert;
   try {
@@ -632,6 +639,19 @@ export function umgebungsWert(env, name) {
     throw new Error(`Umgebungsvariable ${String(name)} muss mit ${KERN_ENV_PRAEFIX} beginnen`);
   }
   return env[name];
+}
+
+/** Wert von `FACTORY_ABSCHLUSS_SKILL`, der den Abschluss-Skill lokal abschaltet. */
+const ABSCHLUSS_AUS = "aus";
+
+/**
+ * Der wirksame Abschluss-Skill (factory#139): `FACTORY_ABSCHLUSS_SKILL` (nicht leer) geht vor `skills.abschluss`; `aus` heißt kein Skill (`null`).
+ * Ohne Variable gilt der Repo-Wert (String oder `null`). Pur.
+ */
+export function wirksamerAbschluss(config, env = {}) {
+  const lokal = umgebungsWert(env, "FACTORY_ABSCHLUSS_SKILL");
+  if (typeof lokal === "string" && lokal !== "") return lokal === ABSCHLUSS_AUS ? null : lokal;
+  return config?.skills?.abschluss ?? null;
 }
 
 const ENV_LITERAL = /umgebungsWert\([^,()]*,\s*"(FACTORY_[A-Z0-9_]+)"/g;
@@ -708,7 +728,7 @@ export function configAusAufruf(argv, { lade = ladeProjektConfig } = {}) {
   }
 }
 
-const CLI_AUFRUF = "Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>";
+const CLI_AUFRUF = "Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad> | abschluss";
 
 /** `--ziel-repo <label>`: gibt das Ziel-Repo für ein Issue mit diesem Label aus (Exit 0), 2 bei Aufruffehler, 1 bei Ladefehler. */
 function zielRepoAusgeben(label, positionale, pfad, { rootDir, out, err }) {
@@ -726,7 +746,7 @@ function zielRepoAusgeben(label, positionale, pfad, { rootDir, out, err }) {
 }
 
 /** Kommandozeile; gibt den Exit-Code zurück. */
-export function cli(argv, { rootDir = ROOT, out = console.log, err = console.error } = {}) {
+export function cli(argv, { rootDir = ROOT, env = process.env, out = console.log, err = console.error } = {}) {
   const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" }, "ziel-repo": { type: "string" } }, { positionale: true });
   if (fehler) {
     err(`✖ ${fehler.text}\n\n${CLI_AUFRUF}`);
@@ -749,6 +769,10 @@ export function cli(argv, { rootDir = ROOT, out = console.log, err = console.err
   } catch (e) {
     err(`✖ ${e instanceof Error ? e.message : e}`);
     return 1;
+  }
+  if (schluessel === "abschluss") {
+    out(wirksamerAbschluss(cfg, env) ?? "keiner");
+    return 0;
   }
   let wert = cfg;
   for (const teil of schluessel.split(".")) {

@@ -15,8 +15,8 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { fehlerText, ghText } from "./gh-cli.mjs";
-import { ladeBoardLibs, inboxStart } from "./inbox-start-lib.mjs";
+import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { ladeBoardLibs, inboxStart, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 
 export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
@@ -27,24 +27,32 @@ const WIEDERVORLAGEN = fileURLToPath(new URL("../.github/wiedervorlagen.json", i
  * Befunde aus einer `npm audit --json`-Ausgabe (Format ab npm 7). Ein Befund je Advisory (`via`-Objekt mit URL), das Paket ist das
  * verwundbare (`via.name`). Kaputte Ausgabe (kein Objekt, keine `vulnerabilities`, Fehlerantwort) wirft. `prod` setzt der Aufrufer. Pur.
  */
+const istObjekt = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+
+/** Ein Befund aus einem `via`-Eintrag einer npm-Schwachstelle (nur Objekte mit GHSA-URL), sonst undefined. Pur. */
+function befundAusVia(name, v, via) {
+  const ghsa = typeof via === "object" && via !== null ? ghsaIn(via.url)[0] : undefined;
+  if (!ghsa) return undefined;
+  const fix = v?.fixAvailable;
+  return {
+    ghsa,
+    paket: typeof via.name === "string" ? via.name : name,
+    schwere: String(via.severity ?? v?.severity ?? "unknown").toLowerCase(),
+    prod: false,
+    fixVerfuegbar: Boolean(fix),
+    fixVersion: typeof fix === "object" && fix !== null && typeof fix.version === "string" ? fix.version : undefined,
+  };
+}
+
 export function befundeAusNpmAudit(json) {
-  if (json === null || typeof json !== "object" || Array.isArray(json) || json.vulnerabilities === null || typeof json.vulnerabilities !== "object") {
+  if (!istObjekt(json) || !istObjekt(json.vulnerabilities)) {
     throw new Error(`Unerwartete npm-audit-Ausgabe: ${JSON.stringify(json)?.slice(0, 200)}`);
   }
   const ergebnis = new Map();
   for (const [name, v] of Object.entries(json.vulnerabilities)) {
-    const fix = v?.fixAvailable;
     for (const via of Array.isArray(v?.via) ? v.via : []) {
-      const ghsa = typeof via === "object" && via !== null ? ghsaIn(via.url)[0] : undefined;
-      if (!ghsa || ergebnis.has(ghsa)) continue;
-      ergebnis.set(ghsa, {
-        ghsa,
-        paket: typeof via.name === "string" ? via.name : name,
-        schwere: String(via.severity ?? v?.severity ?? "unknown").toLowerCase(),
-        prod: false,
-        fixVerfuegbar: Boolean(fix),
-        fixVersion: typeof fix === "object" && fix !== null && typeof fix.version === "string" ? fix.version : undefined,
-      });
+      const b = befundAusVia(name, v, via);
+      if (b && !ergebnis.has(b.ghsa)) ergebnis.set(b.ghsa, b);
     }
   }
   return [...ergebnis.values()];
@@ -54,23 +62,31 @@ export function befundeAusNpmAudit(json) {
  * Befunde aus den offenen Dependabot-Alerts (REST-Form). `prod` nur für das Ökosystem npm mit `dependency.scope === "runtime"`;
  * GitHub-Actions und alles andere zählt nie als ausgeliefert. Pur.
  */
+function gepatchteVersion(a) {
+  const fix = a?.security_vulnerability?.first_patched_version?.identifier;
+  return typeof fix === "string" && fix !== "" ? fix : undefined;
+}
+
+function befundAusAlert(a) {
+  const ghsa = ghsaIn(a?.security_advisory?.ghsa_id)[0];
+  if (!ghsa) return [];
+  const fix = gepatchteVersion(a);
+  const paket = a?.dependency?.package;
+  return [
+    {
+      ghsa,
+      paket: String(paket?.name ?? "unbekannt"),
+      schwere: String(a?.security_advisory?.severity ?? "unknown").toLowerCase(),
+      prod: paket?.ecosystem === "npm" && a?.dependency?.scope === "runtime",
+      fixVerfuegbar: fix !== undefined,
+      fixVersion: fix,
+    },
+  ];
+}
+
 export function befundeAusAlerts(alerts) {
   if (!Array.isArray(alerts)) throw new Error("Unerwartete Dependabot-Antwort (keine Liste).");
-  return alerts.flatMap((a) => {
-    const ghsa = ghsaIn(a?.security_advisory?.ghsa_id)[0];
-    if (!ghsa) return [];
-    const fix = a?.security_vulnerability?.first_patched_version?.identifier;
-    return [
-      {
-        ghsa,
-        paket: String(a?.dependency?.package?.name ?? "unbekannt"),
-        schwere: String(a?.security_advisory?.severity ?? "unknown").toLowerCase(),
-        prod: a?.dependency?.package?.ecosystem === "npm" && a?.dependency?.scope === "runtime",
-        fixVerfuegbar: typeof fix === "string" && fix !== "",
-        fixVersion: typeof fix === "string" && fix !== "" ? fix : undefined,
-      },
-    ];
-  });
+  return alerts.flatMap((a) => befundAusAlert(a));
 }
 
 /** Markiert in `voll` die Befunde als `prod`, deren GHSA auch im Audit ohne Dev-Abhängigkeiten (`prodBefunde`) steht. Pur. */
@@ -109,7 +125,7 @@ export function zeilenText(b) {
 export function alarmText(b) {
   return {
     titel: `${ALARM_PRAEFIX} ${b.ghsa} in ${b.paket}`,
-    body: `${b.ghsa}: ${b.paket} (critical, ausgelieferte Produktiv-Abhängigkeit). Fix: ${b.fixVerfuegbar ? `ja${b.fixVersion ? ` v${b.fixVersion}` : ""}` : "nein"}.\n\nPrüfauftrag: im Spielkontext ausnutzbar? Wenn ja: fixen (Update/overrides). Wenn nein: Eintrag \`audit-${b.ghsa.toLowerCase()}\` in \`.github/wiedervorlagen.json\` anlegen (fällig +30 Tage) und dieses Ticket schließen. Mechanik: docs/ticket-reihenfolge.md › Audit-Einordnung.`,
+    body: `${b.ghsa}: ${b.paket} (critical, ausgelieferte Produktiv-Abhängigkeit). Fix: ${b.fixVerfuegbar ? `ja${b.fixVersion ? ` v${b.fixVersion}` : ""}` : "nein"}.\n\nPrüfauftrag: im Einsatz dieses Projekts ausnutzbar? Wenn ja: fixen (Update/overrides). Wenn nein: Eintrag \`audit-${b.ghsa.toLowerCase()}\` in \`.github/wiedervorlagen.json\` anlegen (fällig +30 Tage) und dieses Ticket schließen. Mechanik: docs/ticket-reihenfolge.md › Audit-Einordnung.`,
   };
 }
 
@@ -147,19 +163,60 @@ function ladeAlerts(repo) {
   }
 }
 
-/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra)`, `alertsLaden(repo)`, `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, log = console.log, err = console.error } = {}) {
-  const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
-  if (start.code !== undefined) return start.code;
-  const { trocken, libs } = start;
-  const { OWNER, REPO, ladeSammelKontext, offeneTitel, platziereOben, postZeilen, waehleSammelticket } = libs;
-  const { rohe, offene, kommentare } = ladeSammelKontext();
-  const bekannt = bekannteGhsa({
+/** Bekannte GHSA-IDs aus Sammelticket-Zeilen, Wiedervorlagen und Titeln offener Security-Tickets. */
+function ladeBekannte({ kommentare, rohe, OWNER, offeneTitel }) {
+  return bekannteGhsa({
     kommentare: vertrauteBodies(kommentare, OWNER),
     wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")),
     // Nur Titel vertrauter Autoren: ein Fremder darf mit einem „🔒 Security: GHSA-…“-Titel keinen Alarm unterdrücken.
     offeneTitel: offeneTitel(rohe, OWNER),
   });
+}
+
+/** Trockenlauf: gibt die Aktionen nur aus. */
+function trockenLauf(aktionen, log) {
+  for (const a of aktionen) log(a.art === "alarm" ? `[dry-run] Alarm: ${a.titel}` : `[dry-run] ${a.text}`);
+  return 0;
+}
+
+/** Legt je Alarm ein Ticket an und platziert es oben. Rückgabe: true, wenn mindestens einer scheiterte. */
+function legeAlarmeAn(alarme, { aktion, log }) {
+  let rot = false;
+  for (const a of alarme) {
+    try {
+      const nr = aktion.legeIssueAn(a.titel, a.body);
+      log(`Alarm angelegt: #${nr} (${a.befund.ghsa})`);
+      aktion.platziere(nr, "security");
+    } catch (fehl) {
+      log(`::error::Alarm für ${a.befund.ghsa} unvollständig: ${fehlerText(fehl)}`);
+      rot = true;
+    }
+  }
+  return rot;
+}
+
+/** Postet die Zeilen ins jüngste ungeclaimte Sammelticket. Rückgabe: false, wenn keins da ist. */
+function postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log }) {
+  const ziel = waehleSammelticket(offene);
+  if (!ziel) {
+    log("::error::Kein ungeclaimtes Harness-Sammelticket für die Audit-Zeilen.");
+    return false;
+  }
+  postZeilen(ziel.number, zeilen.map((z) => z.text).join("\n"));
+  log(`${zeilen.length} Zeile(n) in #${ziel.number}.`);
+  return true;
+}
+
+/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra)`, `alertsLaden(repo)`, `gh` (`{ text, json }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error } = {}) {
+  const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
+  if (start.code !== undefined) return start.code;
+  const { trocken, libs } = start;
+  const { REPO, ladeSammelKontext, offeneTitel, postZeilen, waehleSammelticket } = libs;
+  const aktion = zielAktionen({ gh, libs });
+  const kontext = ladeSammelKontext();
+  const { rohe, offene, kommentare } = kontext;
+  const bekannt = ladeBekannte({ kommentare, rohe, OWNER: vertrauterOwner(kontext, libs), offeneTitel });
   const voll = markiereProd(befundeAusNpmAudit(npmAuditLaden()), befundeAusNpmAudit(npmAuditLaden(["--omit=dev"])));
   const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(alertsLaden(REPO))], bekannt });
   if (aktionen.length === 0) {
@@ -169,33 +226,10 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
 
   const zeilen = aktionen.filter((a) => a.art === "zeile");
   const alarme = aktionen.filter((a) => a.art === "alarm");
-  if (trocken) {
-    for (const a of aktionen) log(a.art === "alarm" ? `[dry-run] Alarm: ${a.titel}` : `[dry-run] ${a.text}`);
-    return 0;
-  }
-  let rot = false;
-  for (const a of alarme) {
-    try {
-      const url = ghText(["issue", "create", "--repo", REPO, "--title", a.titel, "--body", a.body]).trim();
-      const nr = url.split("/").pop();
-      log(`Alarm angelegt: #${nr} (${a.befund.ghsa})`);
-      platziereOben(nr, "security");
-    } catch (fehl) {
-      log(`::error::Alarm für ${a.befund.ghsa} unvollständig: ${fehlerText(fehl)}`);
-      rot = true;
-    }
-  }
-  if (zeilen.length > 0) {
-    const ziel = waehleSammelticket(offene);
-    if (!ziel) {
-      log("::error::Kein ungeclaimtes Harness-Sammelticket für die Audit-Zeilen.");
-      rot = true;
-    } else {
-      postZeilen(ziel.number, zeilen.map((z) => z.text).join("\n"));
-      log(`${zeilen.length} Zeile(n) in #${ziel.number}.`);
-    }
-  }
-  return rot ? 1 : 0;
+  if (trocken) return trockenLauf(aktionen, log);
+  const alarmRot = legeAlarmeAn(alarme, { aktion, log });
+  const zeilenRot = zeilen.length > 0 && !postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log });
+  return alarmRot || zeilenRot ? 1 : 0;
 }
 
 if (istDirektaufruf(import.meta.url)) process.exitCode = await main();

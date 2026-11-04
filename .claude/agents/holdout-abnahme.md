@@ -40,7 +40,7 @@ Zuerst `git -C <worktree> status --porcelain` (muss leer sein) und `git -C <work
 
 ## Bericht (letzte Nachricht)
 
-Erste Zeile `ABNAHME #<nr> · holdout-abnahme`, dann je Kriterium genau eine Zeile:
+Erste Zeile `ABNAHME #<nr> · holdout-abnahme` (`<nr>` ist die Ticketnummer aus der Zeile `Ticket #<nr>` des Auftrags, nie die PR-Nummer), dann je Kriterium genau eine Zeile:
 
 ```
 K<i>: erfuellt | nicht-erfuellt | nicht-pruefbar — <Beleg>
