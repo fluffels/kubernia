@@ -1259,6 +1259,11 @@ describe("cliargs: fehlerPraefix der Familie vor jedem Bibliotheksfehler (#2001)
     expect(dispatchSub(host, d, ["x", "-n"], 1)).toBe("Error: flag needs an argument: 'n' in -n");
     expect(dispatchSub(host, { ...d, fehlerPraefix: undefined }, ["x", "grp", "a", "--follow=maybe"], 1)).toBe(PARSE);
   });
+  test("ein eigener Wert der Gruppe gewinnt gegen den der Eltern", () => {
+    const leaf = { run: "r", maxArgs: OFFENE_LISTE, flags: [flag(false, "-f", "--follow")] } as const;
+    const d: Dispatch<SubEntry<string>> = { cmd: "x", fehlerPraefix: "Error: ", table: { grp: { group: { cmd: "x grp", fehlerPraefix: "E: ", table: { a: leaf } } } } };
+    expect(dispatchSub(host, d, ["x", "grp", "a", "--follow=maybe"], 1)).toBe("E: " + PARSE);
+  });
   test("ein eigener Wert des Eintrags gewinnt gegen den der Ebene", () => {
     const leaf = { run: "r", maxArgs: OFFENE_LISTE, fehlerPraefix: "E: ", flags: [flag(false, "-f", "--follow")] } as const;
     const d: Dispatch<SubEntry<string>> = { cmd: "x", fehlerPraefix: "Error: ", table: { b: leaf } };

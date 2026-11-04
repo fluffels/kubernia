@@ -704,6 +704,13 @@ describe("kubectl: logs -f/-p, -A, --replicas über cliargs", () => {
     const r = freshSim().exec("kubectl create deployment a --image= --replicas=-1");
     expect(r.output?.split("\n")[0]).toBe(INVALID + "[" + NEG + ", spec.template.spec.containers: Required value]");
   });
+  test("create deployment: leeres --image meldet keinen Replica-Tipp, mehrere --image melden zuerst den apiserver (#2001)", () => {
+    expect(freshSim().exec("kubectl create deployment a --image=").output).toBe(INVALID + "spec.template.spec.containers: Required value");
+    const s = freshSim();
+    const r = s.exec("kubectl create deployment a --image=x --image=y --replicas=-1");
+    expect(r.output?.split("\n")[0]).toBe(INVALID + NEG);
+    expect(s.deployments.some(d => d.name === "a")).toBe(false);
+  });
   test("create deployment --replicas=0 und gültige Werte bleiben gültig (#2001)", () => {
     const s = freshSim();
     expect(s.exec("kubectl create deployment a --image=x --replicas=0").error).toBe(false);

@@ -64,6 +64,7 @@ export function kubectlScale(host: KubectlHost, c: Call) {
   if ("error" in dn) return dn.error;
   const replicas = replicasArg(c);
   if (dn.names.length === 0) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
+  // `replicas === null` kann der Scan nicht mehr liefern (Pflicht-Flag, Ganzzahl-Prüfung); die Zeile hält den Typ schmal und kopiert kubectl `Validate`.
   if (replicas === null || replicas < 0) return host._err("error: The --replicas=COUNT flag is required, and COUNT must be greater than or equal to 0");
   return scaleAll(host, dn.names, replicas);
 }

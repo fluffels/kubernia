@@ -99,6 +99,7 @@ const GLAB_CI: Dispatch<SubEntry<GlabCiHandler>> = {
 };
 
 /** Die `glab`-Ebene: nur `ci` ist simuliert; die übrigen Befehlsgruppen des echten CLI sind „nicht simuliert“. */
+// Kein `fehlerPraefix` (#2001): der echte Text des Werkzeugs ist hier nicht belegt, also erfindet die Sim kein Präfix.
 export const GLAB: Dispatch<SubEntry<GlabCiHandler>> = {
   cmd: "glab",
   table: { ci: { group: GLAB_CI } },

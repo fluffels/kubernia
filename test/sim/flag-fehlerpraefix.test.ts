@@ -16,6 +16,10 @@ describe("Flag-Fehler tragen das Präfix ihrer Familie (#2001)", () => {
     const z = erste("docker run -d=x nginx");
     expect(z).toMatch(/^invalid argument "x" for "-d, --detach" flag: strconv.ParseBool/);
   });
+  test("git: `error: ` vor Bool-Parsefehler und fehlendem Wert", () => {
+    expect(erste("git add -A=x")).toMatch(/^error: invalid argument "x" for "-A, --all" flag: strconv.ParseBool/);
+    expect(erste("git commit -m")).toMatch(/^error: flag needs an argument/);
+  });
   test("kubeadm: `error: `", () => {
     expect(erste("kubeadm reset -f=x")).toMatch(/^error: invalid argument "x" for "-f, --force" flag: strconv.ParseBool/);
   });
