@@ -8,7 +8,8 @@
  * Die Tabelle nennt NUR Flags, die die Sim wirklich auswertet (echte CLIs haben Hunderte; „was wir können“
  * ist endlich und ehrlich). Ein Ziel mit `realFlags` (#1996) ist eine geschlossene Welt: `flags` + `realFlags` + Hilfe-Flags
  * sind „Nicht simuliert“, jedes andere Flag meldet den echten Unbekannt-Fehler. Ziele ohne `realFlags` sind offen
- * (jedes unbekannte Flag ist „Nicht simuliert“). Ausnahmen sind im Tabellen-Eintrag kommentiert.
+ * (jedes unbekannte Flag ist „Nicht simuliert“). Eine Ebene mit `Dispatch.realFlags` (kubectl) meldet ein Flag vor dem Unterbefehl, das weder
+ * global noch an einem Ziel darunter bekannt ist, als `unknown flag` (#1998). Ausnahmen sind im Tabellen-Eintrag kommentiert.
  *
  * Zwei Schreibweisen-Stile: `pflag` (kubectl, docker, helm, argocd, glab: `--x=v`, `--x v`, kurz `-xv`,
  * Ketten kurzer Bool-Flags `-aq`) und `goflag` (terraform, Go-Paket `flag`: `-x=v`, `-x v`, `--x` ≙ `-x`,
@@ -382,7 +383,8 @@ export interface Dispatch<E extends SubEntry<unknown>> {
    *  und gelten in jedem Ziel darunter; alle anderen Flags kennt nur das Ziel, das sie in seiner eigenen Tabelle nennt. */
   readonly flags?: readonly FlagSpec[];
   /** Echte, nicht simulierte Flags der Ebene (#1996, kubectl: `kubectl options`): gelten wie `flags` in jedem Ziel darunter, schließen aber
-   *  nur Ziele mit eigener `realFlags`-Liste (`SubEntry.realFlags`): die Familien-Liste allein macht kein Ziel zur geschlossenen Welt. */
+   *  nur Ziele mit eigener `realFlags`-Liste (`SubEntry.realFlags`): die Familien-Liste allein macht kein Ziel zur geschlossenen Welt.
+   *  Ist es gesetzt, schließt es auch die Ebene vor dem Unterbefehl (#1998): global = „Nicht simuliert“, sonst unbekannt = `unknown flag`. */
   readonly realFlags?: readonly string[];
 }
 
@@ -442,9 +444,29 @@ function vorUnterbefehlHint(name: string, d: Dispatch<SubEntry<unknown>>): strin
   return "Setz Flags hinter den Unterbefehl.";
 }
 
-/** Der Fehler eines Flags VOR dem Unterbefehl: unbekannt (auch `--`) heißt „vor dem Unterbefehl“, ohne Wert und ungültiger Bool wie im Blatt. */
+/** Alle Flag-Namen, die die Ebene samt ihren Zielen kennt (persistente, `realFlags`, je Eintrag, Gruppen rekursiv). Läuft nur im Fehlerzweig. */
+function ebenenFlags(d: Dispatch<SubEntry<unknown>>): Set<string> {
+  const names = new Set<string>([...(d.flags ?? []).flatMap(f => f.names), ...(d.realFlags ?? [])]);
+  for (const e of Object.values(d.table)) {
+    if (isGroup(e)) for (const n of ebenenFlags(inherit(d, e.group))) names.add(n);
+    else for (const n of [...(e.flags ?? []).flatMap(f => f.names), ...(e.realFlags ?? [])]) names.add(n);
+  }
+  return names;
+}
+
+/** Kennt keine Stelle der Ebene (global, persistent, Ziel darunter) das Flag? Nur auf einer Ebene mit `realFlags` (kubectl, #1998). */
+function isUnbekanntVorUnterbefehl(d: Dispatch<SubEntry<unknown>>, name: string): boolean {
+  return d.realFlags !== undefined && name !== "--" && !isHelpFlag(name) && !ebenenFlags(d).has(name);
+}
+
+/** Der Fehler eines Flags VOR dem Unterbefehl: ein globales Flag (`d.realFlags`) ist „Nicht simuliert“ ohne Positionshinweis; auf einer Ebene
+ *  mit `realFlags` meldet ein Flag, das nirgends bekannt ist, `unknown flag` (wie cobra/pflag); sonst heißt unbekannt (auch `--`) „vor dem
+ *  Unterbefehl“, ohne Wert und ungültiger Bool wie im Blatt. Grenze: Flags nicht simulierter Unterbefehle (`real`) kennt die Sim nicht;
+ *  ein globales Flag vor dem Unterbefehl meldet zuerst, auch vor einem echten Fehler dahinter. */
 function vorUnterbefehlError(host: ErrHost, d: Dispatch<SubEntry<unknown>>, e: ScanError, kann: () => string[]): string {
   if (e.kind !== "unknown") return scanErrorText(host, { cmd: d.cmd, flags: [], style: d.style, maxArgs: 0 }, e);
+  if (d.realFlags?.includes(e.name)) return notSimulated(host, "das Flag '" + e.name + "' bei '" + d.cmd + "'.", kann(), d.hints?.[e.name]);
+  if (isUnbekanntVorUnterbefehl(d, e.name)) return unknownFlag(host, { cmd: d.cmd, flags: d.flags ?? [], style: d.style, hints: d.hints, maxArgs: 0 }, e);
   return notSimulated(host, "das Flag '" + e.name + "' vor dem Unterbefehl.", kann(), vorUnterbefehlHint(e.name, d));
 }
 

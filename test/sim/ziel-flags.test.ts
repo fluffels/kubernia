@@ -5,6 +5,7 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { kannOf, type Dispatch, type FlagSpec } from "../../src/sim/cliargs";
 import { KUBECTL } from "../../src/sim/kubectl";
+import { KUBECTL_OPTIONS } from "../../src/sim/kubectl/real-flags";
 import type { KubectlEntry } from "../../src/sim/kubectl/namespace";
 
 const NS = "Nicht simuliert:";
@@ -337,5 +338,42 @@ describe("Namespace-Wache: -n <fremd> wird nie still auf default angewendet (#17
     const out = lauf("kubectl describe pod x -n prod", new KQSim({ bareMetal: true })).out;
     expect(out).toContain("refused");
     expect(out).not.toContain(FREMD);
+  });
+});
+
+describe("kubectl: globale und unbekannte Flags vor dem Unterbefehl (#1998)", () => {
+  test.each(KUBECTL_OPTIONS)("%s vor dem Unterbefehl: Nicht simuliert, nie unknown flag, kein Dahinter-Tipp", name => {
+    const r = lauf("kubectl " + name + "=x get pods");
+    expect(r.error).toBe(true);
+    expect(r.out).toContain(NS + " das Flag '" + name + "' bei 'kubectl'");
+    expect(r.out).not.toContain("unknown flag");
+    expect(r.out).not.toContain("Setz Flags hinter den Unterbefehl");
+  });
+  test("in einer Gruppe: bei 'kubectl create', der Zustand bleibt", () => {
+    const s = freshSim(); const vorher = zustand(s);
+    const r = lauf("kubectl create --kubeconfig=x deployment web --image=nginx", s);
+    expect(r.out).toContain(NS + " das Flag '--kubeconfig' bei 'kubectl create'");
+    expect(zustand(s)).toBe(vorher);
+  });
+  test("die getrennte Form: der Wert wird nicht als Unterbefehl gelesen", () => {
+    const r = lauf("kubectl --kubeconfig x get pods");
+    expect(r.out).toContain(NS + " das Flag '--kubeconfig'");
+    expect(r.out).not.toContain("unknown command");
+  });
+  test("ein Flag, das kein Ziel kennt, meldet unknown flag; der Zustand bleibt", () => {
+    expect(lauf("kubectl --zzz get pods").out).toContain("error: unknown flag: --zzz");
+    expect(lauf("kubectl --zzz=1 get pods").out).toContain("error: unknown flag: --zzz");
+    expect(lauf("kubectl -zq get pods").out).toContain("error: unknown shorthand flag: 'z' in -zq");
+    const s = freshSim(); const vorher = zustand(s);
+    const r = lauf("kubectl create --zzz deployment web --image=nginx", s);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: unknown flag: --zzz");
+    expect(zustand(s)).toBe(vorher);
+  });
+  test("-n bleibt gültig", () => {
+    expect(lauf("kubectl -n default get pods").out).toBe(lauf("kubectl get pods").out);
+    const r = lauf("kubectl -n default --kubeconfig=x get pods");
+    expect(r.out).toContain(NS);
+    expect(r.out).not.toContain("unknown flag");
   });
 });

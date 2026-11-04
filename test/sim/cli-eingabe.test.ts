@@ -1039,6 +1039,46 @@ describe("dispatchSub: Gruppen erben Stil und Hinweise, Flags vor dem Unterbefeh
   });
 });
 
+/* ---------- dispatchSub: globale und unbekannte Flags vor dem Unterbefehl auf einer Ebene mit realFlags (#1998) ---------- */
+describe("dispatchSub: Flag vor dem Unterbefehl bei realFlags", () => {
+  const run = "x";
+  const d: Dispatch<SubEntry<string>> = {
+    cmd: "t", flags: [flag(true, "-n")], realFlags: ["--g"],
+    table: {
+      a: { run, maxArgs: 0, flags: [flag(true, "--x")], realFlags: ["--r"] },
+      grp: { group: { cmd: "t grp", table: { b: { run, maxArgs: 0, flags: [flag(false, "--y")], realFlags: [] } } } },
+    },
+  };
+  const lauf = (...t: string[]) => dispatchSub(host, d, ["t", ...t], 1) as string;
+
+  test("ein globales Flag meldet „Nicht simuliert“ ohne Positionshinweis, in der Gruppe geerbt", () => {
+    const r = lauf("--g=1", "a");
+    expect(r).toContain("Nicht simuliert: das Flag '--g' bei 't'.");
+    expect(r).not.toContain("Setz Flags");
+    expect(r).not.toContain("unknown flag");
+    expect(lauf("grp", "--g=1", "b")).toContain("bei 't grp'");
+  });
+  test("ein Ziel-Flag (auch aus der Gruppe) behält „vor dem Unterbefehl“ samt Hinweis", () => {
+    for (const z of [["--x=1", "a"], ["--r", "a"], ["--y", "a"]]) expect(lauf(...z), z.join(" ")).toContain("vor dem Unterbefehl. Setz Flags hinter den Unterbefehl.");
+  });
+  test("ein nirgends bekanntes Flag meldet den pflag-Fehler", () => {
+    expect(lauf("--zzz", "a")).toContain("error: unknown flag: --zzz");
+    expect(lauf("--zzz=1", "a")).toContain("error: unknown flag: --zzz");
+    expect(lauf("-zq", "a")).toContain("error: unknown shorthand flag: 'z' in -zq");
+    expect(lauf("grp", "--zzz", "b")).toContain("error: unknown flag: --zzz");
+  });
+  test("Negativfälle: Hilfe-Flags, Doppelstrich, -n; ohne realFlags bleibt die Ebene offen", () => {
+    expect(lauf("-h", "a")).toContain("Hilfe zeigt der Simulator");
+    expect(lauf("--help", "a")).toContain("Hilfe zeigt der Simulator");
+    expect(lauf("--", "a")).toContain("das Flag '--' vor dem Unterbefehl");
+    const r = dispatchSub(host, d, ["t", "-n", "x", "a"], 1);
+    expect(typeof r === "string" ? r : r.call.value("-n")).toBe("x");
+    const offen = dispatchSub(host, { ...d, realFlags: undefined }, ["t", "--zzz", "a"], 1) as string;
+    expect(offen).toContain("Nicht simuliert: das Flag '--zzz' vor dem Unterbefehl. Setz Flags hinter den Unterbefehl.");
+    expect(offen).not.toContain("unknown flag");
+  });
+});
+
 /* ---------- dispatchSub: persistente Flags der Ebene, Flags je Ziel (#1491) ---------- */
 describe("dispatchSub: persistente Flags und Flags je Ziel", () => {
   const A: SubEntry<string> = { run: "a", maxArgs: OFFENE_LISTE, flags: [flag(true, "--x")] };

@@ -16,7 +16,7 @@
  *
  * Reines Datenmodul (pure Domäne, keine Imports). */
 
-/** Die globalen kubectl-Flags (`kubectl options`, persistente Flags der Wurzel): gelten an jedem Ziel. */
+/** Die globalen kubectl-Flags (`kubectl options`, persistente Flags der Wurzel): gelten an jedem Ziel und vor dem Unterbefehl (#1998: dort „Nicht simuliert“, nie `unknown flag`). */
 export const KUBECTL_OPTIONS: readonly string[] = [
   "--as", "--as-group", "--as-uid", "--as-user-extra", "--cache-dir", "--certificate-authority", "--client-certificate", "--client-key",
   "--cluster", "--context", "--disable-compression", "--insecure-skip-tls-verify", "--kubeconfig", "--kuberc", "--log-flush-frequency",
