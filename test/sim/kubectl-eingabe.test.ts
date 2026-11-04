@@ -691,6 +691,7 @@ describe("kubectl: logs -f/-p, -A, --replicas über cliargs", () => {
       const r = s.exec(cmd);
       expect(r.error, cmd).toBe(true);
       expect(r.output?.split("\n")[0], cmd).toBe(INVALID + NEG);
+      expect(r.output, cmd).toContain("Die Replica-Zahl ist eine ganze Zahl ab 0");
       expect(s.deployments.some(d => d.name === "a"), cmd).toBe(false);
     }
   });
