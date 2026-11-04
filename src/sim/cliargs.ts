@@ -8,7 +8,8 @@
  * Die Tabelle nennt NUR Flags, die die Sim wirklich auswertet (echte CLIs haben Hunderte; „was wir können“
  * ist endlich und ehrlich). Ein Ziel mit `realFlags` (#1996) ist eine geschlossene Welt: `flags` + `realFlags` + Hilfe-Flags
  * sind „Nicht simuliert“, jedes andere Flag meldet den echten Unbekannt-Fehler. Ziele ohne `realFlags` sind offen
- * (jedes unbekannte Flag ist „Nicht simuliert“). Ausnahmen sind im Tabellen-Eintrag kommentiert.
+ * (jedes unbekannte Flag ist „Nicht simuliert“). Eine Ebene mit `Dispatch.realFlags` (kubectl) meldet ein Flag vor dem Unterbefehl, das weder
+ * global noch an einem Ziel darunter bekannt ist, als `unknown flag` (#1998). Ausnahmen sind im Tabellen-Eintrag kommentiert.
  *
  * Zwei Schreibweisen-Stile: `pflag` (kubectl, docker, helm, argocd, glab: `--x=v`, `--x v`, kurz `-xv`,
  * Ketten kurzer Bool-Flags `-aq`) und `goflag` (terraform, Go-Paket `flag`: `-x=v`, `-x v`, `--x` ≙ `-x`,
@@ -382,7 +383,8 @@ export interface Dispatch<E extends SubEntry<unknown>> {
    *  und gelten in jedem Ziel darunter; alle anderen Flags kennt nur das Ziel, das sie in seiner eigenen Tabelle nennt. */
   readonly flags?: readonly FlagSpec[];
   /** Echte, nicht simulierte Flags der Ebene (#1996, kubectl: `kubectl options`): gelten wie `flags` in jedem Ziel darunter, schließen aber
-   *  nur Ziele mit eigener `realFlags`-Liste (`SubEntry.realFlags`): die Familien-Liste allein macht kein Ziel zur geschlossenen Welt. */
+   *  nur Ziele mit eigener `realFlags`-Liste (`SubEntry.realFlags`): die Familien-Liste allein macht kein Ziel zur geschlossenen Welt.
+   *  Ist es gesetzt, schließt es auch die Ebene vor dem Unterbefehl (#1998): global = „Nicht simuliert“, sonst unbekannt = `unknown flag`. */
   readonly realFlags?: readonly string[];
 }
 
@@ -442,18 +444,39 @@ function vorUnterbefehlHint(name: string, d: Dispatch<SubEntry<unknown>>): strin
   return "Setz Flags hinter den Unterbefehl.";
 }
 
-/** Der Fehler eines Flags VOR dem Unterbefehl: unbekannt (auch `--`) heißt „vor dem Unterbefehl“, ohne Wert und ungültiger Bool wie im Blatt. */
-function vorUnterbefehlError(host: ErrHost, d: Dispatch<SubEntry<unknown>>, e: ScanError, kann: () => string[]): string {
+/** Alle Flag-Namen, die die Ebene samt ihren Zielen kennt (persistente, `realFlags`, je Eintrag, Gruppen rekursiv). Läuft nur im Fehlerzweig. */
+function ebenenFlags(d: Dispatch<SubEntry<unknown>>): Set<string> {
+  const names = new Set<string>([...(d.flags ?? []).flatMap(f => f.names), ...(d.realFlags ?? [])]);
+  for (const e of Object.values(d.table)) {
+    if (isGroup(e)) for (const n of ebenenFlags(inherit(d, e.group))) names.add(n);
+    else for (const n of [...(e.flags ?? []).flatMap(f => f.names), ...(e.realFlags ?? [])]) names.add(n);
+  }
+  return names;
+}
+
+/** Kennt keine Stelle der Ebene (global, persistent, Ziel darunter) das Flag? Nur auf einer Ebene mit `realFlags` (kubectl, #1998). */
+function isUnbekanntVorUnterbefehl(d: Dispatch<SubEntry<unknown>>, name: string): boolean {
+  return d.realFlags !== undefined && name !== "--" && !isHelpFlag(name) && !ebenenFlags(d).has(name);
+}
+
+/** Der Fehler eines Flags VOR dem Unterbefehl: ein globales Flag (`d.realFlags`) ist „Nicht simuliert“ ohne Positionshinweis; auf einer Ebene
+ *  mit `realFlags` meldet ein Flag, das nirgends bekannt ist, `unknown flag` (wie cobra/pflag); sonst heißt unbekannt (auch `--`) „vor dem
+ *  Unterbefehl“, ohne Wert und ungültiger Bool wie im Blatt. Grenzen: Flags nicht simulierter Unterbefehle (`real`) und die eigenen Flags
+ *  einer Gruppe (`kubectl create -f`) kennt die Sim nicht, darum meldet `unknown flag` nur die Wurzel der Familie, nie eine Gruppe (`inGruppe`);
+ *  ein globales Flag vor dem Unterbefehl meldet zuerst, auch vor einem echten Fehler dahinter. */
+function vorUnterbefehlError(host: ErrHost, d: Dispatch<SubEntry<unknown>>, e: ScanError, kann: () => string[], inGruppe: boolean): string {
   if (e.kind !== "unknown") return scanErrorText(host, { cmd: d.cmd, flags: [], style: d.style, maxArgs: 0 }, e);
+  if (d.realFlags?.includes(e.name)) return notSimulated(host, "das Flag '" + e.name + "' bei '" + d.cmd + "'.", kann(), d.hints?.[e.name]);
+  if (!inGruppe && isUnbekanntVorUnterbefehl(d, e.name)) return unknownFlag(host, { cmd: d.cmd, flags: d.flags ?? [], style: d.style, hints: d.hints, maxArgs: 0 }, e);
   return notSimulated(host, "das Flag '" + e.name + "' vor dem Unterbefehl.", kann(), vorUnterbefehlHint(e.name, d));
 }
 
 /** Der Unterbefehl dieser Ebene samt der Eingabe ohne ihn. Vor ihm dürfen nur die persistenten Flags der Ebene stehen
  *  (`d.flags`, wie cobra PersistentFlags); jedes andere Flag, auch `--`, ist ein Fehler. */
-function locateSub(host: ErrHost, d: Dispatch<SubEntry<unknown>>, t: readonly string[], at: number, kann: () => string[]): { sub: string; rest: readonly string[] } | string {
+function locateSub(host: ErrHost, d: Dispatch<SubEntry<unknown>>, t: readonly string[], at: number, kann: () => string[], inGruppe: boolean): { sub: string; rest: readonly string[] } | string {
   const w = walk({ cmd: d.cmd, flags: d.flags ?? [], style: d.style, maxArgs: OFFENE_LISTE, stopAtPositional: true }, t, at);
-  if (w.error) return vorUnterbefehlError(host, d, w.error, kann);
-  if (w.dashAt === 0) return vorUnterbefehlError(host, d, { kind: "unknown", name: "--" }, kann);
+  if (w.error) return vorUnterbefehlError(host, d, w.error, kann, inGruppe);
+  if (w.dashAt === 0) return vorUnterbefehlError(host, d, { kind: "unknown", name: "--" }, kann, inGruppe);
   const target = w.entries[0];
   if (!target) return host._err(d.cmd + ": Unterbefehl fehlt.", "Der Simulator kann: " + kann().join(" · "));
   return { sub: target.tok, rest: [...t.slice(0, target.at), ...t.slice(target.at + 1)] };
@@ -469,13 +492,13 @@ function inherit<E extends SubEntry<unknown>>(d: Dispatch<E>, g: Dispatch<E>): D
  *  simulierter Unterbefehl, Tippfehler mit Vorschlag, dann `parseCall` mit den Flags GENAU dieses Ziels (#1491). Ergebnis:
  *  `{ sub, entry, call }` oder die fertige Fehlerausgabe. Familien-Wachen (Control-Plane, init, Repo) laufen danach im
  *  Familien-Dispatcher. */
-export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispatch<E>, t: readonly string[], at: number): { sub: string; cmd: string; entry: E; call: Call } | string {
+export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispatch<E>, t: readonly string[], at: number, inGruppe = false): { sub: string; cmd: string; entry: E; call: Call } | string {
   const kann = () => kannOf(d);
-  const loc = locateSub(host, d, t, at, kann);
+  const loc = locateSub(host, d, t, at, kann, inGruppe);
   if (typeof loc === "string") return loc;
   const { sub, rest } = loc;
   const entry = subEntry(d.table, sub);
-  if (entry && isGroup(entry)) return dispatchSub(host, inherit(d, entry.group), rest, at);
+  if (entry && isGroup(entry)) return dispatchSub(host, inherit(d, entry.group), rest, at, true);
   if (!entry) return unknownSub(host, d, sub, kann);
   const cmd = d.cmd + " " + sub;
   const call = parseCall(host, specOfSub(cmd, entry, d), rest, at);
