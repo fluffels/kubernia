@@ -1046,7 +1046,7 @@ describe("dispatchSub: Flag vor dem Unterbefehl bei realFlags", () => {
     cmd: "t", flags: [flag(true, "-n")], realFlags: ["--g"],
     table: {
       a: { run, maxArgs: 0, flags: [flag(true, "--x")], realFlags: ["--r"] },
-      grp: { group: { cmd: "t grp", table: { b: { run, maxArgs: 0, flags: [flag(false, "--y")], realFlags: [] } } } },
+      grp: { group: { cmd: "t grp", realFlags: ["--gr"], table: { b: { run, maxArgs: 0, flags: [flag(false, "--y")], realFlags: [] } } } },
     },
   };
   const lauf = (...t: string[]) => dispatchSub(host, d, ["t", ...t], 1) as string;
@@ -1059,7 +1059,7 @@ describe("dispatchSub: Flag vor dem Unterbefehl bei realFlags", () => {
     expect(lauf("grp", "--g=1", "b")).toContain("bei 't grp'");
   });
   test("ein Ziel-Flag (auch aus der Gruppe) behält „vor dem Unterbefehl“ samt Hinweis", () => {
-    for (const z of [["--x=1", "a"], ["--r", "a"], ["--y", "a"]]) expect(lauf(...z), z.join(" ")).toContain("vor dem Unterbefehl. Setz Flags hinter den Unterbefehl.");
+    for (const z of [["--x=1", "a"], ["--r", "a"], ["--y", "a"], ["--gr", "a"]]) expect(lauf(...z), z.join(" ")).toContain("vor dem Unterbefehl. Setz Flags hinter den Unterbefehl.");
   });
   test("ein nirgends bekanntes Flag meldet den pflag-Fehler", () => {
     expect(lauf("--zzz", "a")).toContain("error: unknown flag: --zzz");
