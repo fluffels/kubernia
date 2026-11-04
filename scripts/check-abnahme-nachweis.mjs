@@ -14,7 +14,7 @@
  *  - `entfaellt` ist nur grün, wenn das Ticket keine Kriterien hat oder kein Ticket verknüpft ist.
  *
  * Das Ticket ist die einzige Schließ-Referenz im PR-Body (Umgebungsvariable `FACTORY_PR_BODY`, alle GitHub-Schlüsselwörter zählen); mehrere sind rot.
- * Ein Entwurfs-PR (`FACTORY_PR_DRAFT=true`) wird nur berichtet: maßgeblich ist der Lauf nach `ready_for_review`. Jeder git- oder gh-Fehler ist rot
+ * Ein Entwurfs-PR wird nur berichtet: maßgeblich ist der Lauf nach `ready_for_review`. Den Entwurfs-Status liest der Wächter live vom PR (`repos/<repo>/pulls/<nr>`, ein Rerun trägt sonst den veralteten Ereigniswert); `FACTORY_PR_DRAFT` gilt nur ohne PR-Nummer, ein fehlgeschlagener Abruf ist rot. Jeder git- oder gh-Fehler ist rot
  * (fail-closed). Druckventil: die Override-Zeile (Schlüssel `abnahmeOverride`, `#<nr> <warum>`), ausgewertet vor jedem gh-Aufruf.
  * Bewusst kein npm-`check:*`-Skript und nicht in `verify` (der Nachweis entsteht erst nach dem Review). Lokal:
  *   node scripts/check-abnahme-nachweis.mjs
@@ -146,21 +146,41 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
   const base = resolveBase(git, env);
   if (!base) return { ok: false, fehler: ["Keine Vergleichs-Basis auflösbar (flacher Checkout?): Abnahme-Nachweis nicht prüfbar."], invalid: [] };
   let fehler;
+  let entwurf = false; // erst der Live-Abruf (oder der Ereigniswert ohne PR-Nummer) setzt ihn; ein Fehler davor bleibt streng
   try {
     if (git(["rev-parse", "HEAD"]).trim() === base) return { ok: true, skipped: true, fehler: [], invalid: [] };
     const ov = sliceOverride(git, base, zeilen.abnahmeOverride);
     if (ov.reason !== null) return { ok: true, override: ov.reason, overrideKey: zeilen.abnahmeOverride, fehler: [], invalid: ov.invalid };
+    entwurf = entwurfLive({ gh, env, repo: repoVon(env, config) });
     fehler = pruefe({ git, gh, env, config, zeilen, base });
   } catch (e) {
     fehler = [`Fehler beim Prüfen des Abnahme-Nachweises (git/gh): ${fehlerText(e)}`];
   }
-  const entwurf = umgebungsWert(env, "FACTORY_PR_DRAFT") === "true";
   return { ok: fehler.length === 0 || entwurf, entwurf: entwurf && fehler.length > 0, fehler, invalid: [] };
+}
+
+const repoVon = (env, config) => env.GITHUB_REPOSITORY || config.repo;
+
+/**
+ * Entwurfs-Status live vom PR (ein Rerun trägt den Ereigniswert von damals). Ohne PR-Nummer gilt die Umgebung (`FACTORY_PR_DRAFT`);
+ * mit ihr wirft ein Fehler oder ein unlesbarer Wert (fail-closed, rot).
+ */
+export function entwurfLive({ gh, env, repo }) {
+  const nr = umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "";
+  if (!/^\d+$/.test(nr)) return umgebungsWert(env, "FACTORY_PR_DRAFT") === "true";
+  let pr;
+  try {
+    pr = gh(["api", `repos/${repo}/pulls/${nr}`]);
+  } catch (e) {
+    throw new Error(`Entwurfs-Status des PR #${nr} nicht abrufbar: ${fehlerText(e)}`, { cause: e });
+  }
+  if (typeof pr?.draft !== "boolean") throw new Error(`Entwurfs-Status des PR #${nr} nicht lesbar (Feld draft fehlt).`);
+  return pr.draft;
 }
 
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
 function pruefe({ git, gh, env, config, zeilen, base }) {
-  const repo = env.GITHUB_REPOSITORY || config.repo;
+  const repo = repoVon(env, config);
   const { owner } = zerlegeRepo(repo);
   const nachweis = parseNachweis(git(["log", "--reverse", "--format=%B", `${base}..HEAD`]), zeilen);
   const nummern = verknuepfteTickets(umgebungsWert(env, "FACTORY_PR_BODY"));

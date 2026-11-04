@@ -12,7 +12,7 @@ import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
 import { MANIFEST_PFAD, manifestAusText, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
 import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 import { ausFehler as ausFehlerRoh, gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
-import { modulPunkt } from "./modul-wahl-lib.mjs";
+import { manifestKenntModule, MODUL_STANDARD, modulFormFehler, modulWahl } from "./modul-wahl-lib.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
 const LINK = {
@@ -298,6 +298,24 @@ const besitzNichtPruefbar = (grund) => ({
   hinweis: "nur die Checks des Ruleset-Spiegels geprüft, Kern-Pflicht-Checks nicht prüfbar",
 });
 
+/**
+ * Doctor-Punkt `Sicherheits-Module` (factory#119): fehlender Schlüssel `module` ist eine Lücke, eine Teilauswahl OK mit Hinweis auf die nicht gewählten Module.
+ * Ohne lesbares Manifest (`manifestFehler` gesetzt) ist der Punkt nicht prüfbar (factory#139); `null`, wenn das Manifest einfach nicht übergeben wurde (direkter Aufruf)
+ * oder keine Module kennt und die Config nichts wählt (es gibt nichts zu wählen).
+ */
+export function modulPunkt(config, manifest, { configPfad = "die Projekt-Config", manifestFehler = null } = {}) {
+  const punkt = "Sicherheits-Module";
+  if (!manifest && manifestFehler) return nichtPruefbar(punkt, `${MANIFEST_PFAD} nicht lesbar (${manifestFehler}): welche Module wählbar sind, ist unbekannt`, `${MANIFEST_PFAD} aus Git oder per Sync von einem Factory-Tag wiederherstellen, dann erneut prüfen`);
+  const w = modulWahl(config, manifest, { configPfad });
+  if (!manifest || (!manifestKenntModule(manifest) && w.fehlt)) return null;
+  if (w.fehlt) {
+    return luecke(punkt, `der Schlüssel module fehlt in ${configPfad} (es gilt nur ${MODUL_STANDARD.join(", ")})`, `module in ${configPfad} als Liste der gewünschten Sicherheits-Module eintragen (wählbar: ${w.erlaubt.join(", ")}); [] wählt bewusst keines`);
+  }
+  const fehler = [...modulFormFehler(config), ...w.fehler];
+  if (fehler.length > 0) return luecke(punkt, fehler[0].split("\n")[0], fehler[0].split("\nFix: ")[1]);
+  return gut(punkt, w.nichtGewaehlt.length > 0 ? `nicht gewählt: ${w.nichtGewaehlt.join(", ")}` : undefined);
+}
+
 const besitzPunkt = (v) => (v.besitzFehler ? [besitzNichtPruefbar(v.besitzFehler)] : []);
 /** Soll-Liste der Required Checks: die Ableitung, sonst (direkter Aufruf ohne sie) der Spiegel, damit er nie verloren geht. */
 const sollChecks = (v, spiegel) => v.pflichtChecks ?? spiegel?.requiredChecks ?? [];
@@ -328,7 +346,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     ergebnis.push(...pruefeSicherheit({ repo: aus, actions: aus, regeln: aus, pvr: aus, spiegel }));
   }
   ergebnis.push(...pruefeSprache(config)); // liest nur die Config, braucht kein Token
-  const module = modulPunkt(config, voraussetzungen.manifest, { configPfad: PROJEKT_CONFIG }); // Sicherheits-Module (factory#119), ebenfalls ohne Token
+  const module = modulPunkt(config, voraussetzungen.manifest, { configPfad: PROJEKT_CONFIG, manifestFehler: voraussetzungen.besitzFehler }); // Sicherheits-Module (factory#119), ebenfalls ohne Token
   if (module !== null) ergebnis.push(module);
   if (langfuse) {
     const lf = langfuse();

@@ -64,7 +64,8 @@ export function parseBericht(text, nr, kriterienListe) {
   const zeilen = String(text ?? "").replace(/\r/g, "").split("\n");
   const kopf = zeilen.find((z) => z.trim() !== "");
   const km = kopf === undefined ? null : KOPF.exec(kopf.trim());
-  if (!km || Number(km[1]) !== nr) fehler.push(`Kopf fehlt oder falsch (erwartet: ABNAHME #${nr} · ${ABNAHME_AGENT})`);
+  if (km && Number(km[1]) !== nr) fehler.push(`Kopf falsch: Kopf nennt #${km[1]}, erwartet die Ticketnummer #${nr}, nicht die PR-Nummer (erwartet: ABNAHME #${nr} · ${ABNAHME_AGENT})`);
+  else if (!km) fehler.push(`Kopf fehlt oder falsch (erwartet: ABNAHME #${nr} · ${ABNAHME_AGENT})`);
   const bekannt = new Set(kriterienListe.map((c) => c.k));
   const nachMerge = new Set(kriterienListe.filter((c) => c.nachMerge).map((c) => c.k));
   const gefunden = new Map();

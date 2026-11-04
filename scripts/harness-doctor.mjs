@@ -16,7 +16,7 @@
  * (die Summenzeile zählt beide getrennt), 2 bei Aufruf-Fehler oder unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf).
  * Die Dateipunkte `Root-Kontextdatei` und `Zeilenenden` (factory#94, harness-doctor-dateien.mjs) prüfen die Projektdateien des Beziehers (keine CLAUDE.md im Root, eol-Regeln und LF im Index), brauchen kein Token und laufen auch im Wochenlauf, nicht in `--einrichten`.
  * Die acht Sicherheitspunkte (Secret Scanning, Push Protection, Non-Provider-Patterns, Validity Checks, PVR, Dependabot Security Updates, Code-Scanning,
- * SHA-Pinning; dazu der Punkt `Sicherheits-Module` (factory#119, `modul-wahl-lib.mjs`: fehlender Schlüssel `module` ist eine Lücke, eine Teilauswahl OK mit HINWEIS); factory#116, harness-doctor-sicherheit.mjs) stehen immer da; `--einrichten` ändert sie nie, nur `ANLEITUNG … Link: …`. Reines Node-Skript ohne Modell-Tokens; `gh` und
+ * SHA-Pinning; dazu der Punkt `Sicherheits-Module` (factory#119, `modulPunkt` in harness-doctor-lib.mjs: fehlender Schlüssel `module` ist eine Lücke, eine Teilauswahl OK mit HINWEIS, ein nicht lesbares Manifest NICHT PRÜFBAR); factory#116, harness-doctor-sicherheit.mjs) stehen immer da; `--einrichten` ändert sie nie, nur `ANLEITUNG … Link: …`. Reines Node-Skript ohne Modell-Tokens; `gh` und
  * der Langfuse-Aufruf sind injizierbar (Tests laufen ohne Netz). Alles Projektspezifische kommt zur Laufzeit aus `.factory/projekt.json`
  * und den Workflows (`voraussetzungenAus`); der Wächter test/harness/harness-doctor-voraussetzungen.test.ts hält die Ableitung vollständig.
  *

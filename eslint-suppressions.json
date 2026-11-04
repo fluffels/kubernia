@@ -9,11 +9,6 @@
       "count": 2
     }
   },
-  "scripts/audit-einordnung.mjs": {
-    "complexity": {
-      "count": 3
-    }
-  },
   "scripts/besitz-extraktion.mjs": {
     "complexity": {
       "count": 1
@@ -82,7 +77,7 @@
   },
   "scripts/check-factory-drift.mjs": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "scripts/check-lockfile.mjs": {

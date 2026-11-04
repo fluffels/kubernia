@@ -24,6 +24,7 @@
       "todoOptionId": "f75ad846"
     }
   ],
+  "module": ["dependabot-inbox", "audit-einordnung"],
   "praefixe": {
     "commitZeile": "KQ-",
     "branch": "feature/kq-",

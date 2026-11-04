@@ -105,12 +105,12 @@ export function verteilteSkripte(besitz, manifest) {
   return [...new Set(besitz.flatMap((c) => c.dateien).filter((d) => SKRIPT_DATEI.test(d) && gedeckt(d)))].sort();
 }
 
-/** Pur: der vorgeschlagene nächste Tag nach Conventional Commits (`!` oder `BREAKING CHANGE:` oder ein entfernter Export, `entfernt` = `[{ datei, namen }]`, Major; `feat` Minor, sonst Patch); `v` bleibt erhalten. */
+/** Pur: der vorgeschlagene nächste Tag nach Conventional Commits (`!` oder `BREAKING CHANGE:` oder ein entfernter Export, `entfernt` = `[{ datei, namen }]`, Major; `feat` Minor, sonst Patch); unter v1 (0.y.z) hebt Breaking nur das Minor (SemVer §4), v1.0.0 setzt man bewusst; `v` bleibt erhalten. */
 export function naechsterTag(letzterTag, commits, entfernt = []) {
   const [major, minor, patch] = teile(letzterTag);
   const breaking = (c) => /^[a-z]+(\([^)]*\))?!:/.test(c.betreff) || /^(?:\* )?BREAKING[ -]CHANGE:/m.test(c.body);
   const feature = (c) => /^feat(\([^)]*\))?:/.test(c.betreff);
-  const stufe = [major + 1, 0, 0];
+  const stufe = major === 0 ? [0, minor + 1, 0] : [major + 1, 0, 0];
   const neu = commits.some(breaking) || entfernt.length > 0 ? stufe : commits.some(feature) ? [major, minor + 1, 0] : [major, minor, patch + 1];
   return `${letzterTag.startsWith("v") ? "v" : ""}${neu.join(".")}`;
 }
@@ -122,6 +122,11 @@ export function dringlichSignal(besitz, dringlichKey) {
     if (treffer) return { grund: treffer[2].trim(), sha: c.sha };
   }
   return null;
+}
+
+/** Pur: die Migrationshinweise für Bezieher (`[{ pr, text }]`): jede Zeile `<migrationKey>: <text>` mit nicht leerem Text in den Besitz-Commits (Nicht-Besitz-Commits zählen nicht). */
+export function bezieherMigrationen(besitz, migrationKey) {
+  return besitz.flatMap((c) => [...c.body.matchAll(zeilenRe(migrationKey))].map((m) => ({ pr: c.pr, text: m[2].trim() })).filter((x) => x.text !== ""));
 }
 
 /** Pur: das Alter der ältesten Änderung in ganzen Tagen (Kommazahl) oder `null`; `datum` ISO. */
@@ -173,7 +178,7 @@ export function ciZustand(laeufe) {
 const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)", unbekannt: "unbekannt" };
 
 /** Pur: Body des Tag-Tickets. `prs` = `besitzCommits`, `aeltestes` = `{ datum, sha }`, `ci` = `ciZustand`. */
-export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [] }) {
+export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [], migrationen = [] }) {
   const wt = `.claude/worktrees/tag-${tag}`;
   const zeilen = prs.slice(0, MAX_ZEILEN).map((c) => `- ${c.pr} ${zelle(c.betreff)} (${c.datum.slice(0, 10)})`);
   if (prs.length > MAX_ZEILEN) zeilen.push(`- … und ${prs.length - MAX_ZEILEN} weitere`);
@@ -183,11 +188,14 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `- Vorgeschlagener Tag: \`${tag}\` (Basis ${letzterTag}, Vorschlag nach Conventional Commits)`,
     `- Älteste ungetaggte Änderung: ${aeltestes.datum.slice(0, 10)} (${aeltestes.sha.slice(0, 7)})`,
     `- main-Commit: \`${sha}\``,
-    ...entfernt.map((x) => `- Entfernte Exporte (Major): \`${x.datei}\`: ${x.namen.join(", ")}`),
+    ...entfernt.map((x) => `- Entfernte Exporte (Breaking): \`${x.datei}\`: ${x.namen.join(", ")}`),
     `- CI-Status dieses Commits: ${CI_TEXT[ci.zustand] ?? CI_TEXT.unbekannt}${ci.url ? ` ([Lauf](${ci.url}))` : ""}`,
     "",
     `Besitz-PRs seit ${letzterTag} (${prs.length}):`,
     ...zeilen,
+    "",
+    "Bezieher-Migration (Commit-Zeilen der Besitz-PRs, je Bezieher zu erledigen):",
+    ...(migrationen.length > 0 ? migrationen.map((m) => `- ${m.pr} ${zelle(m.text)}`) : ["- keine gemeldet"]),
     "",
     "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün). Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout, darum aus einem eigenen Worktree auf dem Commit (das Entfernen nur mit cwd außerhalb des Worktrees):",
     "",
@@ -204,8 +212,10 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `- [ ] Trockenlauf-Sync je Bezieher gegen dessen frischen Stand, nie gegen einen lokalen Checkout hinter \`origin/main\`: erst \`gh repo clone <bezieher> <leerer-ordner> -- --depth 1\` (oder \`git -C <checkout> fetch origin\` und \`git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>\`), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <leerer-ordner> --entwurf --trocken\` (die Bezieher nennt die Maintainerin oder \`arbeitsplatz.repos\` in der Projekt-Config des Arbeitsplatzes, der sie führt; \`node scripts/arbeitsplatz.mjs pfade\` nennt im Factory-Repo keinen Bezieher). Er meldet auch die Kontextgröße gegen das Budget des Ziels`,
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
-    `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`). ${WERKZEUG_HINWEIS} Im Ziel danach \`npm run docs:gen\` und \`npm run check:factorylinks -- --schreiben --quelle <checkout auf ${sha.slice(0, 7)}>\` fahren und mitcommitten; bei einer Kontext-Warnung den Projekt-Block kürzen, nie Wächter-gebundene Sätze (Wächter binden Projekt-Block-Sätze wörtlich)`,
+    `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“: im Bezieher erst \`node scripts/ticket-lock.mjs claim <nr>\` für dieses Ticket, dann den Worktree anlegen; ein vorhandener Worktree lässt den Claim mit Exit 4 scheitern. Plan-Nachweis im Sync-PR: \`<Präfix des Beziehers>Plan: ohne — Factory-Sync ${tag}\` (der Bezieher-Wächter kennt nur den eigenen Planer). Vor dem PR im Bezieher \`npm run verify:kompakt\` voll fahren, gezielte Tests ersetzen es nicht. Anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`). ${WERKZEUG_HINWEIS} Im Ziel danach \`npm run docs:gen\` fahren und mitcommitten (Refs und Index der Factory-Links schreibt der Sync mit; \`npm run check:factorylinks -- --schreiben --quelle <checkout auf ${sha.slice(0, 7)}>\` nur als Reparaturweg, falls \`docs:gen\` neue Factory-Links erzeugt hat); bei einer Kontext-Warnung den Projekt-Block kürzen, nie Wächter-gebundene Sätze (Wächter binden Projekt-Block-Sätze wörtlich)`,
     "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf fährt kein verify); rot durch Factory-Besitz: Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
+    "- [ ] Bezieher-Migrationen (Abschnitt oben) je Bezieher erledigt; Projektkopien abgelöster Kern-Tests im Bezieher abgleichen (projekteigen bleibt nur die Abdeckung der Projektwerte)",
+    "- [ ] Befunde aus dem Sync: Kern-Befunde als Zeile ins Harness-Sammelticket der Factory, nur den Bezieher betreffende als Issue ins Bezieher-Repo",
     "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen und deren CI grün ist (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
     "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: docs/agent-harness.md › Tag-Takt (#103).",
@@ -245,7 +255,7 @@ function sammle(io, log) {
   } catch (err) {
     log(`CI-Status nicht lesbar (${fehlerText(err)}), im Ticket steht „unbekannt“.`);
   }
-  return { letzterTag, besitz, sha, ci, entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
+  return { letzterTag, besitz, sha, ci, migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
 }
 
 /** Führt die Aktion aus. Rückgabe: true bei Fehler. */
@@ -277,11 +287,11 @@ function fuehreAus(e, io, log) {
 }
 
 /** Pur: Soll-Titel und Soll-Body des Tickets. */
-function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt }) {
+function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen }) {
   const tag = naechsterTag(letzterTag, besitz, entfernt);
   const aeltestes = besitz.reduce((a, c) => (Date.parse(c.datum) < Date.parse(a.datum) ? c : a));
   const ausloeser = e.ausloeser ?? [`${besitz.length} Besitz-PRs seit ${letzterTag}`];
-  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt }) };
+  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen }) };
 }
 
 /** Pur: stimmt das offene Ticket mit dem Soll überein? */
@@ -326,7 +336,8 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+/** git-Aufruf mit abgefangenem stderr (ein erwarteter Fehlschlag, z. B. `git show` einer neuen Datei, schreibt nichts ins Log); die Meldung bleibt im geworfenen Fehler. */
+export const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
 
 /** Standard-Lader des Manifests unter `wurzel`: wirft die einheitliche Meldung (`manifestAusText`), wenn es fehlt oder kaputt ist. */
 export function manifestLaden(wurzel) {
@@ -367,6 +378,7 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     },
     frischeOffene: () => frischeOffeneIssues({ repo: ziel, anzahl: 50, mitBoard: false }, zielOpt),
     dringlichKey: commitZeilenAus(config).syncDringlich,
+    migrationKey: commitZeilenAus(config).bezieherMigration,
     jetzt: () => new Date(),
     projectToken: env.PROJECT_TOKEN,
     legeIssueAn: aktion.legeIssueAn,
