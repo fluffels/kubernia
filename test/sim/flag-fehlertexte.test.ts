@@ -155,12 +155,12 @@ describe("Wortlaut-Tabellen: jede Art, auch die ohne Weg durch die heutige Flag-
   test("curl: unbekannt und Ganzzahl nennen das Token, ein Bool-Wert und Pflicht-Flags haben keinen curl-Text", () => {
     expect(CURL_GETPARAM.wortlaut?.({ kind: "unknown", name: "--x" }, "curl")).toBe("curl: option --x: is unknown");
     expect(CURL_GETPARAM.wortlaut?.(int, "curl")).toBe("curl: option --n: expected a proper numerical parameter");
-    expect(CURL_GETPARAM.wortlaut?.(bool, "curl")).toBeNull();
+    expect(CURL_GETPARAM.wortlaut?.({ kind: "bool", name: "-s", label: "-s, --silent", value: "x" }, "curl")).toBe("curl: option -s=x: is unknown");
     expect(CURL_GETPARAM.wortlaut?.(pflicht, "curl")).toBeNull();
   });
   test("curl: der Rahmen hängt den `--manual`-Verweis nur an Arten mit curl-Text, nicht an Bool und Pflicht", () => {
     expect(CURL_GETPARAM.rahmen?.("t", "curl", "pflicht")).toBe("t");
-    expect(CURL_GETPARAM.rahmen?.("t", "curl", "bool")).toBe("t");
+    expect(CURL_GETPARAM.rahmen?.("t", "curl", "bool")).toContain("curl: try");
     expect(CURL_GETPARAM.rahmen?.("t", "curl", "missing")).toContain("curl: try");
   });
   test("aws: ein Bool-Flag nennt Kurz- und Langform mit Schrägstrich", () => {
@@ -214,10 +214,14 @@ describe("gültige Eingaben, die ein erreichbares Ziel brauchen (keine neue Able
   });
   test("der Wert eines Bool-Flags wird ignoriert, auch bei der Auswertung: `--silent=0` und `--silent=yes` bleiben still wie `-s`", () => {
     const still = szenario().exec("curl -s -o f kasse").output;
+    expect(still).toBe("");
     for (const cmd of ["curl --silent=0 -o f kasse", "curl --silent=yes -o f kasse", "curl -s --silent=0 -o f kasse"]) expect(szenario().exec(cmd).output, cmd).toBe(still);
   });
   test("die Kurzform `-s=x` bleibt von `boolWertEgal` unberührt (Grenze: nur lange Flags)", () => {
-    expect(szenario().exec("curl -s=x kasse").output).toMatch(/invalid argument/);
+    const r = szenario().exec("curl -s=x kasse");
+    expect(r.error).toBe(true);
+    expect(r.output?.startsWith("curl: option -s=x: is unknown")).toBe(true);
+    expect(r.output).toContain("curl: try");
   });
   test("ohne `boolWertEgal` bleibt ein ungültiger Bool-Wert ein Fehler (git add --all=x wird weiter abgelehnt)", () => {
     const s = szenario();

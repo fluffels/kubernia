@@ -20,7 +20,7 @@
  *
  * Bekannte Grenzen: git zeigt nach `unknown option` den Optionen-Block des Befehls (nicht simuliert); curl nennt das ganze Token
  * (`-sSo`, `--x=v`) statt des Flag-Namens; aws kennt für unbekannte Optionen einen eigenen Pfad (`Unknown options: …`, Text nicht belegt: Stil-Text);
- * aws, git und curl lehnen ein Bool-Flag mit Wert unterschiedlich ab (git immer, aws immer, curl nie), die Sim lehnt bei curl nie ab (`boolWertEgal`, `tool_getparam.c`), sonst nur ungültige Bool-Werte;
+ * aws, git und curl lehnen ein Bool-Flag mit Wert unterschiedlich ab (git immer, aws immer, curl nie), die Sim lehnt bei curl an langen Flags nie ab (`boolWertEgal`, `tool_getparam.c`), die Kurzform `-s=x` meldet `curl: option -s=x: is unknown`, sonst nur ungültige Bool-Werte;
  * docker `build` (buildx-Alias) behält den Stil-Text; glab ebenso (fang `DefaultErrorHandler`: ohne TTY nur der Text, also der Stil-Text, mit TTY gestylt mit `ERROR`-Kopf, nicht nachgebildet; `NewGitLabErrorHandler` nicht geprüft);
  * kubeadm hängt die Stacktrace-Zeile hier nur an Flag-Fehler, echtes kubeadm hängt sie in `handleError` an jeden Fehler. */
 
@@ -38,7 +38,7 @@ export interface FlagFehlerTexte {
   readonly wortlaut?: (f: FlagFehler, cmd: string) => string | null;
   /** Die Zusatzzeilen des Werkzeugs um den fertigen Text (Usage-Block, Hilfe-Verweis, Diagnose-Rahmen). */
   readonly rahmen?: (text: string, cmd: string, kind: FlagFehlerArt) => string;
-  /** Das Werkzeug nimmt an einem langen Bool-Flag jeden angeklebten Wert an (`--x=wert`) und ignoriert ihn, auch bei der Auswertung: kein Bool-Fehler (curl). Die Kurzform `-s=x` bleibt davon unberührt. */
+  /** Das Werkzeug nimmt an einem langen Bool-Flag jeden angeklebten Wert an (`--x=wert`) und ignoriert ihn, auch bei der Auswertung: kein Bool-Fehler (curl). Die Kurzform `-s=x` bleibt davon unberührt (Bool-Fehler, bei curl `is unknown`). */
   readonly boolWertEgal?: boolean;
 }
 
@@ -82,13 +82,14 @@ function curlWortlaut(f: FlagFehler): string | null {
     case "unknown": return "curl: option " + f.name + ": is unknown";
     case "missing": return "curl: option " + f.name + ": requires parameter";
     case "int": return "curl: option " + f.name + ": expected a proper numerical parameter";
-    case "bool": case "pflicht": return null; // Bool-Werte lehnt curl nie ab (`boolWertEgal`), Pflicht-Flags gibt es nicht
+    case "bool": return "curl: option " + f.name + "=" + f.value + ": is unknown"; // nur die Kurzform `-s=x` (`findshortopt('=')`); an langen Flags nimmt curl jeden Wert an (`boolWertEgal`)
+    case "pflicht": return null; // Pflicht-Flags gibt es bei curl nicht
   }
 }
 export const CURL_GETPARAM: FlagFehlerTexte = {
   boolWertEgal: true,
   wortlaut: curlWortlaut,
-  rahmen: (text, _cmd, kind) => kind === "bool" || kind === "pflicht" ? text : text + "\n" + CURL_TRY,
+  rahmen: (text, _cmd, kind) => kind === "pflicht" ? text : text + "\n" + CURL_TRY,
 };
 
 /* ----- docker: FlagErrorFunc ----- */
