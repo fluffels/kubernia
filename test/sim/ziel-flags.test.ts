@@ -364,10 +364,16 @@ describe("kubectl: globale und unbekannte Flags vor dem Unterbefehl (#1998)", ()
     expect(lauf("kubectl --zzz get pods").out).toContain("error: unknown flag: --zzz");
     expect(lauf("kubectl --zzz=1 get pods").out).toContain("error: unknown flag: --zzz");
     expect(lauf("kubectl -zq get pods").out).toContain("error: unknown shorthand flag: 'z' in -zq");
+    expect(lauf("kubectl --version get pods").out).toContain("error: unknown flag: --version");
+  });
+  test("eine Gruppe kennt ihre eigenen Flags nicht: kein unknown flag (kubectl create -f ist echt)", () => {
     const s = freshSim(); const vorher = zustand(s);
-    const r = lauf("kubectl create --zzz deployment web --image=nginx", s);
-    expect(r.error).toBe(true);
-    expect(r.out).toContain("error: unknown flag: --zzz");
+    for (const f of ["-f x.yaml", "--filename=x.yaml", "--zzz"]) {
+      const r = lauf("kubectl create " + f + " deployment web --image=nginx", s);
+      expect(r.error, f).toBe(true);
+      expect(r.out, f).toContain("vor dem Unterbefehl");
+      expect(r.out, f).not.toContain("unknown");
+    }
     expect(zustand(s)).toBe(vorher);
   });
   test("-n bleibt gültig", () => {

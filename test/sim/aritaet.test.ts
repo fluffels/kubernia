@@ -258,11 +258,11 @@ describe("kubectl rollout/set/auth als Gruppen (#1667 a): Flags vor dem Blatt, B
     expect(lauf("kubectl set --namespace=default resources deployment/web --limits=memory=256Mi", s).out).toContain("resource requirements updated");
     expect(lauf("kubectl auth -n default can-i get pods", s).out).toBe("yes");
   });
-  test("ein unbekanntes Flag vor dem Blatt meldet unknown flag (#1998), nichts passiert", () => {
+  test("ein unbekanntes Flag vor dem Blatt wird abgelehnt, nichts passiert", () => {
     const s = web(); const vorher = pods(s);
     const r = lauf("kubectl rollout --bogus restart deployment web", s);
     expect(r.error).toBe(true);
-    expect(r.out).toContain("error: unknown flag: --bogus");
+    expect(r.out).toContain("das Flag '--bogus' vor dem Unterbefehl");
     expect(pods(s)).toEqual(vorher);
   });
   test("ein Flag vor dem Blatt ohne Wert: flag needs an argument; `--` vor dem Blatt wird abgelehnt", () => {

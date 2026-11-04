@@ -1043,10 +1043,10 @@ describe("dispatchSub: Gruppen erben Stil und Hinweise, Flags vor dem Unterbefeh
 describe("dispatchSub: Flag vor dem Unterbefehl bei realFlags", () => {
   const run = "x";
   const d: Dispatch<SubEntry<string>> = {
-    cmd: "t", flags: [flag(true, "-n")], realFlags: ["--g"],
+    cmd: "t", flags: [flag(true, "-n")], realFlags: ["--g", "--gh"], hints: { "--gh": "Globaler Hinweis." },
     table: {
       a: { run, maxArgs: 0, flags: [flag(true, "--x")], realFlags: ["--r"] },
-      grp: { group: { cmd: "t grp", realFlags: ["--gr"], table: { b: { run, maxArgs: 0, flags: [flag(false, "--y")], realFlags: [] } } } },
+      grp: { group: { cmd: "t grp", flags: [flag(true, "--gf")], realFlags: ["--gr"], table: { b: { run, maxArgs: 0, flags: [flag(false, "--y")], realFlags: [] } } } },
     },
   };
   const lauf = (...t: string[]) => dispatchSub(host, d, ["t", ...t], 1) as string;
@@ -1058,14 +1058,20 @@ describe("dispatchSub: Flag vor dem Unterbefehl bei realFlags", () => {
     expect(r).not.toContain("unknown flag");
     expect(lauf("grp", "--g=1", "b")).toContain("bei 't grp'");
   });
+  test("ein globales Flag mit Familien-Hinweis zeigt ihn, ohne Dahinter-Tipp", () => {
+    const r = lauf("--gh=1", "a");
+    expect(r).toContain("Globaler Hinweis.");
+    expect(r).not.toContain("Setz Flags");
+  });
   test("ein Ziel-Flag (auch aus der Gruppe) behält „vor dem Unterbefehl“ samt Hinweis", () => {
-    for (const z of [["--x=1", "a"], ["--r", "a"], ["--y", "a"], ["--gr", "a"]]) expect(lauf(...z), z.join(" ")).toContain("vor dem Unterbefehl. Setz Flags hinter den Unterbefehl.");
+    for (const z of [["--x=1", "a"], ["--r", "a"], ["--y", "a"], ["--gr", "a"], ["--gf=1", "a"]]) expect(lauf(...z), z.join(" ")).toContain("vor dem Unterbefehl. Setz Flags hinter den Unterbefehl.");
   });
   test("ein nirgends bekanntes Flag meldet den pflag-Fehler", () => {
     expect(lauf("--zzz", "a")).toContain("error: unknown flag: --zzz");
     expect(lauf("--zzz=1", "a")).toContain("error: unknown flag: --zzz");
     expect(lauf("-zq", "a")).toContain("error: unknown shorthand flag: 'z' in -zq");
-    expect(lauf("grp", "--zzz", "b")).toContain("error: unknown flag: --zzz");
+    expect(lauf("grp", "--zzz", "b")).toContain("vor dem Unterbefehl");
+    expect(lauf("grp", "--zzz", "b")).not.toContain("unknown flag");
   });
   test("Negativfälle: Hilfe-Flags, Doppelstrich, -n; ohne realFlags bleibt die Ebene offen", () => {
     expect(lauf("-h", "a")).toContain("Hilfe zeigt der Simulator");
