@@ -203,7 +203,8 @@ describe("scale und rollout restart: Mehrfachziele", () => {
     ["kubectl scale deployment fehlt --replicas=-1", "COUNT must be greater than or equal to 0"],
     ["kubectl scale deployment web api --replicas=x", "invalid argument"],
     ["kubectl scale deployment web api", 'required flag(s) "replicas" not set'],
-    ["kubectl scale --replicas=2", "So nicht ganz"],
+    ["kubectl scale --replicas=2", "You must provide one or more resources by argument or filename."],
+    ["kubectl scale deployment --replicas=2", "error: resource(s) were provided, but no name was specified"],
   ])("%s → Fehler, nichts angefasst", (cmd, text) => { ablehnen(cmd, text); });
 
   test("rollout restart: zwei Deployments", () => {

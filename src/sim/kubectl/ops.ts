@@ -12,7 +12,7 @@ import { maxRestartedAt, rolloutRevisions, undoTarget } from "../replicasets";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
-import { FROM_FLAG, isEnvArg, isImagePairArg, LIMITS_FLAG, MISSING_RESOURCE_ERROR, notSimulated, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, splitResourcesAndPairs, UNKNOWN_TARGET, type ResourceList } from "./args";
+import { FROM_FLAG, isEnvArg, isImagePairArg, LIMITS_FLAG, MISSING_RESOURCE_ERROR, NO_NAME_ERROR, notSimulated, parseFromRef, parseResourceList, REQUESTS_FLAG, replicasArg, REVISION_FLAG, splitResourcesAndPairs, UNKNOWN_TARGET, type ResourceList } from "./args";
 import { readTargets, targetOutcome } from "./targets";
 import { foreignNamespace, type KubectlEntry } from "./namespace";
 import { noResourcesIn } from "./inspect";
@@ -63,9 +63,10 @@ export function kubectlScale(host: KubectlHost, c: Call) {
   const dn = deploymentNames(host, "scale", c.args);
   if ("error" in dn) return dn.error;
   const replicas = replicasArg(c);
-  if (dn.names.length === 0) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
   // `replicas === null` kann der Scan nicht mehr liefern (Pflicht-Flag, Ganzzahl-Prüfung); die Zeile hält den Typ schmal und kopiert kubectl `Validate`.
+  // `scale.go`: `Validate` (Replicas) läuft vor `RunScale`, dessen Builder (`builder.go`) erst Ressource (`NoResourceError`) und Namen (`visitorResult`) verlangt.
   if (replicas === null || replicas < 0) return host._err("error: The --replicas=COUNT flag is required, and COUNT must be greater than or equal to 0");
+  if (dn.names.length === 0) return host._err(dn.ohneName ? NO_NAME_ERROR : MISSING_RESOURCE_ERROR, "Muster: 'kubectl scale deployment <name> --replicas=3'");
   return scaleAll(host, dn.names, replicas);
 }
 
@@ -152,7 +153,7 @@ function setImageValidate(host: KubectlHost, pairs: readonly string[]): string |
  *  (`set_image.go` Complete → `builder.go` visitorResult: „resource(s) were provided, but no name was specified“), nie einen
  *  NotFound mit Namen `null`; `deploymentNotFound` nimmt nur einen `string`. */
 function setImageTarget(host: KubectlHost, name: string | null): Deployment | string {
-  if (name === null) return host._err("error: resource(s) were provided, but no name was specified", SET_IMAGE_MUSTER);
+  if (name === null) return host._err(NO_NAME_ERROR, SET_IMAGE_MUSTER);
   return host.deployments.find(d => d.name === name) ?? host._err(deploymentNotFound(name));
 }
 

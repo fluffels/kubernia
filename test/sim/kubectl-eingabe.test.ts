@@ -504,11 +504,11 @@ describe("create deployment --replicas", () => {
       expect(freshSim().exec(cmd).output, cmd).toContain("Nicht simuliert: das Flag");
     }
   });
-  test("scale: das Label ist \"--replicas\" (ohne Kurzform), der Fehler kommt vor „So nicht ganz“ (#1996)", () => {
+  test("scale: das Label ist \"--replicas\" (ohne Kurzform), der Fehler kommt vor dem Builder-Fehler (#1996)", () => {
     const r = freshSim().exec("kubectl scale --replicas=abc");
     expect(r.error).toBe(true);
     expect(r.output?.split("\n")[0]).toBe('error: invalid argument "abc" for "--replicas" flag: strconv.ParseInt: parsing "abc": invalid syntax');
-    expect(r.output).not.toContain("So nicht ganz");
+    expect(r.output).not.toContain("You must provide");
   });
   test("rollout undo --to-revision=abc: der Scan meldet den Parse-Fehler (#1996)", () => {
     const r = freshSim().exec("kubectl rollout undo deployment web --to-revision=abc");

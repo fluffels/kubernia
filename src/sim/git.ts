@@ -18,6 +18,7 @@
  */
 import type { ClusterState, Deployment, Broken } from "./state";
 import { runPipeline } from "./glab";
+import { GIT_PARSE_OPTIONS } from "./flag-fehlertexte";
 import { flag, notSimulated, dispatchSub, IM_HANDLER, OFFENE_LISTE, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 const HINT_COMMIT_ALL = "Der Simulator kennt nur die Stage: erst 'git add <datei>', dann 'git commit --message \"…\"'.";
@@ -56,8 +57,8 @@ const PUSH_HINTS: Readonly<Record<string, string>> = {
 /** Alias → Eintrag (Handler + Flag-Tabelle; alle NACH der `git init`-Wache, also im initialisierten Repo, `init`
  *  selbst läuft davor). Ein neuer git-Unterbefehl ist ein Eintrag hier + eine Funktion unten – der Dispatcher
  *  (`gitCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz (Stardew-Scope). */
-// Beleg: git `usage.c` (`error()`) setzt `error: ` vor jede Meldung.
-export const GIT: Dispatch<SubEntry<GitHandler>> = { cmd: "git", fehlerPraefix: "error: ", table: {
+// Beleg (#2006): git `parse-options.c` meldet eigene Texte, `flag-fehlertexte.ts`.
+export const GIT: Dispatch<SubEntry<GitHandler>> = { cmd: "git", fehlerTexte: GIT_PARSE_OPTIONS, table: {
   init: { run: gitInit, maxArgs: 0 },
   status: { run: gitStatus, maxArgs: 0 },
   add: { run: gitAdd, maxArgs: OFFENE_LISTE, flags: [flag(false, "-A", "--all")] },

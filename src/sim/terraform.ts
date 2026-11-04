@@ -30,6 +30,7 @@
  */
 import type { ClusterState } from "./state";
 import { provisionNode, removeNode, isControlPlane, workerNodeName, CONTROL_PLANE_NODE } from "./nodes";
+import { tfDiagnose } from "./flag-fehlertexte";
 import { flag, dispatchSub, type Dispatch, type Call, type FlagStyle, type SubEntry } from "./cliargs";
 
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -292,16 +293,17 @@ const TF_STATE: Dispatch<SubEntry<TerraformHandler>> = {
 
 /** Die Dispatch-Tabelle (terraform nutzt Go-`flag`-Schreibweise). Ein neuer Unterbefehl ist ein Eintrag hier + eine
  *  Funktion oben – der Dispatcher (`terraformCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
-// Kein `fehlerPraefix` (#2001): terraform nutzt das Go-Paket `flag`, dessen Fehler ohne Präfix erscheinen.
+// Kein `fehlerPraefix` (#2001): terraform nutzt das Go-Paket `flag`, dessen Fehler ohne Präfix erscheinen. plan, apply, destroy und force-unlock
+// verpacken ihn in die Diagnose „Failed to parse command-line flags“ (#2006, `flag-fehlertexte.ts`); die übrigen Befehle (init, fmt …) haben andere Formen und behalten den Stil-Text.
 export const TERRAFORM: Dispatch<SubEntry<TerraformHandler>> = { cmd: "terraform", style: STYLE, table: {
   get: { run: tfGet, maxArgs: 0 },
   init: { run: tfInit, maxArgs: 0 },
-  plan: { run: tfPlan, maxArgs: 0, flags: [VAR_FILE] },
-  apply: { run: tfApply, maxArgs: 0, flags: [VAR_FILE, AUTO_APPROVE] },
-  destroy: { run: tfDestroy, maxArgs: 0, flags: [VAR_FILE, AUTO_APPROVE] },
+  plan: { run: tfPlan, maxArgs: 0, flags: [VAR_FILE], fehlerTexte: tfDiagnose("plan") },
+  apply: { run: tfApply, maxArgs: 0, flags: [VAR_FILE, AUTO_APPROVE], fehlerTexte: tfDiagnose("apply") },
+  destroy: { run: tfDestroy, maxArgs: 0, flags: [VAR_FILE, AUTO_APPROVE], fehlerTexte: tfDiagnose("destroy") },
   state: { group: TF_STATE },
   output: { run: tfOutput, maxArgs: 1, hints: { "-raw": OUTPUT_HINT, "-json": OUTPUT_HINT } },
-  "force-unlock": { run: tfForceUnlock, maxArgs: 1, flags: [flag(false, "-force")] },
+  "force-unlock": { run: tfForceUnlock, maxArgs: 1, flags: [flag(false, "-force")], fehlerTexte: tfDiagnose(null) },
   fmt: { run: () => "main.tf", maxArgs: 0 },
   validate: { run: () => "Success! The configuration is valid.", maxArgs: 0 },
 },

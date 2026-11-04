@@ -49,10 +49,15 @@ export function isResourceName(name: string): boolean {
  *  teilen sie, damit ein ungültiger Name überall dieselbe Meldung ergibt. */
 export function rfc1123ErrorText(raw: string, kind?: string): string {
   const subject = kind ? 'The ' + kind + ' "' + raw + '" is invalid: metadata.name' : '"' + raw + '" is invalid';
-  return subject + ': Invalid value: "' + raw +
-    "\": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', " +
-    "and must start and end with an alphanumeric character";
+  return subject + ": " + rfc1123Grund(raw);
 }
+
+const rfc1123Grund = (raw: string) => 'Invalid value: "' + raw +
+  "\": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', " +
+  "and must start and end with an alphanumeric character";
+
+/** Die Ursache eines ungültigen Namens, wie der apiserver sie in einer Aufzählung `[a, b]` nennt (#2006): `metadata.name: Invalid value: …`. */
+export const rfc1123Ursache = (raw: string) => "metadata.name: " + rfc1123Grund(raw);
 
 /** Der deutsche Erklär-Tipp zur DNS-1123-Regel (fürs `_err`-Hint der Aufrufer). */
 export const RFC1123_TIP =
