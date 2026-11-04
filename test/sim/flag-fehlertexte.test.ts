@@ -74,8 +74,8 @@ describe("curl: tool_getparam statt pflag (#2006)", () => {
     expect(out("curl -o")).toBe("curl: option -o: requires parameter\n" + TRY);
     expect(out("curl -H")).toBe("curl: option -H: requires parameter\n" + TRY);
   });
-  test("ein ungültiger Bool-Wert bleibt der Stil-Text: curl selbst nimmt `--silent=x` an (Grenze, keine neue Ablehnung)", () => {
-    expect(erste("curl --silent=x web")).toMatch(/^invalid argument "x" for "-s, --silent" flag: strconv.ParseBool/);
+  test("ein Bool-Flag mit beliebigem Wert ist kein Fehler: curl nimmt `--silent=x` an und ignoriert den Wert (`boolWertEgal`)", () => {
+    expect(out("curl --silent=x web")).not.toMatch(/invalid argument|ParseBool/);
     expect(out("curl --silent=x web")).not.toContain(TRY);
   });
 });
@@ -206,6 +206,20 @@ describe("gültige Eingaben, die ein erreichbares Ziel brauchen (keine neue Able
   test.each(["curl -s kasse", "curl --silent=true kasse", "curl -o datei kasse"])("%s kommt an", cmd => {
     const r = szenario().exec(cmd);
     expect(r.error, cmd).toBeFalsy();
+  });
+  test.each(["curl --silent=yes kasse", "curl --head=no kasse", "curl --include=x kasse", "curl -s --silent=0 kasse"])("%s: curl nimmt an einem Bool-Flag jeden Wert an (tool_getparam.c) und ignoriert ihn", cmd => {
+    const r = szenario().exec(cmd);
+    expect(r.error, cmd).toBeFalsy();
+    expect(r.output ?? "", cmd).not.toMatch(/invalid argument|ParseBool/);
+  });
+  test("ohne `boolWertEgal` bleibt ein ungültiger Bool-Wert ein Fehler (git add --all=x wird weiter abgelehnt)", () => {
+    const s = szenario();
+    s.exec("git init");
+    expect(s.exec("git add --all=x").output).toContain("takes no value");
+    const host: ErrHost = { _err: m => m };
+    const spec: ArgSpec = { cmd: "t", flags: [flag(false, "--b")], fehlerTexte: { boolWertEgal: true }, maxArgs: 0 };
+    expect(typeof parseCall(host, spec, ["--b=x"], 0)).not.toBe("string");
+    expect(parseCall(host, { ...spec, fehlerTexte: undefined }, ["--b=x"], 0)).toMatch(/invalid argument/);
   });
   test("kubectl scale mit Ressource und Replicas skaliert", () => {
     const s = szenario();

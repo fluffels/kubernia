@@ -139,6 +139,8 @@ interface Walk {
   unsimulated: Extract<ScanError, { kind: "unknown" }> | null;
   /** Das erste Hilfe-Flag (`-h`, `--help`) eines geschlossenen Ziels, an jeder Position: es geht den Pflicht-Flags und Wertprüfern vor (cobra). */
   help: Extract<ScanError, { kind: "unknown" }> | null;
+  /** `FlagFehlerTexte.boolWertEgal`: ein Bool-Flag nimmt jeden angeklebten Wert an (curl), statt ihn als `true/false` zu prüfen. */
+  boolWertEgal: boolean;
 }
 interface Step { used: boolean; error: ScanError | null }
 
@@ -153,7 +155,7 @@ function take(flags: readonly FlagSpec[], name: string, attached: string | null,
     w.hits.push({ spec: s, value: v });
     return { used: attached === null, error: null };
   }
-  if (attached !== null && parseBool(attached) === null) return { used: false, error: { kind: "bool", name, label: s.names.join(", "), value: attached } };
+  if (attached !== null && !w.boolWertEgal && parseBool(attached) === null) return { used: false, error: { kind: "bool", name, label: s.names.join(", "), value: attached } };
   w.hits.push({ spec: s, value: attached });
   return { used: false, error: null };
 }
@@ -192,7 +194,7 @@ function noteError(spec: ArgSpec, w: Walk, e: ScanError): void {
  *  gemerkt, der Scan läuft weiter (so bleiben die Positionsargumente auch bei einem unbekannten Flag lesbar). */
 function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
   const style = styleOf(spec);
-  const w: Walk = { hits: [], entries: [], error: null, dashAt: null, unsimulated: null, help: null };
+  const w: Walk = { hits: [], entries: [], error: null, dashAt: null, unsimulated: null, help: null, boolWertEgal: spec.fehlerTexte?.boolWertEgal === true };
   for (let i = from; i < t.length; i++) {
     const tok = t[i];
     const rest = restFrom(spec, tok, i);
