@@ -139,7 +139,7 @@ interface Walk {
   unsimulated: Extract<ScanError, { kind: "unknown" }> | null;
   /** Das erste Hilfe-Flag (`-h`, `--help`) eines geschlossenen Ziels, an jeder Position: es geht den Pflicht-Flags und Wertprüfern vor (cobra). */
   help: Extract<ScanError, { kind: "unknown" }> | null;
-  /** `FlagFehlerTexte.boolWertEgal`: ein Bool-Flag nimmt jeden angeklebten Wert an (curl), statt ihn als `true/false` zu prüfen. */
+  /** `FlagFehlerTexte.boolWertEgal`: ein langes Bool-Flag nimmt jeden angeklebten Wert an und ignoriert ihn (curl; der Treffer trägt keinen Wert), statt ihn als `true/false` zu prüfen. */
   boolWertEgal: boolean;
 }
 interface Step { used: boolean; error: ScanError | null }
@@ -155,7 +155,8 @@ function take(flags: readonly FlagSpec[], name: string, attached: string | null,
     w.hits.push({ spec: s, value: v });
     return { used: attached === null, error: null };
   }
-  if (attached !== null && !w.boolWertEgal && parseBool(attached) === null) return { used: false, error: { kind: "bool", name, label: s.names.join(", "), value: attached } };
+  if (attached !== null && w.boolWertEgal && name.startsWith("--")) { w.hits.push({ spec: s, value: null }); return { used: false, error: null }; }
+  if (attached !== null && parseBool(attached) === null) return { used: false, error: { kind: "bool", name, label: s.names.join(", "), value: attached } };
   w.hits.push({ spec: s, value: attached });
   return { used: false, error: null };
 }

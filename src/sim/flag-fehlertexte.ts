@@ -38,7 +38,7 @@ export interface FlagFehlerTexte {
   readonly wortlaut?: (f: FlagFehler, cmd: string) => string | null;
   /** Die Zusatzzeilen des Werkzeugs um den fertigen Text (Usage-Block, Hilfe-Verweis, Diagnose-Rahmen). */
   readonly rahmen?: (text: string, cmd: string, kind: FlagFehlerArt) => string;
-  /** Das Werkzeug nimmt an einem Bool-Flag jeden angeklebten Wert an (`--x=wert`) und ignoriert ihn: kein Bool-Fehler (curl). */
+  /** Das Werkzeug nimmt an einem langen Bool-Flag jeden angeklebten Wert an (`--x=wert`) und ignoriert ihn, auch bei der Auswertung: kein Bool-Fehler (curl). Die Kurzform `-s=x` bleibt davon unberührt. */
   readonly boolWertEgal?: boolean;
 }
 

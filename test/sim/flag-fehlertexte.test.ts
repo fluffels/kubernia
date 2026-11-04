@@ -212,6 +212,13 @@ describe("gültige Eingaben, die ein erreichbares Ziel brauchen (keine neue Able
     expect(r.error, cmd).toBeFalsy();
     expect(r.output ?? "", cmd).not.toMatch(/invalid argument|ParseBool/);
   });
+  test("der Wert eines Bool-Flags wird ignoriert, auch bei der Auswertung: `--silent=0` und `--silent=yes` bleiben still wie `-s`", () => {
+    const still = szenario().exec("curl -s -o f kasse").output;
+    for (const cmd of ["curl --silent=0 -o f kasse", "curl --silent=yes -o f kasse", "curl -s --silent=0 -o f kasse"]) expect(szenario().exec(cmd).output, cmd).toBe(still);
+  });
+  test("die Kurzform `-s=x` bleibt von `boolWertEgal` unberührt (Grenze: nur lange Flags)", () => {
+    expect(szenario().exec("curl -s=x kasse").output).toMatch(/invalid argument/);
+  });
   test("ohne `boolWertEgal` bleibt ein ungültiger Bool-Wert ein Fehler (git add --all=x wird weiter abgelehnt)", () => {
     const s = szenario();
     s.exec("git init");
