@@ -202,7 +202,7 @@ describe("scale und rollout restart: Mehrfachziele", () => {
     ["kubectl scale deploy/web api --replicas=1", NO_TYPE],
     ["kubectl scale deployment fehlt --replicas=-1", "COUNT must be greater than or equal to 0"],
     ["kubectl scale deployment web api --replicas=x", "invalid argument"],
-    ["kubectl scale deployment web api", "So nicht ganz"],
+    ["kubectl scale deployment web api", 'required flag(s) "replicas" not set'],
     ["kubectl scale --replicas=2", "So nicht ganz"],
   ])("%s → Fehler, nichts angefasst", (cmd, text) => { ablehnen(cmd, text); });
 

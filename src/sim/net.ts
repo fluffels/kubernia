@@ -47,6 +47,7 @@ function checkType(host: ErrHost, value: string): string | null {
 
 /** nslookup (goflag-Stil wie BIND: `-type=A`). Alle anderen Optionen (`-debug`, `-port=…`, `-timeout=…`) sind
  *  nicht simuliert. Die Aliase `-ty`, `-querytype`, `-query`, `-qu`, `-q` kennt BIND (nslookup.c, setoption). */
+// Kein `fehlerPraefix` (#2001): der echte Text des Werkzeugs ist hier nicht belegt, also erfindet die Sim kein Präfix.
 export const NSLOOKUP_ARGS: ArgSpec = {
   cmd: "nslookup",
   style: "goflag",
@@ -206,6 +207,7 @@ function checkOutput(host: ErrHost, value: string): string | null {
 
 /** curl-Flags. -S, -v, -I, -i, -H, -X und -d werden angenommen, ändern aber nichts (-s nur ohne -o; Grenzen curl-antwort und
  *  curl-anfrage): jeder Dienst antwortet gleich. -o schreibt die Antwort in eine Datei. */
+// Kein `fehlerPraefix` (#2001): der echte Text des Werkzeugs ist hier nicht belegt, also erfindet die Sim kein Präfix.
 export const CURL_ARGS: ArgSpec = {
   cmd: "curl",
   maxArgs: 1,

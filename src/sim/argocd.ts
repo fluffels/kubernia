@@ -384,6 +384,8 @@ const ARGOCD_APP: Dispatch<SubEntry<ArgocdAppHandler>> = { cmd: "argocd app", ta
 /** Die `argocd`-Ebene: nur `app` ist simuliert; die übrigen Befehlsgruppen des echten CLI sind „nicht simuliert“. */
 export const ARGOCD: Dispatch<SubEntry<ArgocdAppHandler>> = {
   cmd: "argocd",
+  // Beleg: argocd `cmd/argocd/commands/root.go` setzt nur `SilenceUsage`, also druckt cobra seinen Standard `Error: `.
+  fehlerPraefix: "Error: ",
   table: { app: { group: ARGOCD_APP } },
   real: ["account", "admin", "appset", "cert", "cluster", "completion", "context", "gpg", "login", "logout", "proj", "relogin", "repo", "repocreds", "version"],
 };

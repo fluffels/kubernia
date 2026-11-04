@@ -56,7 +56,8 @@ const PUSH_HINTS: Readonly<Record<string, string>> = {
 /** Alias → Eintrag (Handler + Flag-Tabelle; alle NACH der `git init`-Wache, also im initialisierten Repo, `init`
  *  selbst läuft davor). Ein neuer git-Unterbefehl ist ein Eintrag hier + eine Funktion unten – der Dispatcher
  *  (`gitCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz (Stardew-Scope). */
-export const GIT: Dispatch<SubEntry<GitHandler>> = { cmd: "git", table: {
+// Beleg: git `usage.c` (`error()`) setzt `error: ` vor jede Meldung.
+export const GIT: Dispatch<SubEntry<GitHandler>> = { cmd: "git", fehlerPraefix: "error: ", table: {
   init: { run: gitInit, maxArgs: 0 },
   status: { run: gitStatus, maxArgs: 0 },
   add: { run: gitAdd, maxArgs: OFFENE_LISTE, flags: [flag(false, "-A", "--all")] },

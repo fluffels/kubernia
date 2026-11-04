@@ -58,6 +58,7 @@ const S3: Dispatch<SubEntry<S3Handler>> = { cmd: "aws s3", table: {
 };
 
 /** Die `aws`-Ebene: nur der Dienst `s3` ist simuliert, die anderen echten Dienste sind „nicht simuliert“. */
+// Kein `fehlerPraefix` (#2001): der echte Text des Werkzeugs ist hier nicht belegt, also erfindet die Sim kein Präfix.
 export const AWS: Dispatch<SubEntry<S3Handler>> = {
   cmd: "aws",
   table: { s3: { group: S3 } },
