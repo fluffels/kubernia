@@ -21,7 +21,7 @@ import { fehlerText, ghText } from "./gh-cli.mjs";
 import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
-import { KERN_TICKET_SKILL, PROJEKT_CONFIG, TICKET_SKILL_NAME, repoName } from "./projekt-config-lib.mjs";
+import { KERN_TICKET_SKILL, PROJEKT_CONFIG, TICKET_SKILL_NAME, repoName, wirksamerAbschluss } from "./projekt-config-lib.mjs";
 import { failClosedGrund, namenOderGrund } from "./ticket-namen.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { ladeSessions, projektOrdner } from "./transkript.mjs";
@@ -31,7 +31,7 @@ export const ERGEBNIS_SCHLUESSEL = Object.freeze(["rows", "fenster", "ohnePreis"
 
 /**
  * Die Namen der Zerlegung aus der Projekt-Config: die Ticket-Skills (Produkt-Skill aus `agenten.ticketSkill`, der Kern-Skill und der Verzeichnisname des festen Rollen-Pfads `ROLLEN_PFADE.ticketSkill`; ihr Aufruf per Slash oder
- * Skill-Tool ist ein Ticketlauf), die Menge der Ticketlauf-Agenten (`agenten.planer|umsetzer|lens|gruppe`), der Abschluss-Skill (`skills.abschluss`, zählt als Brain) und der Repo-Name (Schlüssel und Label der eigenen Subagenten).
+ * Skill-Tool ist ein Ticketlauf), die Menge der Ticketlauf-Agenten (`agenten.planer|umsetzer|lens|gruppe`), der Abschluss-Skill (`skills.abschluss`, darf `null` sein; zusammen mit dem wirksamen Namen aus `FACTORY_ABSCHLUSS_SKILL` die Menge `abschlussSkills`, sie zählt als Brain; ein Messlauf ohne die Variable kennt einen nur lokal gesetzten Namen nicht) und der Repo-Name (Schlüssel und Label der eigenen Subagenten).
  * Wirft mit Grund, wenn die Config fehlt oder nicht nutzbar ist (Datenfehler statt falscher Zählung). Die Config lädt der Einstiegspunkt und reicht sie
  * als `deps.config` durch; dieser Kern lädt nie selbst.
  */
@@ -45,9 +45,10 @@ Fix: repo in ${PROJEKT_CONFIG} auf einen Namen außerhalb von ${ERGEBNIS_SCHLUES
   const { planer, umsetzer, lens, gruppe, ticketSkill } = r.namen.agenten;
   const ticketSkills = [...new Set([ticketSkill, KERN_TICKET_SKILL, TICKET_SKILL_NAME])];
   const abschlussSkill = r.config.skills?.abschluss;
-  if (typeof abschlussSkill !== "string" || !abschlussSkill) throw new Error(`skills.abschluss fehlt in der Projekt-Config
-Fix: skills.abschluss in ${PROJEKT_CONFIG} setzen (Name des Abschluss-Skills)`);
-  return { ticketSkills, abschlussSkill, ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: name, config: r.config };
+  if (abschlussSkill !== null && (typeof abschlussSkill !== "string" || !abschlussSkill)) throw new Error(`skills.abschluss fehlt in der Projekt-Config
+Fix: skills.abschluss in ${PROJEKT_CONFIG} setzen (Name des Abschluss-Skills oder null)`);
+  const abschlussSkills = new Set([abschlussSkill, wirksamerAbschluss(r.config, deps.env ?? process.env)].filter((n) => typeof n === "string" && n !== ""));
+  return { ticketSkills, abschlussSkill, abschlussSkills, ticketAgenten: new Set([planer, umsetzer, lens, gruppe]), repoName: name, config: r.config };
 }
 
 /** Die Ticket-Skills aus der Projekt-Config (siehe `hauptchatNamen`). */
@@ -87,14 +88,14 @@ function beruehrtWurzel(text, wurzeln) {
   return false;
 }
 
-function eventBeruehrtBrain(ev, wurzeln, abschlussSkill) {
-  if (ev.tool === "Skill") return ev.input?.skill === abschlussSkill;
+function eventBeruehrtBrain(ev, wurzeln, abschlussSkills) {
+  if (ev.tool === "Skill") return abschlussSkills.has(ev.input?.skill);
   const felder = [ev.input?.file_path, ev.input?.path, ev.input?.notebook_path, ev.input?.command, ev.input?.pattern];
   return felder.some((f) => typeof f === "string" && beruehrtWurzel(f, wurzeln));
 }
 
 /** Eine Session in Turns zerlegen: jede Zeile gehört zum zuletzt begonnenen Turn. */
-function turnsAus(zeilen, wurzeln, ticketSkills, abschlussSkill) {
+function turnsAus(zeilen, wurzeln, ticketSkills, abschlussSkills) {
   const gruppen = [{ start: null, rows: [] }];
   for (const row of zeilen) {
     const s = turnStart(row);
@@ -108,8 +109,8 @@ function turnsAus(zeilen, wurzeln, ticketSkills, abschlussSkill) {
     const workflow = events.some((e) => /workflow/i.test(e.tool));
     const art = ticketSkills.includes(g.start?.slash) ? "Slash" : skillGeladen ? "Skill-Tool" : workflow ? "Workflow" : "frei";
     // Brain gilt ab dem ersten Brain-Ereignis bis Turn-Ende (#1382); ein Turn mit dem Slash-Aufruf des Abschluss-Skills ist ganz Brain.
-    const brainTs = events.filter((e) => eventBeruehrtBrain(e, wurzeln, abschlussSkill)).map((e) => (gueltig(e.ts) ? Date.parse(e.ts) : -Infinity));
-    const brainAb = g.start?.slash === abschlussSkill ? -Infinity : brainTs.length ? Math.min(...brainTs) : null;
+    const brainTs = events.filter((e) => eventBeruehrtBrain(e, wurzeln, abschlussSkills)).map((e) => (gueltig(e.ts) ? Date.parse(e.ts) : -Infinity));
+    const brainAb = abschlussSkills.has(g.start?.slash) ? -Infinity : brainTs.length ? Math.min(...brainTs) : null;
     return { idx, startTs: g.start?.ts ?? null, art, brainAb, calls, events };
   });
 }
@@ -208,10 +209,10 @@ export function ttlVergleich(calls) {
 /**
  * Kern: Sessions (Hauptzeilen + Subagenten) → Summen je Kategorie × Modell × Quelle plus Ticket-Fenster.
  * @param {{ sessions: Iterable<{ id: string, main: object[], subagents?: { meta: object, zeilen: object[] }[] }>,
- *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, config: object }} e Die Projekt-Config (`config`) ist Pflicht, ohne wirft `hauptchatNamen`.
+ *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, config: object, env?: Record<string, string | undefined> }} e Die Projekt-Config (`config`) ist Pflicht, ohne wirft `hauptchatNamen`.
  */
-export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null, config }) {
-  const { ticketSkills, ticketAgenten, abschlussSkill, repoName: name } = hauptchatNamen({ config });
+export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null, config, env }) {
+  const { ticketSkills, ticketAgenten, abschlussSkills, repoName: name } = hauptchatNamen({ config, env });
   const wurzeln = brainRoots.map((r) => norm(r).replace(/\/+$/, "")).filter(Boolean);
   const summen = new Map();
   const fenster = [];
@@ -237,7 +238,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
   };
 
   for (const s of sessions) {
-    const turns = turnsAus(s.main, wurzeln, ticketSkills, abschlussSkill);
+    const turns = turnsAus(s.main, wurzeln, ticketSkills, abschlussSkills);
     const subs = (s.subagents ?? []).map((sa) => ({
       meta: sa.meta ?? {},
       calls: callsFromTranscript(sa.zeilen).calls,

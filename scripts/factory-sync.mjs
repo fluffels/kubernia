@@ -3,16 +3,24 @@
 // Der Besitz kommt aus einem Tag der Quelle (Inhalte wie `git show <tag>:<pfad>` über `git cat-file --batch`, Ausführbar-Bit aus `git ls-tree`), nie aus dem Arbeitsbaum; der
 // Sync-Stand hält Commit und Tag fest. Ohne `--tag` synct nichts; nur `--entwurf` liest den Arbeitsbaum (Probe, das Drift-Gate bleibt rot).
 // Erst-Übernahme-Schutz und Vorlagen (factory#118, `sync-abgleich-lib.mjs`): eine abweichende Ziel-Datei, die noch nicht im Stand steht, überschreibt erst `--uebernehmen <pfad>`; eine Vorlage wird nur angelegt.
-// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich. Hash und Vergleich
+// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index). Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
+// Hinweise ohne Fehler: eine Projektkopie einer Test-Hilfe (nicht verteilt), die von der Quelle abweicht (`testHilfeKopienAbweichend`); ein unbekannter Manifest-Versionsfehler trägt den Werkzeug-Hinweis.
+// Link-Schritt (factory#131, nur mit `--tag`): auf dem Ergebnis des Sync-Plans (neue Texte, neuer Sync-Stand) prüft `linkSchritt` die Factory-Links des Ziels gegen den Baum des Tags
+// und stellt Refs und `.factory/factory-links.json` mit um; ein Link-Befund heißt Exit 1 und nichts geschrieben (auch mit `--trocken`), `--entwurf` macht keinen Link-Schritt.
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
-import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
+import { befundZeile, INDEX_PFAD, planeFactoryLinks } from "./factory-links-lib.mjs";
+import { factoryRepoAus } from "./factory-seite.mjs";
+import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
+import { manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
+import { testHilfeKopienAbweichend } from "./besitz-extraktion.mjs";
+import { WERKZEUG_HINWEIS } from "./release-tag-lib.mjs";
 import { ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
@@ -26,7 +34,8 @@ const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
 
 /** Fehler des Quell-Manifests: Schema, Projekt-Config nie Besitz, jede Besitz-Rolle (#1871) eine ganze, verteilte Einheit (die Rollen des Projekts stehen nicht im Manifest). */
 function manifestFehler(manifest, quelleLies) {
-  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}`);
+  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}${/^version .* unbekannt/.test(m) ? `
+Fix: ${WERKZEUG_HINWEIS}` : ""}`);
   if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
   for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
     if (PROJEKT_ROLLEN.includes(rolle)) continue;
@@ -89,7 +98,7 @@ function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
  * ohne den Schlüssel `module` gilt der Standard, die Namen prüft `modulWahl` gegen das Quell-Manifest (ein neues Modul ist sofort wählbar).
  */
 function waehleModule(manifest, zielConfig) {
-  if (!manifest.eintraege.some((e) => e.modul !== undefined)) return { gewaehlt: MODUL_STANDARD, fehler: [], meldungen: [] };
+  if (!manifestKenntModule(manifest)) return { gewaehlt: MODUL_STANDARD, fehler: [], meldungen: [] };
   let config;
   try {
     config = zielConfig();
@@ -104,7 +113,7 @@ function waehleModule(manifest, zielConfig) {
 /**
  * Plan eines Syncs, ohne zu schreiben. `quelleLies`/`zielLies` liefern den Dateitext (relativer Pfad, Schrägstrich-Form) oder `null`.
  * Ergebnis: `fehler` (nicht leer: nichts schreiben), `meldungen`, `dateien` (Pfad → { text, neu, ausfuehrbar }, nur Geändertes),
- * `unveraendert` (Zahl) und der `stand`. `zielConfig` liefert die Projekt-Config des Ziels, nur gerufen, wenn eine Datei Projektwert-Stellen hat oder das Manifest Einheiten mit `modul` kennt (Modulwahl).
+ * `unveraendert` (Zahl, dazu `unveraendertePfade`) und der `stand`. `zielConfig` liefert die Projekt-Config des Ziels, nur gerufen, wenn eine Datei Projektwert-Stellen hat oder das Manifest Einheiten mit `modul` kennt (Modulwahl).
  */
 export function planeSync({
   quelleLies,
@@ -116,7 +125,7 @@ export function planeSync({
     throw new Error("keine Projekt-Config des Ziels übergeben");
   },
 }) {
-  const res = { fehler: [], meldungen: [], dateien: new Map(), unveraendert: 0, stand: null };
+  const res = { fehler: [], meldungen: [], dateien: new Map(), unveraendert: 0, unveraendertePfade: new Set(), stand: null };
   const manifestText = quelleLies(MANIFEST_PFAD);
   const geladen = manifestAusText(manifestText);
   if (geladen.fehler !== undefined) {
@@ -159,11 +168,12 @@ export function planeSync({
     uebernehmen,
   });
   res.fehler.push(...abgleich.fehler);
-  res.meldungen.push(...abgleich.hinweise);
+  res.meldungen.push(...abgleich.hinweise, ...testHilfeKopienAbweichend({ quelleLies, zielLies }));
   if (res.fehler.length > 0) return res;
   const ziehe = (pfad, ergebnis, zielRoh, ausfuehrbar) => {
     if (zielRoh !== null && normalisiereEol(zielRoh) === ergebnis) {
       res.unveraendert++;
+      res.unveraendertePfade.add(pfad);
       return;
     }
     const eol = zielRoh === null ? "\n" : eolVon(zielRoh);
@@ -172,8 +182,10 @@ export function planeSync({
   for (const [pfad, z] of ziele) ziehe(pfad, z.ergebnis, z.zielRoh, quelleAusfuehrbar(pfad));
   ziehe(MANIFEST_PFAD, normalisiereEol(manifestText), zielLies(MANIFEST_PFAD), false);
   for (const e of alle.filter(istVorlage)) {
-    if (zielLies(e.pfad) !== null) res.unveraendert++;
-    else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar));
+    if (zielLies(e.pfad) !== null) {
+      res.unveraendert++;
+      res.unveraendertePfade.add(e.pfad);
+    } else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar));
   }
 
   const einheiten = {};
@@ -206,7 +218,7 @@ export function quelleVomTag(quelle, tag) {
   const commit = aufgeloest.out.toString("utf8").trim();
   const leser = leserFuerCommit(quelle, commit);
   if (leser === null) return { fehler: `Tag '${tag}': der Baum von ${commit} ist nicht lesbar` };
-  return { stand: { commit, tag, sauber: true }, lies: leser.lies, ausfuehrbar: leser.ausfuehrbar, vorladen: leser.vorladen };
+  return { stand: { commit, tag, sauber: true }, lies: leser.lies, ausfuehrbar: leser.ausfuehrbar, vorladen: leser.vorladen, pfade: leser.pfade };
 }
 
 function quelleGit(quelle) {
@@ -262,6 +274,55 @@ function kontextHinweise(plan, ziel) {
   return ueberBudget({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget: ${k.file} hätte ${k.chars} Zeichen > Budget ${k.budget}; im Ziel wird check:contextsize rot, Projekt-Block kürzen (nie Wächter-gebundene Sätze)`);
 }
 
+/** Trägt die Änderungen des Link-Plans in den Sync-Plan ein: ein Pfad, den der Sync als unverändert zählte, wechselt zu geändert; neue Pfade (der Index) werden angelegt. */
+function verschmelzeLinkDateien(plan, geaendert, platte) {
+  for (const [pfad, text] of geaendert) {
+    const alt = plan.dateien.get(pfad);
+    if (alt !== undefined) {
+      plan.dateien.set(pfad, { ...alt, text });
+      continue;
+    }
+    if (plan.unveraendertePfade.delete(pfad)) plan.unveraendert--;
+    plan.dateien.set(pfad, { text, neu: platte(pfad) === null, ausfuehrbar: false });
+  }
+}
+
+/**
+ * Link-Schritt auf dem Sync-Ergebnis (factory#131): `leser` ist der Leser des Tags (`{ pfade, lies, vorladen }`). Rückgabe `{ fehler, hinweise }`, bei Erfolg sind Refs und Index im `plan.dateien`.
+ * Ohne bestimmbares Factory-Repo (weder `quelle.repo` noch Board mit Rolle factory) gibt es nur einen Hinweis; eine unlesbare Ziel-Config bei bekanntem Repo ist ein Fehler.
+ */
+function linkSchritt({ plan, ziel, leser }) {
+  const { tag, commit } = plan.stand.quelle;
+  const ladeConfig = () => ladeProjektConfig({ rootDir: ziel, pruefen: false });
+  const repo = factoryRepoAus(plan.stand, ladeConfig);
+  if (repo === undefined) return { fehler: [], hinweise: [`Factory-Links: kein Factory-Repo bestimmbar (weder quelle.repo noch Board mit Rolle factory in ${PROJEKT_CONFIG}), kein Link-Schritt`] };
+  let ausnahmen;
+  try {
+    ausnahmen = factoryLinkAusnahmenAus(ladeConfig());
+  } catch (err) {
+    return { fehler: [`[config] ${err.message}`], hinweise: [] };
+  }
+  const platte = liesDatei(ziel);
+  const lies = (pfad) => plan.dateien.get(pfad)?.text ?? platte(pfad);
+  const dateien = [...new Set([...collectMarkdown(ziel), ...[...plan.dateien.keys()].filter(istGelesenesMarkdown)])];
+  const r = planeFactoryLinks({ dateien, lies, repo, einheiten: Object.keys(plan.stand.einheiten), ausnahmen, tag, commit, leser });
+  if (r.befunde.length > 0) return { fehler: r.befunde.map(befundZeile), hinweise: [] };
+  verschmelzeLinkDateien(plan, r.dateien, platte);
+  return { fehler: [], hinweise: [`Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
+}
+
+/** Link-Phase der Kommandozeile: `{ ok, hinweise }`; bei `ok: false` ist die Meldung schon über `err` ausgegeben (nichts geschrieben). */
+function linkPhase({ opt, plan, ziel, leser, err }) {
+  if (opt.tag === null) return { ok: true, hinweise: [`Entwurf: kein Link-Schritt (Factory-Links und ${INDEX_PFAD} bleiben unverändert)`] };
+  const r = linkSchritt({ plan, ziel, leser });
+  if (r.fehler.length === 0) return { ok: true, hinweise: r.hinweise };
+  for (const f of r.fehler) err(`factory-sync: Factory-Links: ${f}`);
+  const nurConfig = r.fehler.every((f) => f.startsWith("[config]"));
+  err(nurConfig ? `factory-sync: Weg: ${PROJEKT_CONFIG} des Ziels anlegen bzw. den Block factoryLinks korrigieren, dann neu syncen` : "factory-sync: Weg: den Link im Ziel korrigieren oder per factoryLinks.ausnahmen in der Projekt-Config ausnehmen, dann neu syncen");
+  err("factory-sync: nichts geschrieben");
+  return { ok: false, hinweise: [] };
+}
+
 /** Kommandozeile; Rückgabe = Exit-Code (0 ok, 1 Fehler, 2 Aufruf). */
 export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)) } = {}) {
   const opt = parseArgs(argv);
@@ -287,6 +348,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     return 1;
   }
   let leser = { quelleLies: liesDatei(quelle), quelleAusfuehrbar: (pfad) => (statSync(join(quelle, ...pfad.split("/"))).mode & 0o111) !== 0, quelleStand: quelleGit(quelle) };
+  let tagLeser = null;
   if (opt.tag !== null) {
     const v = quelleVomTag(quelle, opt.tag);
     if (v.fehler !== undefined) {
@@ -300,6 +362,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
       // kein lesbares Manifest: planeSync meldet es.
     }
     leser = { quelleLies: v.lies, quelleAusfuehrbar: v.ausfuehrbar, quelleStand: v.stand };
+    tagLeser = v;
   }
   const plan = planeSync({ ...leser, uebernehmen: opt.uebernehmen, zielLies: liesDatei(ziel), zielConfig: () => ladeProjektConfig({ rootDir: ziel }) });
   if (plan.fehler.length > 0) {
@@ -307,6 +370,8 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     err("factory-sync: nichts geschrieben");
     return 1;
   }
+  const links = linkPhase({ opt, plan, ziel, leser: tagLeser, err });
+  if (!links.ok) return 1;
   const ausfuehrbarePfade = [];
   for (const [pfad, d] of plan.dateien) {
     out(`${opt.trocken ? "würde " : ""}${d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert"}: ${pfad}`);
@@ -325,6 +390,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     return 1;
   }
   for (const m of plan.meldungen) out(`Hinweis: ${m}`);
+  for (const h of links.hinweise) out(`Hinweis: ${h}`);
   for (const h of kontextHinweise(plan, ziel)) out(h);
   if (opt.tag === null) out("Hinweis: Entwurf aus dem Arbeitsbaum, check:factorydrift im Ziel bleibt rot bis zum Sync von einem Tag");
   out(`factory-sync: ${plan.dateien.size} ${opt.trocken ? "zu ändern" : "geändert"}, ${plan.unveraendert} unverändert`);

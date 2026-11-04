@@ -2,7 +2,7 @@
 
 > **Fachlich geprüft am: 2026-11-02.**
 >
-> **Projektanteil.** Das Harness-Glossar steht im Factory-Repo: [Harness-Glossar](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.7.1/docs/harness-glossar.md). Hier stehen nur die Begriffe, die dieses Projekt ergänzt. Die Begriffe des Projekts selbst stehen getrennt im [Glossar](glossar.md); welche Seite Projekt und welche Kern ist: [Inventar](referenz/anlaufstellen.md#factory-seiten-projektanteil-und-kern).
+> **Projektanteil.** Das Harness-Glossar steht im Factory-Repo: [Harness-Glossar](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/harness-glossar.md). Hier stehen nur die Begriffe, die dieses Projekt ergänzt. Die Begriffe des Projekts selbst stehen getrennt im [Glossar](glossar.md); welche Seite Projekt und welche Kern ist: [Inventar](referenz/anlaufstellen.md#factory-seiten-projektanteil-und-kern).
 
 ## Grenzen und Prüfungen
 

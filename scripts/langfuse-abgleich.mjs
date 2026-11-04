@@ -27,6 +27,7 @@ import { fetchSessionObservations, langfuseZugang } from "./langfuse-api.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { costDetails } from "./langfuse-otlp.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
 import {
   ROW_LIMIT,
@@ -50,6 +51,7 @@ import {
 } from "./langfuse-abgleich-kern.mjs";
 
 const FEHLEND_ANZEIGE = 20;
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 /** Liegen die Langfuse-Kosten bei gleichen Calls strikt unter (1 − PREIS_TOLERANZ) · Transkript-Kosten, bepreist die Instanz das Modell nicht oder zu niedrig (Hinweis Modellpreis). */
 export const PREIS_TOLERANZ = 0.1;
 
@@ -207,7 +209,7 @@ export function renderMarkdown(bewertungen, sum) {
     if (b.fehlendeCalls.length > FEHLEND_ANZEIGE) out.push(`- … und ${b.fehlendeCalls.length - FEHLEND_ANZEIGE} weitere`);
   }
   for (const b of bewertungen.filter((x) => x.ausserhalb)) {
-    out.push("", `Hinweis ${String(b.session).slice(0, 8)}: Session außerhalb des Projekts (Projektordner passt nicht). Weder Projekt-Hook noch Nachlieferer erfassen sie, der Score erfassung kommt nie. Kosten: node scripts/token-baseline.mjs --session ${b.session}; Einordnung: docs/langfuse-hook-patch.md › Läufe außerhalb des Repos.`);
+    out.push("", `Hinweis ${String(b.session).slice(0, 8)}: Session außerhalb des Projekts (Projektordner passt nicht). Weder Projekt-Hook noch Nachlieferer erfassen sie, der Score erfassung kommt nie. Kosten: node scripts/token-baseline.mjs --session ${b.session}; Einordnung: ${factorySeiteIn(WURZEL, "docs/langfuse-hook-patch.md", "fehlende-sessions-1382")} › Fehlende Sessions › Läufe außerhalb des Repos.`);
   }
   const zaehlDubletten = bewertungen.filter((x) => x.schluessel === "zählung" && x.dubletten > 0);
   if (zaehlDubletten.length) {

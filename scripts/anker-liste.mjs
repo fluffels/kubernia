@@ -3,15 +3,16 @@
  * Guard-Liste (#112): je geänderter Funktion die Anker (Verzweigungs- und Guard-Stellen) der Diff-Zeilen, damit der Selbstcheck des
  * Umsetzers und Lens 3 von derselben, nicht selbst gewählten Liste ausgehen. Kein Gate, Exit 0 (außer Aufruf-Fehler und fehlende Basis).
  *
+ * Köpfe: Deklaration, `const f = …=>`, Methode `name(…) {` (auch einzeilig) und Eigenschaft `name: (…) =>`/`name: function` (eine TS-Typzeile `name: (x) => T;` zählt ebenfalls als Kopf).
  * Bewusste Grenzen (Regex-Heuristik, kein AST): mehrzeilige Ausdrücke und Funktionsköpfe über mehrere Zeilen, verschachtelte oder zeilenübergreifende
  * Strings, Ausdrücke in `${…}` eines Template-Literals, Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
  * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`.
  * Ungetrackte Dateien mit Nicht-ASCII-Namen (git quotet sie) fehlen.
- * Quelle: Projekt-Config `struktur.quelle` über `isMeasured` (keine festen Endungen); Testdateien liegen außerhalb und fehlen.
+ * Messumfang (`istGemessen`): Quelle der Projekt-Config `struktur.quelle` über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis (Hilfsdateien wie `test/support/x.ts`); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMeasured, normalizePath, parseDiffLines, resolveBase } from "./check-basis.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -56,7 +57,8 @@ const REGEX_LITERAL = /(^\s*|[=(,:;!&|?{}[]\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[
 const KOPF = [
   /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([\w$]+)\s*\(/,
   /^\s*(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*=\s*(?:async\s+)?(?:function\b|\(.*\)\s*(?::[^=]+)?=>|[\w$]+\s*=>)/,
-  /^\s+(?:static\s+)?(?:async\s+)?(?!(?:if|for|while|switch|catch|return|function)\b)([\w$]+)\s*\([^)]*\)\s*(?::[^{]+)?\{\s*$/,
+  /^\s+(?:static\s+)?(?:async\s+)?(?!(?:if|for|while|switch|catch|return|function)\b)([\w$]+)\s*\([^)]*\)\s*(?::[^{]+)?\{/,
+  /^\s+(?:async\s+)?([\w$]+)\s*:\s*(?:async\s+)?(?:function\b|\(.*\)\s*(?::[^=]+)?=>|[\w$]+\s*=>)/,
 ];
 const DEFAULT_PARAMETER = /[^=!<>]=(?![=>])/;
 
@@ -150,6 +152,13 @@ export function lauf(argv, { git, lesen, istQuelle }) {
   return { code: 0, out: r.werte.json ? `${JSON.stringify(ergebnis)}\n` : formatiere(ergebnis), err: "" };
 }
 
+const TESTDATEI = /\.(?:test|spec)\.[cm]?[jt]s$/;
+
+/** Pur: Quellwurzel (`isMeasured`) oder das Verzeichnis als eigene Wurzel (`test/support/x.ts`); Testdateien (`*.test.*`, `*.spec.*`, auch in der Quelle), Doku und Root-Dateien nie. */
+export function istGemessen(pfad, quelle) {
+  return !TESTDATEI.test(pfad) && (isMeasured(pfad, quelle) || isMeasured(pfad, posix.dirname(pfad)));
+}
+
 /** Die echte Umgebung: git im Repo-Root, Dateien relativ dazu (nicht lesbar: `undefined`), Quelle aus der Projekt-Config. */
 export function echteUmgebung() {
   const quelle = strukturAus(ladeProjektConfig()).quelle;
@@ -162,7 +171,7 @@ export function echteUmgebung() {
         return undefined;
       }
     },
-    istQuelle: (pfad) => isMeasured(pfad, quelle),
+    istQuelle: (pfad) => istGemessen(pfad, quelle),
   };
 }
 

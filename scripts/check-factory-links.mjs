@@ -1,7 +1,8 @@
 // Factory-Link-Wächter (ADR 0022 F10, factory#130; Kern): Links ins Factory-Repo stehen auf dem Sync-Tag und zeigen auf Pfade und Anker, die es dort gibt.
 // `node scripts/check-factory-links.mjs [--wurzel <pfad>]` prüft hermetisch (kein Git, kein Netz): Doku-Links gegen den Index `.factory/factory-links.json`,
 // der selbst zu `STAND_PFAD` (`.factory/sync-stand.json`) › `quelle` passen muss. `--schreiben --quelle <klon>` schreibt nach einem Sync auf einen neuen Tag
-// die Refs um und erzeugt den Index aus dem Tag der Quelle (Klon des Factory-Repos): Befund ⇒ nichts geschrieben, Exit 1.
+// die Refs um und erzeugt den Index aus dem Tag der Quelle (Klon des Factory-Repos): Befund ⇒ nichts geschrieben, Exit 1. Das ist der Reparaturweg: Refs und Index
+// schreibt `factory-sync --tag` im selben Lauf mit (factory#131, Bausteine in `factory-links-lib.mjs`).
 // Ohne Sync-Stand (das Factory-Repo selbst, ein Projekt ohne Sync) gibt es nichts zu prüfen: Exit 0. Mit Sync-Stand ohne `quelle.tag` ist es rot.
 // Exit 0 grün, 1 Befund, 2 Aufruf.
 //
@@ -23,58 +24,24 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown } from "./check-basis.mjs";
-import { besitzSpannen, einheitAusId } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { codeMaskiert, collectHeadingSlugs, externeLinkStellen, schnappschussBloecke } from "./docs-gen/markdown.mjs";
-import { factoryRepo, factoryUrlTeile } from "./factory-seite.mjs";
+import { INDEX_PFAD, befund, befundZeile, factoryLinkStellen, planeFactoryLinks, sammleLinksAus } from "./factory-links-lib.mjs";
+import { factoryRepo } from "./factory-seite.mjs";
 import { leserVomCommit } from "./factory-sync-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { globRegex } from "./pfad-glob.mjs";
 import { PROJEKT_CONFIG, factoryLinkAusnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { STAND_PFAD, liesSyncStand } from "./sync-stand-lib.mjs";
 
-const INDEX_PFAD = ".factory/factory-links.json";
+export { factoryLinkStellen };
+
+/** Alle erfassten Links im Umfang einer Wurzel: `{ datei, ...stelle }`, sortiert nach Datei und Position. `ausnahmen` sind Pfad-Globs (`factoryLinks.ausnahmen`). */
+export function sammleLinks(rootDir, optionen) {
+  const lies = (datei) => readFileSync(join(rootDir, ...datei.split("/")), "utf8");
+  return sammleLinksAus({ dateien: collectMarkdown(rootDir), lies }, optionen);
+}
+
 const SCHREIB_WEG = "Weg: `npm run check:factorylinks -- --schreiben --quelle <klon des Factory-Repos>`";
 
-/** Zeile (1-basiert) einer Position im Text. */
-const zeileVon = (md, pos) => md.slice(0, pos).split("\n").length;
-
-/**
- * Pur: die Factory-Links (blob, tree, fremd) eines Markdown-Textes für das Repo `repo` (`owner/name`, Groß-/Kleinschreibung egal).
- * Stelle: `{ start, ende, zeile, url, form, ref, pfad, anker, refStart }`; Pfad und Anker sind dekodiert, Positionen gelten im Original.
- */
-export function factoryLinkStellen(md, repo) {
-  const stellen = [];
-  for (const { start, ende, url } of externeLinkStellen(md)) {
-    const k = factoryUrlTeile(url, repo);
-    if (k) stellen.push({ start, ende, zeile: zeileVon(md, start), url, form: k.form, ref: k.ref, pfad: k.pfad, anker: k.anker, refStart: start + k.refOffset });
-  }
-  return stellen;
-}
-
-/** Zeilen (0-basiert) in den geschlossenen Schnappschuss-Blöcken (`schnappschussBloecke`; ein Start ohne Ende maskiert nichts, fail-closed); Marker in Code zählen nicht. */
-function maskierteZeilen(text) {
-  const aus = new Set();
-  for (const [start, ende] of schnappschussBloecke(codeMaskiert(text).split("\n")).bloecke) for (let i = start; i <= ende; i++) aus.add(i);
-  return aus;
-}
-
-/** Alle erfassten Links im Umfang: `{ datei, ...stelle }`, sortiert nach Datei und Position. `ausnahmen` sind Pfad-Globs (`factoryLinks.ausnahmen`). */
-export function sammleLinks(rootDir, { repo, einheiten = [], ausnahmen = [] }) {
-  const besitz = einheiten.map(einheitAusId);
-  const ausgenommen = ausnahmen.map(globRegex);
-  const links = [];
-  for (const datei of collectMarkdown(rootDir)) {
-    if (ausgenommen.some((re) => re.test(datei))) continue;
-    const text = readFileSync(join(rootDir, ...datei.split("/")), "utf8");
-    const aus = maskierteZeilen(text);
-    const spannen = besitzSpannen(besitz, datei, text);
-    for (const s of factoryLinkStellen(text, repo)) if (!aus.has(s.zeile - 1) && !spannen.some(([von, bis]) => s.start >= von && s.start <= bis)) links.push({ datei, ...s });
-  }
-  return links;
-}
-
-const befund = (art, text, l) => ({ art, datei: l?.datei, zeile: l?.zeile, text });
 const paarSchluessel = (pfad, anker) => `${pfad}\0${anker}`;
 
 /** Sync-Stand und Index gegeneinander und gegen das Factory-Repo: `index-fehlt`, `sync-stand`, `index-stand`. */
@@ -156,36 +123,6 @@ export function auditFactoryLinks(rootDir) {
   return { befunde: pruefeIndex({ links, index: liesJson(rootDir, INDEX_PFAD), sync: v.sync, repo: v.repo }), links };
 }
 
-/** Pfad und Anker eines Links am Tag der Quelle: `pfad-tot` oder `anker-tot` als Befund, sonst `null`. */
-function zielBefund(l, leser) {
-  const gibtEs = l.form === "tree" ? leser.pfade.some((p) => p.startsWith(`${l.pfad}/`)) : leser.pfade.includes(l.pfad);
-  if (!gibtEs) return befund("pfad-tot", `${l.url}: ${l.pfad} gibt es am Tag nicht`, l);
-  if (l.anker === "" || l.form !== "blob" || !l.pfad.endsWith(".md")) return null;
-  return collectHeadingSlugs(leser.lies(l.pfad) ?? "").includes(l.anker) ? null : befund("anker-tot", `${l.url}: Anker #${l.anker} gibt es in ${l.pfad} am Tag nicht`, l);
-}
-
-/** Refs positionsgenau auf `tag` setzen (von hinten nach vorn, Zeilenenden bleiben); schreibt jede Datei mit Factory-Links. */
-function schreibeRefs(rootDir, links, tag) {
-  const jeDatei = new Map();
-  for (const l of links) jeDatei.set(l.datei, [...(jeDatei.get(l.datei) ?? []), l]);
-  for (const [datei, liste] of jeDatei) {
-    const voll = join(rootDir, ...datei.split("/"));
-    let text = readFileSync(voll, "utf8");
-    for (const l of [...liste].sort((a, b) => b.refStart - a.refStart)) text = text.slice(0, l.refStart) + tag + text.slice(l.refStart + l.ref.length);
-    writeFileSync(voll, text);
-  }
-}
-
-/** Index-Text: Schlüssel sortiert, je Pfad eine Zeile, abschließender Zeilenumbruch. */
-function indexText({ repo, tag, commit }, links) {
-  const ziele = new Map();
-  for (const l of links) ziele.set(l.pfad, new Set([...(ziele.get(l.pfad) ?? []), l.anker]));
-  const sortiert = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  const zeilen = [...ziele.keys()].sort(sortiert).map((p) => `    ${JSON.stringify(p)}: ${JSON.stringify([...ziele.get(p)].sort(sortiert))}`);
-  const kopf = `{\n  "repo": ${JSON.stringify(repo)},\n  "tag": ${JSON.stringify(tag)},\n  "commit": ${JSON.stringify(commit)},\n`;
-  return `${kopf}  "ziele": {\n${zeilen.join(",\n")}\n  }\n}\n`;
-}
-
 /**
  * Schreibmodus: prüft die Links gegen den Tag in `quelle` (Klon des Factory-Repos) und schreibt nur ohne Befund Refs und Index.
  * Rückgabe `{ befunde, geschrieben }`; zusätzliche Befund-Arten `quelle`, `tag-commit`, `pfad-tot`, `anker-tot`, `form`. Ohne Sync-Stand gibt es keinen Tag: Befund `sync-stand`.
@@ -200,17 +137,11 @@ export function schreibeFactoryLinks(rootDir, quelle) {
   const leser = leserVomCommit(quelle, tag);
   if (leser.fehler) return { befunde: [befund("quelle", `Tag ${tag} in ${quelle}: ${leser.fehler}`)], geschrieben: 0 };
   if (leser.commit !== commit) return { befunde: [befund("tag-commit", `Tag ${tag} zeigt auf ${leser.commit}, ${STAND_PFAD} nennt ${commit}`)], geschrieben: 0 };
-  const links = sammleLinks(rootDir, { repo, einheiten: Object.keys(sync.einheiten ?? {}), ausnahmen: v.ausnahmen });
-  const echte = links.filter((l) => l.form !== "fremd");
-  leser.vorladen(echte.filter((l) => l.anker !== "" && l.form === "blob" && l.pfad.endsWith(".md")).map((l) => l.pfad));
-  const befunde = [
-    ...links.filter((l) => l.form === "fremd").map((l) => befund("form", `${l.url}: keine geprüfte Form (erwartet blob oder tree, Ref, Pfad, optional Anker)`, l)),
-    ...echte.map((l) => zielBefund(l, leser)).filter(Boolean),
-  ];
-  if (befunde.length > 0) return { befunde, geschrieben: 0 };
-  schreibeRefs(rootDir, echte, tag);
-  writeFileSync(join(rootDir, ...INDEX_PFAD.split("/")), indexText({ repo, tag, commit }, echte));
-  return { befunde: [], geschrieben: echte.length, ziele: new Set(echte.map((l) => l.pfad)).size, tag };
+  const lies = (datei) => (existsSync(join(rootDir, ...datei.split("/"))) ? readFileSync(join(rootDir, ...datei.split("/")), "utf8") : null);
+  const plan = planeFactoryLinks({ dateien: collectMarkdown(rootDir), lies, repo, einheiten: Object.keys(sync.einheiten ?? {}), ausnahmen: v.ausnahmen, tag, commit, leser });
+  if (plan.befunde.length > 0) return { befunde: plan.befunde, geschrieben: 0 };
+  for (const [datei, text] of plan.dateien) writeFileSync(join(rootDir, ...datei.split("/")), text);
+  return { befunde: [], geschrieben: plan.geschrieben, ziele: plan.ziele, tag };
 }
 
 const AUFRUF = "Aufruf: node scripts/check-factory-links.mjs [--wurzel <pfad>] | --schreiben --quelle <klon>";
@@ -218,7 +149,7 @@ const AUSNAHMEN_HINWEIS = `  Hinweis: historische Dateien nimmt \`factoryLinks.a
 
 function meldeBefunde(name, befunde, err) {
   err(`${name}: ${befunde.length} Befund(e)`);
-  for (const b of befunde) err(`  ✖ ${b.datei ? `${b.datei}:${b.zeile}: ` : ""}[${b.art}] ${b.text}`);
+  for (const b of befunde) err(`  ✖ ${befundZeile(b)}`);
   if (befunde.some((b) => b.art === "ref")) err(AUSNAHMEN_HINWEIS);
 }
 
