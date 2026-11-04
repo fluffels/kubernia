@@ -20,7 +20,7 @@
  *
  * Bekannte Grenzen: git zeigt nach `unknown option` den Optionen-Block des Befehls (nicht simuliert); curl nennt das ganze Token
  * (`-sSo`, `--x=v`) statt des Flag-Namens; aws kennt für unbekannte Optionen einen eigenen Pfad (`Unknown options: …`, Text nicht belegt: Stil-Text);
- * aws, git und curl lehnen ein Bool-Flag mit Wert unterschiedlich ab (git immer, aws immer, curl nie), die Sim lehnt bei curl an langen Flags nie ab (`boolWertEgal`, `tool_getparam.c`), die Kurzform `-s=x` meldet `curl: option -s=x: is unknown`, sonst nur ungültige Bool-Werte;
+ * aws, git und curl lehnen ein Bool-Flag mit Wert unterschiedlich ab (git immer, aws immer, curl nie), die Sim lehnt bei curl an langen Flags nie ab (`boolWertEgal`, `tool_getparam.c`), die Kurzform `-s=x` meldet `curl: option -s=x: is unknown` (die Sim erkennt das nur bei ungültigen Bool-Werten, `-s=true` nimmt sie an, curl nicht), sonst nur ungültige Bool-Werte;
  * docker `build` (buildx-Alias) behält den Stil-Text; glab ebenso (fang `DefaultErrorHandler`: ohne TTY nur der Text, also der Stil-Text, mit TTY gestylt mit `ERROR`-Kopf, nicht nachgebildet; `NewGitLabErrorHandler` nicht geprüft);
  * kubeadm hängt die Stacktrace-Zeile hier nur an Flag-Fehler, echtes kubeadm hängt sie in `handleError` an jeden Fehler. */
 

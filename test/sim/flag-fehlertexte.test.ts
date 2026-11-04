@@ -152,13 +152,13 @@ describe("Wortlaut-Tabellen: jede Art, auch die ohne Weg durch die heutige Flag-
     expect(AWS_ARGPARSE.wortlaut?.(int, "aws s3 ls")).toBe("argument -n/--n: invalid int value: 'x'");
     expect(AWS_ARGPARSE.wortlaut?.(pflicht, "aws s3 ls")).toBe("the following arguments are required: --b, --a");
   });
-  test("curl: unbekannt und Ganzzahl nennen das Token, ein Bool-Wert und Pflicht-Flags haben keinen curl-Text", () => {
+  test("curl: unbekannt und Ganzzahl nennen das Token, ein Bool-Wert an der Kurzform meldet `-s=x: is unknown`, Pflicht-Flags haben keinen curl-Text", () => {
     expect(CURL_GETPARAM.wortlaut?.({ kind: "unknown", name: "--x" }, "curl")).toBe("curl: option --x: is unknown");
     expect(CURL_GETPARAM.wortlaut?.(int, "curl")).toBe("curl: option --n: expected a proper numerical parameter");
     expect(CURL_GETPARAM.wortlaut?.({ kind: "bool", name: "-s", label: "-s, --silent", value: "x" }, "curl")).toBe("curl: option -s=x: is unknown");
     expect(CURL_GETPARAM.wortlaut?.(pflicht, "curl")).toBeNull();
   });
-  test("curl: der Rahmen hängt den `--manual`-Verweis nur an Arten mit curl-Text, nicht an Bool und Pflicht", () => {
+  test("curl: der Rahmen hängt den `--manual`-Verweis an alle Arten außer Pflicht", () => {
     expect(CURL_GETPARAM.rahmen?.("t", "curl", "pflicht")).toBe("t");
     expect(CURL_GETPARAM.rahmen?.("t", "curl", "bool")).toContain("curl: try");
     expect(CURL_GETPARAM.rahmen?.("t", "curl", "missing")).toContain("curl: try");
