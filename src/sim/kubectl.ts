@@ -47,13 +47,15 @@ type SubCommand = (host: KubectlHost, c: Call) => string;
  *  `auth` sind Gruppen (#1491): je Ziel eigene Flags und Arität, `-n` gilt persistent für alle Ziele. */
 export const KUBECTL: Dispatch<KubectlEntry<SubCommand>> = {
   cmd: "kubectl",
+  // Beleg: kubectl läuft über `cmdutil.CheckErr` (staging/src/k8s.io/kubectl/pkg/cmd/util/helpers.go), das `error: ` voranstellt.
+  fehlerPraefix: "error: ",
   flags: [NS],
   realFlags: KUBECTL_OPTIONS,
   table: {
     get: { run: kubectlGet, maxArgs: OFFENE_LISTE, namespace: "liest", flags: [flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG], realFlags: REAL_GET },
     describe: { run: kubectlDescribe, maxArgs: OFFENE_LISTE, realFlags: REAL_DESCRIBE },
     create: { group: KUBECTL_CREATE },
-    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [REPLICAS_FLAG], realFlags: REAL_SCALE },
+    scale: { run: kubectlScale, maxArgs: OFFENE_LISTE, flags: [REPLICAS_FLAG], requiredFlags: ["--replicas"], realFlags: REAL_SCALE },
     expose: { run: kubectlExpose, maxArgs: IM_HANDLER, flags: [PORT_FLAG, flag(true, "--target-port"), flag(true, "--type")], realFlags: REAL_EXPOSE },
     delete: { run: kubectlDelete, maxArgs: OFFENE_LISTE, flags: [FILE], realFlags: REAL_DELETE },
     apply: { run: kubectlApply, maxArgs: 0, flags: [FILE], realFlags: REAL_APPLY },

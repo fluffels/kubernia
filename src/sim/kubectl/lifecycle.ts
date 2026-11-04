@@ -198,16 +198,23 @@ const createRoleBindingOf = (cluster: boolean): CreateHandler => (host, c) => {
   return typ + ".rbac.authorization.k8s.io/" + n.name + " created";
 };
 
+/** Die Ursachen von `ValidateDeploymentSpec` (apiserver `pkg/apis/apps/validation/validation.go`, in dieser Reihenfolge: zuerst Replicas,
+ *  dann Template); `create_deployment.go` `Validate` prüft beides nicht. Mehrere Ursachen meldet apimachinery als `[a, b]`. */
+function deploymentInvalid(name: string, replicas: number, images: readonly string[]): string | null {
+  const causes = [...(replicas < 0 ? ["spec.replicas: Invalid value: " + replicas + ": must be greater than or equal to 0"] : []), ...(images.length === 0 ? ["spec.template.spec.containers: Required value"] : [])];
+  return causes.length ? 'error: failed to create deployment: Deployment.apps "' + name + '" is invalid: ' + (causes.length > 1 ? "[" + causes.join(", ") + "]" : causes[0]) : null;
+}
+
 // kubectl create deployment <name> --image=<image>
 const createDeployment: CreateHandler = (host, c) => {
   const n = createName(host, c.args, "Deployment", "z.B. 'kubectl create deployment kasse --image=nginx'");
   if (typeof n === "string") return n;
   const images = c.list("--image");
   // `--image` ist Pflicht-Flag (Tabelle); ein leerer Wert zählt für cobra als gesetzt und scheitert erst am apiserver.
-  if (images.length === 0) return host._err('error: failed to create deployment: Deployment.apps "' + n.name + '" is invalid: spec.template.spec.containers: Required value');
-  if (images.length > 1) return notSimulated(host, "mehrere Container (mehrfaches '--image').", ["kubectl create deployment <name> --image=<image>"], "Ein Deployment hat in der Sim genau einen Container.");
   const replicas = replicasArg(c) ?? 1;
-  if (replicas < 0) return host._err('error: invalid argument "' + replicas + '" for "--replicas" flag', REPLICAS_TIP);
+  const invalid = deploymentInvalid(n.name, replicas, images);
+  if (invalid) return host._err(invalid, replicas < 0 ? REPLICAS_TIP : undefined);
+  if (images.length > 1) return notSimulated(host, "mehrere Container (mehrfaches '--image').", ["kubectl create deployment <name> --image=<image>"], "Ein Deployment hat in der Sim genau einen Container.");
   if (host.deployments.some(d => d.name === n.name)) return host._err('error: deployment "' + n.name + '" already exists');
   // Pod-Security-Admission: ein imperativ erzeugtes Deployment hat keinen securityContext.
   // Unter baseline/restricted wird es deshalb abgelehnt (privileged = keine Prüfung).

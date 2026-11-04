@@ -251,6 +251,7 @@ const ALL = flag(false, "-a", "--all");
 /** Die Dispatch-Tabelle: Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine
  *  Funktion oben – der Dispatcher (`dockerCommand`) bleibt ein Aufruf und wächst nicht mit dem Befehlssatz. `real` sind
  *  echte docker-Unterbefehle, die die Sim nicht kann. */
+// Kein `fehlerPraefix`: docker/cli `cli/cobra.go` (`FlagErrorFunc`) liefert den rohen Fehler als `StatusError` ohne Präfix.
 export const DOCKER: Dispatch<DockerEntry> = {
   cmd: "docker",
   table: {

@@ -27,12 +27,12 @@ function positionalArgs(spec: ArgSpec, t: readonly string[], from: number): stri
 
 /** Der Wert eines Flags über `parseCall` (die EINE Stelle, an der Flags gelesen werden); `null` ohne das Flag oder ohne Wert. */
 function valueOf(t: string[], names: string[], style: FlagStyle = "pflag"): string | null {
-  const r = parseCall(host, { cmd: "x", maxArgs: OFFENE_LISTE, style, flags: [flag(true, ...names)] }, t, 1);
+  const r = parseCall(host, { cmd: "x", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, style, flags: [flag(true, ...names)] }, t, 1);
   return typeof r === "string" ? null : r.value(...names);
 }
 
 const PF: ArgSpec = {
-  cmd: "x run", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n", "--namespace"), flag(false, "-a", "--all"), flag(false, "-d", "--detach")],
+  cmd: "x run", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n", "--namespace"), flag(false, "-a", "--all"), flag(false, "-d", "--detach")],
   hints: { "-o": "Format gibt es nicht." },
 };
 const GO: ArgSpec = { cmd: "tf apply", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-var-file"), flag(false, "-auto-approve")] };
@@ -40,7 +40,7 @@ const GO: ArgSpec = { cmd: "tf apply", maxArgs: OFFENE_LISTE, style: "goflag", f
 describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
   const seen: string[] = [];
   const spec: ArgSpec = {
-    cmd: "x get", maxArgs: OFFENE_LISTE,
+    cmd: "x get", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE,
     flags: [checkedFlag((_h, v) => { seen.push(v); return v === "bad" ? "FEHLER" : null; }, "-o", "--output"), flag(false, "-A")],
   };
   const run = (...t: string[]) => { seen.length = 0; return checkFlags(host, spec, ["x", "get", ...t], 2); };
@@ -68,7 +68,7 @@ describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
     expect(run("-o", "bad")).toBe("FEHLER");
   });
   test("ein Wert-Flag OHNE Prüfung bleibt in der Kette erlaubt (-An x)", () => {
-    const s: ArgSpec = { cmd: "x", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n"), flag(false, "-A")] };
+    const s: ArgSpec = { cmd: "x", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n"), flag(false, "-A")] };
     expect(checkFlags(host, s, ["x", "get", "-An", "a"], 2)).toBeNull();
   });
   test("ohne das Flag kein Aufruf; ein fehlender Wert bleibt 'flag needs an argument' ohne Aufruf", () => {
@@ -81,7 +81,7 @@ describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
 
 describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996)", () => {
   const spec: ArgSpec = {
-    cmd: "x make", maxArgs: OFFENE_LISTE,
+    cmd: "x make", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE,
     flags: [flag(true, "--aa", "-a"), flag(true, "--bb"), checkedFlag((_h, v) => (v === "bad" ? "WERT-FEHLER" : null), "--cc")],
     realFlags: ["--real", "-R"], requiredFlags: ["--bb", "--aa"], hints: { "--nope": "Nimm --aa.", "--real": "Echt, aber nicht simuliert." },
   };
@@ -96,7 +96,7 @@ describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996
   });
   test("kurzes Flag: „unknown shorthand flag“ mit dem Rest der Kette ab dem Zeichen", () => {
     expect(run("-Z", ...ok)).toContain("error: unknown shorthand flag: 'Z' in -Z\n");
-    const kette: ArgSpec = { cmd: "x make", maxArgs: OFFENE_LISTE, flags: [flag(false, "-a")], realFlags: [] };
+    const kette: ArgSpec = { cmd: "x make", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, flags: [flag(false, "-a")], realFlags: [] };
     expect(checkFlags(host, kette, ["x", "make", "-aZq"], 2)).toContain("error: unknown shorthand flag: 'Z' in -Zq\n");
   });
   test("ein Name aus realFlags bleibt „Nicht simuliert“ (mit Hinweis), lang und kurz", () => {
@@ -142,7 +142,7 @@ describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996
     expect(run("--real", "--cc=bad", ...ok)).toBe("WERT-FEHLER");
   });
   test("ohne realFlags bleibt das Ziel offen: jedes unbekannte Flag ist „Nicht simuliert“", () => {
-    const offen: ArgSpec = { cmd: "x make", maxArgs: OFFENE_LISTE, flags: [flag(true, "--aa")] };
+    const offen: ArgSpec = { cmd: "x make", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, flags: [flag(true, "--aa")] };
     expect(checkFlags(host, offen, ["x", "make", "--zzz", "-Z"], 2)).toContain(NS + " das Flag '--zzz'");
     expect(checkFlags(host, offen, ["x", "make", "-Z"], 2)).toContain(NS + " das Flag '-Z'");
   });
@@ -151,11 +151,11 @@ describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996
     expect(run("--real", "-R", ...ok)).toContain(NS + " das Flag '--real'");
   });
   test("ein geschlossenes Ziel ohne eigene Flags: der Ersatz-Tipp nennt „ohne Flags“", () => {
-    const leer: ArgSpec = { cmd: "x make", maxArgs: OFFENE_LISTE, flags: [], realFlags: [] };
+    const leer: ArgSpec = { cmd: "x make", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, flags: [], realFlags: [] };
     expect(checkFlags(host, leer, ["x", "make", "--zzz"], 2)).toBe("error: unknown flag: --zzz\nDer Simulator kann: 'x make' ohne Flags");
   });
   test("goflag: der Wortlaut der Go-Bibliothek", () => {
-    const go: ArgSpec = { cmd: "t plan", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-out")], realFlags: ["-real"] };
+    const go: ArgSpec = { cmd: "t plan", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-out")], realFlags: ["-real"] };
     expect(checkFlags(host, go, ["t", "plan", "-zzz"], 2)).toContain("flag provided but not defined: -zzz");
     expect(checkFlags(host, go, ["t", "plan", "--zzz=1"], 2)).toContain("flag provided but not defined: -zzz");
     expect(checkFlags(host, go, ["t", "plan", "-real"], 2)).toContain(NS + " das Flag '-real'");
@@ -171,7 +171,7 @@ describe("cliargs: geschlossene Welt (realFlags) und requiredFlags (#1678, #1996
     expect(run("-a", "x", "--bb=")).toBeNull();
   });
   test("Hinweistext folgt dem Stil: goflag hängt mit einem Strich an, pflag mit zwei", () => {
-    const go: ArgSpec = { cmd: "x make", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-out")], requiredFlags: ["-out"] };
+    const go: ArgSpec = { cmd: "x make", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, style: "goflag", flags: [flag(true, "-out")], requiredFlags: ["-out"] };
     expect(checkFlags(host, go, ["x", "make"], 2)).toBe('error: required flag(s) "out" not set\nHäng \'-out=<wert>\' an.');
     expect(run()).toContain("Häng '--aa=<wert>' an.");
   });
@@ -478,7 +478,7 @@ const call = (spec: ArgSpec, ...t: string[]) => {
   if (typeof c === "string") throw new Error(c);
   return c;
 };
-const FOLLOW: ArgSpec = { cmd: "x logs", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n", "--namespace"), flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] };
+const FOLLOW: ArgSpec = { cmd: "x logs", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n", "--namespace"), flag(false, "-f", "--follow"), flag(false, "-p", "--previous")] };
 
 describe("parseCall: Scanner", () => {
   test("`--` beendet die Flags: alles danach ist positional, auch ein -x", () => {
@@ -511,7 +511,7 @@ describe("parseCall: Scanner", () => {
     expect(call(FOLLOW).values("-n")).toEqual([]);
   });
   test("list (#1487): pflag-StringSlice – Komma-Split je Angabe, leerer Wert ergibt nichts, `a,,b` behält das leere Feld", () => {
-    const SL: ArgSpec = { cmd: "x c", maxArgs: OFFENE_LISTE, flags: [flag(true, "--verb", "-v"), flag(true, "--user")] };
+    const SL: ArgSpec = { cmd: "x c", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, flags: [flag(true, "--verb", "-v"), flag(true, "--user")] };
     expect(call(SL, "--verb=get,list", "--verb", "watch", "-v", "x").list("--verb", "-v")).toEqual(["get", "list", "watch", "x"]);
     expect(call(SL, "--verb=").list("--verb")).toEqual([]);
     expect(call(SL, "--verb=a,,b").list("--verb")).toEqual(["a", "", "b"]);
@@ -813,7 +813,7 @@ describe("dispatchSub: reiner Helfer", () => {
   const LIST: SubEntry<string> = { run: "list", maxArgs: OFFENE_LISTE, flags: [flag(true, "-n")] };
   const inner: Dispatch<SubEntry<string>> = { cmd: "x grp", table: { mb: { run: "mb", maxArgs: OFFENE_LISTE }, rb: { run: "rb", maxArgs: OFFENE_LISTE } }, real: ["sync"] };
   const d: Dispatch<SubEntry<string>> = {
-    cmd: "x",
+    cmd: "x", fehlerPraefix: "error: ",
     table: { list: LIST, ls: LIST, get: { run: "get", maxArgs: OFFENE_LISTE }, grp: { group: inner } },
     real: ["exec"],
     hints: { "-q": "Familien-Hinweis." },
@@ -959,7 +959,7 @@ describe("Familien-Köpfe: Flag davor, Tippfehler, echter nicht simulierter Unte
 
 /* ---------- maxArgs und dashAt (#1490) ---------- */
 describe("parseCall: maxArgs (zentrale Arität) und dashAt", () => {
-  const mit = (maxArgs: number, extra: Partial<ArgSpec> = {}): ArgSpec => ({ cmd: "x go", flags: [flag(false, "-a")], maxArgs, ...extra });
+  const mit = (maxArgs: number, extra: Partial<ArgSpec> = {}): ArgSpec => ({ cmd: "x go", fehlerPraefix: "error: ", flags: [flag(false, "-a")], maxArgs, ...extra });
 
   test("maxArgs 0: kein Argument ok, eines abgelehnt mit Muster 'ohne Argumente'", () => {
     expect(parseCall(host, mit(0), ["x", "go"], 2)).not.toBeTypeOf("string");
@@ -1043,7 +1043,7 @@ describe("dispatchSub: Gruppen erben Stil und Hinweise, Flags vor dem Unterbefeh
 describe("dispatchSub: Flag vor dem Unterbefehl bei realFlags", () => {
   const run = "x";
   const d: Dispatch<SubEntry<string>> = {
-    cmd: "t", flags: [flag(true, "-n")], realFlags: ["--g", "--gh"], hints: { "--gh": "Globaler Hinweis." },
+    cmd: "t", fehlerPraefix: "error: ", flags: [flag(true, "-n")], realFlags: ["--g", "--gh"], hints: { "--gh": "Globaler Hinweis." },
     table: {
       a: { run, maxArgs: 0, flags: [flag(true, "--x")], realFlags: ["--r"] },
       grp: { group: { cmd: "t grp", flags: [flag(true, "--gf")], realFlags: ["--gr"], table: { b: { run, maxArgs: 0, flags: [flag(false, "--y")], realFlags: [] } } } },
@@ -1093,7 +1093,7 @@ describe("dispatchSub: persistente Flags und Flags je Ziel", () => {
   const grp: Dispatch<SubEntry<string>> = { cmd: "x grp", table: { mb: MB }, hints: { "--g": "Gruppen-Hinweis." } };
   const GRP = { group: grp };
   const d: Dispatch<SubEntry<string>> = {
-    cmd: "x",
+    cmd: "x", fehlerPraefix: "error: ",
     flags: [flag(true, "-n", "--namespace"), flag(false, "-v")],
     hints: { "--z": "Familien-Hinweis.", "--f": "Familien-Hinweis F." },
     table: { a: A, b: B, grp: GRP, gruppe: GRP },
@@ -1164,7 +1164,7 @@ describe("dispatchSub: persistente Flags und Flags je Ziel", () => {
 describe("cliargs: Ganzzahl-Flags (intFlag) gehören in den Scan (#1996)", () => {
   const TIP = "Eine ganze Zahl, z.B. '--n=2'.";
   const spec: ArgSpec = {
-    cmd: "x make", maxArgs: OFFENE_LISTE, flags: [intFlag(TIP, "-n", "--n"), flag(true, "--bb")], requiredFlags: ["--bb"],
+    cmd: "x make", fehlerPraefix: "error: ", maxArgs: OFFENE_LISTE, flags: [intFlag(TIP, "-n", "--n"), flag(true, "--bb")], requiredFlags: ["--bb"],
   };
   const run = (...t: string[]) => checkFlags(host, spec, ["x", "make", ...t], 2);
   const bad = (v: string) => 'error: invalid argument "' + v + '" for "-n, --n" flag: strconv.ParseInt: parsing "' + v + '": invalid syntax\n' + TIP;
@@ -1199,9 +1199,9 @@ describe("cliargs: Dispatch.realFlags erreicht das geschlossene Blatt, die Famil
   const run = (..._a: string[]) => "";
   const geschlossen: SubEntry<typeof run> = { run, maxArgs: OFFENE_LISTE, realFlags: ["--leaf"] };
   const offen: SubEntry<typeof run> = { run, maxArgs: OFFENE_LISTE };
-  const tief: Dispatch<SubEntry<typeof run>> = { cmd: "x mid deep", table: { g: geschlossen, o: offen } };
-  const mid: Dispatch<SubEntry<typeof run>> = { cmd: "x mid", table: { deep: { group: tief } }, realFlags: ["--mid"] };
-  const d: Dispatch<SubEntry<typeof run>> = { cmd: "x", table: { mid: { group: mid } }, realFlags: ["--fam"] };
+  const tief: Dispatch<SubEntry<typeof run>> = { cmd: "x mid deep", fehlerPraefix: "error: ", table: { g: geschlossen, o: offen } };
+  const mid: Dispatch<SubEntry<typeof run>> = { cmd: "x mid", fehlerPraefix: "error: ", table: { deep: { group: tief } }, realFlags: ["--mid"] };
+  const d: Dispatch<SubEntry<typeof run>> = { cmd: "x", fehlerPraefix: "error: ", table: { mid: { group: mid } }, realFlags: ["--fam"] };
   const lauf = (...t: string[]) => dispatchSub(host, d, ["x", ...t], 1);
 
   test("Familien- und Ebenen-Flags gelten zwei Ebenen tiefer im geschlossenen Blatt als „Nicht simuliert“", () => {
@@ -1209,18 +1209,59 @@ describe("cliargs: Dispatch.realFlags erreicht das geschlossene Blatt, die Famil
     expect(lauf("mid", "deep", "g", "--zzz")).toContain("error: unknown flag: --zzz");
   });
   test("ein geschlossenes Blatt unter einer Ebene ohne eigene Liste: nur seine Liste gilt", () => {
-    const ohne: Dispatch<SubEntry<typeof run>> = { cmd: "y", table: { g: geschlossen } };
+    const ohne: Dispatch<SubEntry<typeof run>> = { cmd: "y", fehlerPraefix: "error: ", table: { g: geschlossen } };
     expect(dispatchSub(host, ohne, ["y", "g", "--leaf"], 1)).toContain(NS + " das Flag '--leaf'");
     expect(dispatchSub(host, ohne, ["y", "g", "--fam"], 1)).toContain("error: unknown flag: --fam");
   });
   test("die Liste einer Gruppen-Ebene gilt auch unter einer Wurzel OHNE Liste", () => {
-    const g2: Dispatch<SubEntry<typeof run>> = { cmd: "y mid", realFlags: ["--mid"], table: { g: geschlossen } };
-    const wurzel: Dispatch<SubEntry<typeof run>> = { cmd: "y", table: { mid: { group: g2 } } };
+    const g2: Dispatch<SubEntry<typeof run>> = { cmd: "y mid", fehlerPraefix: "error: ", realFlags: ["--mid"], table: { g: geschlossen } };
+    const wurzel: Dispatch<SubEntry<typeof run>> = { cmd: "y", fehlerPraefix: "error: ", table: { mid: { group: g2 } } };
     expect(dispatchSub(host, wurzel, ["y", "mid", "g", "--mid"], 1)).toContain(NS + " das Flag '--mid'");
     expect(dispatchSub(host, wurzel, ["y", "mid", "g", "--zzz"], 1)).toContain("error: unknown flag: --zzz");
   });
   test("ein Blatt ohne eigene Liste bleibt offen, auch mit Familien-Liste", () => {
     expect(lauf("mid", "deep", "o", "--zzz")).toContain(NS + " das Flag '--zzz'");
     expect(lauf("mid", "deep", "o", "--fam")).toContain(NS + " das Flag '--fam'");
+  });
+});
+
+describe("cliargs: fehlerPraefix der Familie vor jedem Bibliotheksfehler (#2001)", () => {
+  const bool = (praefix?: string): ArgSpec => ({ cmd: "x logs", maxArgs: OFFENE_LISTE, fehlerPraefix: praefix, flags: [flag(true, "-n", "--n"), flag(false, "-f", "--follow")], requiredFlags: ["--n"] });
+  const PARSE = 'invalid argument "maybe" for "-f, --follow" flag: strconv.ParseBool: parsing "maybe": invalid syntax';
+  const fehler = (spec: ArgSpec, ...t: string[]) => parseCall(host, spec, ["x", "logs", ...t], 2) as string;
+
+  test("Bool-Parsefehler: mit Präfix der Familie, ohne Angabe ohne Präfix", () => {
+    expect(fehler(bool("error: "), "--follow=maybe")).toBe("error: " + PARSE);
+    expect(fehler(bool("Error: "), "--follow=maybe")).toBe("Error: " + PARSE);
+    expect(fehler(bool(), "--follow=maybe")).toBe(PARSE);
+  });
+  test("das Präfix gilt für fehlenden Wert, Unbekanntes, Ganzzahl und Pflicht-Flag", () => {
+    const geschlossen: ArgSpec = { ...bool("Error: "), realFlags: [], flags: [intFlag("Zahl.", "-i", "--i"), flag(true, "-n", "--n"), flag(false, "-f", "--follow")] };
+    expect(fehler(geschlossen, "-n")).toBe("Error: flag needs an argument: 'n' in -n");
+    expect(fehler(geschlossen, "--zzz")).toMatch(/^Error: unknown flag: --zzz/);
+    expect(fehler(geschlossen, "-z")).toMatch(/^Error: unknown shorthand flag: 'z' in -z/);
+    expect(fehler(geschlossen, "--i=a")).toMatch(/^Error: invalid argument "a" for "-i, --i" flag/);
+    expect(fehler({ ...geschlossen, requiredFlags: ["--n"] }, "-f")).toMatch(/^Error: required flag\(s\) "n" not set/);
+    expect(fehler({ ...bool(), flags: [flag(true, "-n", "--n")] }, "-n")).toBe("flag needs an argument: 'n' in -n");
+  });
+  test("goflag: der Bool-Fehler hat den Go-Text von flag.Parse, ohne Präfix", () => {
+    const tf: ArgSpec = { cmd: "tf x", maxArgs: OFFENE_LISTE, style: "goflag", fehlerPraefix: "error: ", flags: [flag(false, "-force")] };
+    expect(parseCall(host, tf, ["tf", "x", "-force=x"], 2)).toBe('invalid boolean value "x" for -force: parse error');
+  });
+  test("gültige Bool-Werte bleiben gültig (keine neue Ablehnung)", () => {
+    for (const t of [["-f"], ["--follow=true"], ["--follow=false"], ["-f=1"]]) expect(typeof fehler({ ...bool("error: "), requiredFlags: [] }, ...t)).toBe("object");
+  });
+  test("Gruppen und das Flag vor dem Unterbefehl erben das Präfix der Eltern", () => {
+    const leaf = { run: "r", maxArgs: OFFENE_LISTE, flags: [flag(false, "-f", "--follow")] } as const;
+    const d: Dispatch<SubEntry<string>> = { cmd: "x", fehlerPraefix: "Error: ", flags: [flag(true, "-n")], table: { grp: { group: { cmd: "x grp", table: { a: leaf } } }, b: leaf } };
+    expect(dispatchSub(host, d, ["x", "grp", "a", "--follow=maybe"], 1)).toBe("Error: " + PARSE);
+    expect(dispatchSub(host, d, ["x", "b", "--follow=maybe"], 1)).toBe("Error: " + PARSE);
+    expect(dispatchSub(host, d, ["x", "-n"], 1)).toBe("Error: flag needs an argument: 'n' in -n");
+    expect(dispatchSub(host, { ...d, fehlerPraefix: undefined }, ["x", "grp", "a", "--follow=maybe"], 1)).toBe(PARSE);
+  });
+  test("ein eigener Wert des Eintrags gewinnt gegen den der Ebene", () => {
+    const leaf = { run: "r", maxArgs: OFFENE_LISTE, fehlerPraefix: "E: ", flags: [flag(false, "-f", "--follow")] } as const;
+    const d: Dispatch<SubEntry<string>> = { cmd: "x", fehlerPraefix: "Error: ", table: { b: leaf } };
+    expect(dispatchSub(host, d, ["x", "b", "--follow=maybe"], 1)).toBe("E: " + PARSE);
   });
 });

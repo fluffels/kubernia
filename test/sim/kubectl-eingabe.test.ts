@@ -454,11 +454,11 @@ describe("create deployment --replicas", () => {
     sim.exec("kubectl create deploy web --image=nginx --replicas=2");
     expect(sim.deployments[0].pods).toHaveLength(2);
   });
-  test.each(["abc", "-1", "1.5", ""])("--replicas=%j ist ungültig und legt nichts an", v => {
+  test.each(["abc", "1.5", ""])("--replicas=%j ist ungültig und legt nichts an", v => {
     const sim = freshSim();
     const r = sim.exec(`kubectl create deployment web --image=nginx --replicas=${v}`);
     expect(r.error).toBe(true);
-    expect(r.output).toContain('invalid argument "' + v + '" for "' + (v === "-1" ? "--replicas" : "-r, --replicas") + '" flag');
+    expect(r.output).toContain('invalid argument "' + v + '" for "-r, --replicas" flag');
     expect(sim.deployments).toHaveLength(0);
   });
   test("Int-Parsefehler kommen vor Pflicht-Flag und Namensprüfung (#1996): ohne Name und ohne Image, auch mit -r", () => {
@@ -669,7 +669,10 @@ describe("kubectl: logs -f/-p, -A, --replicas über cliargs", () => {
     expect(rep()).toBe(2);
     expect(s.exec("kubectl scale deployment web --replicas=0").error).toBe(false);
     expect(rep()).toBe(0);
-    expect(s.exec("kubectl scale deployment web").output).toContain("So nicht ganz");
+    const ohne = s.exec("kubectl scale deployment web");
+    expect(ohne.error).toBe(true);
+    expect(ohne.output?.split("\n")[0]).toBe('error: required flag(s) "replicas" not set');
+    expect(rep()).toBe(0);
   });
   test("create deployment --replicas: gleicher Parser, 3.5 und Text abgelehnt, nichts angelegt", () => {
     const s = freshSim();
@@ -678,6 +681,34 @@ describe("kubectl: logs -f/-p, -A, --replicas über cliargs", () => {
     expect(s.exec("kubectl create deployment a --image=nginx --replicas=-1").error).toBe(true);
     expect(s.deployments.some(d => d.name === "a")).toBe(false);
     expect(s.exec("kubectl create deployment a --image=nginx --replicas=2").error).toBe(false);
+  });
+  // #2001: create_deployment.go prüft Replicas nicht; erst der apiserver (ValidateDeploymentSpec) meldet den Wert.
+  const INVALID = 'error: failed to create deployment: Deployment.apps "a" is invalid: ';
+  const NEG = "spec.replicas: Invalid value: -1: must be greater than or equal to 0";
+  test("create deployment --replicas=-1: der Text des apiservers statt eines erfundenen pflag-Fehlers (#2001)", () => {
+    for (const cmd of ["kubectl create deployment a --image=x --replicas=-1", "kubectl create deployment a --image=x -r -1", "kubectl create deployment a --image=x -r=-1"]) {
+      const s = freshSim();
+      const r = s.exec(cmd);
+      expect(r.error, cmd).toBe(true);
+      expect(r.output?.split("\n")[0], cmd).toBe(INVALID + NEG);
+      expect(s.deployments.some(d => d.name === "a"), cmd).toBe(false);
+    }
+  });
+  test("create deployment --replicas=-1 auf einen bestehenden Namen: invalid kommt vor already exists (#2001)", () => {
+    const s = freshSim();
+    s.exec("kubectl create deployment a --image=x");
+    expect(s.exec("kubectl create deployment a --image=x --replicas=-1").output?.split("\n")[0]).toBe(INVALID + NEG);
+  });
+  test("create deployment: zwei Ursachen als Liste in der Reihenfolge von ValidateDeploymentSpec (#2001)", () => {
+    const r = freshSim().exec("kubectl create deployment a --image= --replicas=-1");
+    expect(r.output?.split("\n")[0]).toBe(INVALID + "[" + NEG + ", spec.template.spec.containers: Required value]");
+  });
+  test("create deployment --replicas=0 und gültige Werte bleiben gültig (#2001)", () => {
+    const s = freshSim();
+    expect(s.exec("kubectl create deployment a --image=x --replicas=0").error).toBe(false);
+    expect(s.deployments.find(d => d.name === "a")?.replicas).toBe(0);
+    expect(s.exec("kubectl create deployment b --image=x -r 2").error).toBe(false);
+    expect(s.deployments.find(d => d.name === "b")?.replicas).toBe(2);
   });
 });
 

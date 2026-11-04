@@ -416,7 +416,8 @@ const HELM_REPO: Dispatch<SubEntry<HelmHandler>> = {
   real: ["index", "remove"],
 };
 
-export const HELM: Dispatch<SubEntry<HelmHandler>> = { cmd: "helm", table: {
+// Beleg: helm `pkg/cmd/root.go` setzt nur `SilenceUsage`, also druckt cobra seinen Standard `Error: `.
+export const HELM: Dispatch<SubEntry<HelmHandler>> = { cmd: "helm", fehlerPraefix: "Error: ", table: {
   repo: { group: HELM_REPO },
   search: { group: HELM_SEARCH },
   create: { run: helmCreate, maxArgs: 1 },

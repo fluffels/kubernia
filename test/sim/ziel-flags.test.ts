@@ -303,8 +303,8 @@ describe("kubectl -n: persistentes Flag der Wurzel (#1720)", () => {
 
 describe("Namespace-Wache: -n <fremd> wird nie still auf default angewendet (#1720)", () => {
   const FREMD = "Nicht simuliert: der Namespace 'prod' bei '";
-  // Pflicht-Flags (cobra prüft sie vor Run, also vor der Namespace-Wache) bekommen einen Wert, sonst käme ihr Fehler zuerst (#1989).
-  test.each(EINDEUTIG.map(b => [b.cmd, [...b.tokens, ...(b.entry.requiredFlags ?? []).map(f => f + "=x")], b.entry.namespace] as const))("%s (Markierung: %s)", (cmd, tokens, bezug) => {
+  // Pflicht-Flags (cobra prüft sie vor Run, also vor der Namespace-Wache) bekommen einen Wert (eine Zahl, damit auch Ganzzahl-Flags passen), sonst käme ihr Fehler zuerst (#1989).
+  test.each(EINDEUTIG.map(b => [b.cmd, [...b.tokens, ...(b.entry.requiredFlags ?? []).map(f => f + "=1")], b.entry.namespace] as const))("%s (Markierung: %s)", (cmd, tokens, bezug) => {
     const out = lauf("kubectl " + tokens.join(" ") + " -n prod").out;
     expect(out.includes(FREMD + cmd + "'.")).toBe(!bezug);
     expect(out.includes(FREMD)).toBe(!bezug);
