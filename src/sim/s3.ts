@@ -20,6 +20,7 @@
  * S3Host-Interface; kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { S3Bucket, S3Object } from "./state";
+import { AWS_ARGPARSE } from "./flag-fehlertexte";
 import { flag, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 /** Was die aws-s3-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). */
@@ -58,9 +59,10 @@ const S3: Dispatch<SubEntry<S3Handler>> = { cmd: "aws s3", table: {
 };
 
 /** Die `aws`-Ebene: nur der Dienst `s3` ist simuliert, die anderen echten Dienste sind „nicht simuliert“. */
-// Kein `fehlerPraefix` (#2001): der echte Text des Werkzeugs ist hier nicht belegt, also erfindet die Sim kein Präfix.
+// Beleg (#2006): aws `argparser.py` (argparse mit eigenem `error`), `flag-fehlertexte.ts`; `aws s3` erbt es.
 export const AWS: Dispatch<SubEntry<S3Handler>> = {
   cmd: "aws",
+  fehlerTexte: AWS_ARGPARSE,
   table: { s3: { group: S3 } },
   real: ["ec2", "iam", "sts", "s3api", "lambda", "ecr", "ecs", "eks", "dynamodb", "rds", "sqs", "sns", "cloudformation", "cloudwatch", "logs", "route53", "kms", "secretsmanager", "ssm", "configure"],
 };

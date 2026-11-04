@@ -17,7 +17,7 @@ import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, rep
 import { findClusterPod } from "../pods";
 import { argoReconcile, cloneChildSpec } from "../argocd";
 import { assertNever } from "../../core/assert";
-import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
+import { isResourceName, rfc1123ErrorText, rfc1123Ursache, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
 import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
@@ -83,7 +83,7 @@ const SIMPLE_DELETABLE: ReadonlyMap<ResourcePlural, (host: KubectlHost) => { nam
  * `Call` (#1487): `c.args` sind die Namen hinter dem Typ (`web`), die Flags des Ziels stehen überall. */
 type CreateHandler = (host: KubectlHost, c: Call) => string;
 
-/** Der EINE Namens-Vorspann aller create-Handler: genau ein NAME (sonst der echte kubectl-Text samt deutschem
+/** Der EINE Namens-Vorspann aller create-Handler außer deployment (das den Namen mit den Spec-Gründen zusammen meldet, #2006): genau ein NAME (sonst der echte kubectl-Text samt deutschem
  *  Muster) und gültig nach DNS-1123. `names` sind die Argumente hinter dem Typ; ein String ist die Fehlerausgabe. */
 function createName(host: KubectlHost, names: readonly string[], kind: string, muster: string, clientCheck?: () => string | null): { name: string } | string {
   const arity = exactlyOneName(host, names, muster);
@@ -198,22 +198,26 @@ const createRoleBindingOf = (cluster: boolean): CreateHandler => (host, c) => {
   return typ + ".rbac.authorization.k8s.io/" + n.name + " created";
 };
 
-/** Die Ursachen von `ValidateDeploymentSpec` (apiserver `pkg/apis/apps/validation/validation.go`, in dieser Reihenfolge: zuerst Replicas,
- *  dann Template); `create_deployment.go` `Validate` prüft beides nicht. Mehrere Ursachen meldet apimachinery als `[a, b]`. */
-function deploymentInvalid(name: string, replicas: number, images: readonly string[]): string | null {
-  const causes = [...(replicas < 0 ? ["spec.replicas: Invalid value: " + replicas + ": must be greater than or equal to 0"] : []), ...(images.length === 0 ? ["spec.template.spec.containers: Required value"] : [])];
-  return causes.length ? 'error: failed to create deployment: Deployment.apps "' + name + '" is invalid: ' + (causes.length > 1 ? "[" + causes.join(", ") + "]" : causes[0]) : null;
+/** Die Ursachen von `ValidateDeployment` (apiserver `pkg/apis/apps/validation/validation.go`, in dieser Reihenfolge: zuerst `ObjectMeta` (Name), dann Spec:
+ *  Replicas, dann Template); `create_deployment.go` `Validate` prüft nichts davon, `Run` umhüllt den Fehler mit `failed to create deployment`.
+ *  Mehrere Ursachen meldet apimachinery `ToAggregate` als `[a, b]`. */
+function deploymentInvalid(host: KubectlHost, name: string, replicas: number, images: readonly string[]): string | null {
+  const badName = !isResourceName(name);
+  const causes = [...(badName ? [rfc1123Ursache(name)] : []), ...(replicas < 0 ? ["spec.replicas: Invalid value: " + replicas + ": must be greater than or equal to 0"] : []), ...(images.length === 0 ? ["spec.template.spec.containers: Required value"] : [])];
+  if (!causes.length) return null;
+  return host._err('error: failed to create deployment: Deployment.apps "' + name + '" is invalid: ' + (causes.length > 1 ? "[" + causes.join(", ") + "]" : causes[0]), badName ? RFC1123_TIP : replicas < 0 ? REPLICAS_TIP : undefined);
 }
 
 // kubectl create deployment <name> --image=<image>
 const createDeployment: CreateHandler = (host, c) => {
-  const n = createName(host, c.args, "Deployment", "z.B. 'kubectl create deployment kasse --image=nginx'");
-  if (typeof n === "string") return n;
+  const arity = exactlyOneName(host, c.args, "z.B. 'kubectl create deployment kasse --image=nginx'");
+  if (arity) return arity;
+  const n = { name: c.args[0] };
   const images = c.list("--image");
   // `--image` ist Pflicht-Flag (Tabelle); ein leerer Wert zählt für cobra als gesetzt und scheitert erst am apiserver.
   const replicas = replicasArg(c) ?? 1;
-  const invalid = deploymentInvalid(n.name, replicas, images);
-  if (invalid) return host._err(invalid, replicas < 0 ? REPLICAS_TIP : undefined);
+  const invalid = deploymentInvalid(host, n.name, replicas, images);
+  if (invalid) return invalid;
   if (images.length > 1) return notSimulated(host, "mehrere Container (mehrfaches '--image').", ["kubectl create deployment <name> --image=<image>"], "Ein Deployment hat in der Sim genau einen Container.");
   if (host.deployments.some(d => d.name === n.name)) return host._err('error: deployment "' + n.name + '" already exists');
   // Pod-Security-Admission: ein imperativ erzeugtes Deployment hat keinen securityContext.

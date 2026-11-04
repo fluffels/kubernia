@@ -14,6 +14,7 @@
 import { DEFAULT_NAMESPACE, isHeadlessService, type ServiceRes } from "./state";
 import { parseServiceName, resolveService } from "./dns";
 import { serviceBackends, readyBackends, KUBERNETES_SERVICE, type EndpointsHost } from "./endpoints";
+import { CURL_GETPARAM } from "./flag-fehlertexte";
 import { parseCall, notSimulated, flag, checkedFlag, isFlagToken, type ArgSpec, type Call, type ErrHost } from "./cliargs";
 
 const HINT_INSECURE = "TLS simuliert der Simulator nicht: https:// prüft nur Port 443.";
@@ -207,9 +208,10 @@ function checkOutput(host: ErrHost, value: string): string | null {
 
 /** curl-Flags. -S, -v, -I, -i, -H, -X und -d werden angenommen, ändern aber nichts (-s nur ohne -o; Grenzen curl-antwort und
  *  curl-anfrage): jeder Dienst antwortet gleich. -o schreibt die Antwort in eine Datei. */
-// Kein `fehlerPraefix` (#2001): der echte Text des Werkzeugs ist hier nicht belegt, also erfindet die Sim kein Präfix.
+// Beleg (#2006): curl `tool_getparam.c` (`option %s: %s`) und `helpf`, `flag-fehlertexte.ts`.
 export const CURL_ARGS: ArgSpec = {
   cmd: "curl",
+  fehlerTexte: CURL_GETPARAM,
   maxArgs: 1,
   flags: [
     flag(false, "-s", "--silent"), flag(false, "-S", "--show-error"), flag(false, "-v", "--verbose"),

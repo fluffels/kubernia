@@ -21,6 +21,7 @@
  */
 import type { Container } from "./state";
 import { randSuffix, table, suggest } from "./util";
+import { dockerFehler } from "./flag-fehlertexte";
 import { flag, isFlagToken, dispatchSub, targetOutcome, OFFENE_LISTE, type Dispatch, type Call, type SubEntry } from "./cliargs";
 import { hashStr, hashHex } from "../core/rng";
 
@@ -251,18 +252,19 @@ const ALL = flag(false, "-a", "--all");
 /** Die Dispatch-Tabelle: Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine
  *  Funktion oben – der Dispatcher (`dockerCommand`) bleibt ein Aufruf und wächst nicht mit dem Befehlssatz. `real` sind
  *  echte docker-Unterbefehle, die die Sim nicht kann. */
-// Kein `fehlerPraefix`: docker/cli `cli/cobra.go` (`FlagErrorFunc`) liefert den rohen Fehler als `StatusError` ohne Präfix.
+// Kein `fehlerPraefix`: docker/cli `cli/cobra.go` (`FlagErrorFunc`) liefert den rohen Fehler als `StatusError` ohne Präfix, aber mit Usage-Block
+// (#2006): die `Use`-Zeilen stehen in docker/cli `cli/command/{image,container}/*.go`. `build` ist der buildx-Alias und behält den Stil-Text (Grenze).
 export const DOCKER: Dispatch<DockerEntry> = {
   cmd: "docker",
   table: {
-    pull: { run: dockerPull, maxArgs: 1 },
+    pull: { run: dockerPull, maxArgs: 1, fehlerTexte: dockerFehler("[OPTIONS] NAME[:TAG|@DIGEST]") },
     build: { run: dockerBuild, maxArgs: 1, flags: [flag(true, "-t", "--tag"), flag(true, "-f", "--file")] },
-    tag: { run: dockerTag, maxArgs: 2 },
-    images: { run: dockerImages, maxArgs: 0 },
-    run: { run: dockerRun, maxArgs: OFFENE_LISTE, flags: [flag(true, "--name"), flag(false, "-d", "--detach")], hints: RUN_HINTS, stopAtPositional: true },
-    ps: { run: dockerPs, maxArgs: 0, flags: [ALL], hints: { "-q": "Nur die IDs zeigt der Simulator nicht – 'docker ps' zeigt die Tabelle mit ID und Namen." } },
-    stop: { run: dockerStop, maxArgs: OFFENE_LISTE },
-    rm: { run: dockerRm, maxArgs: OFFENE_LISTE, hints: { "-f": "Erzwingen gibt es nicht – erst 'docker stop <name>', dann 'docker rm <name>'." } },
+    tag: { run: dockerTag, maxArgs: 2, fehlerTexte: dockerFehler("SOURCE_IMAGE[:TAG] TARGET_IMAGE[:TAG]") },
+    images: { run: dockerImages, maxArgs: 0, fehlerTexte: dockerFehler("[OPTIONS] [REPOSITORY[:TAG]]") },
+    run: { run: dockerRun, maxArgs: OFFENE_LISTE, flags: [flag(true, "--name"), flag(false, "-d", "--detach")], hints: RUN_HINTS, stopAtPositional: true, fehlerTexte: dockerFehler("[OPTIONS] IMAGE [COMMAND] [ARG...]") },
+    ps: { run: dockerPs, maxArgs: 0, flags: [ALL], fehlerTexte: dockerFehler("[OPTIONS]"), hints: { "-q": "Nur die IDs zeigt der Simulator nicht – 'docker ps' zeigt die Tabelle mit ID und Namen." } },
+    stop: { run: dockerStop, maxArgs: OFFENE_LISTE, fehlerTexte: dockerFehler("[OPTIONS] CONTAINER [CONTAINER...]") },
+    rm: { run: dockerRm, maxArgs: OFFENE_LISTE, fehlerTexte: dockerFehler("[OPTIONS] CONTAINER [CONTAINER...]"), hints: { "-f": "Erzwingen gibt es nicht – erst 'docker stop <name>', dann 'docker rm <name>'." } },
   },
   real: ["exec", "logs", "inspect", "start", "restart", "kill", "rmi", "push", "login", "logout", "network", "volume", "compose", "cp", "commit", "save", "load", "export", "import", "history", "info", "version", "search", "top", "stats", "pause", "unpause", "rename", "wait", "attach", "events", "diff", "port", "update", "create", "system", "container", "image", "builder", "buildx", "context", "manifest", "plugin", "swarm", "service", "stack", "node", "secret", "config", "trust"],
 };

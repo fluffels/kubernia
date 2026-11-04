@@ -11,6 +11,9 @@
  * (jedes unbekannte Flag ist „Nicht simuliert“). Eine Ebene mit `Dispatch.realFlags` (kubectl) meldet ein Flag vor dem Unterbefehl, das weder
  * global noch an einem Ziel darunter bekannt ist, als `unknown flag` (#1998). Ausnahmen sind im Tabellen-Eintrag kommentiert.
  *
+ * Der Wortlaut eines Werkzeugs mit eigener Flag-Bibliothek (git, aws, curl) und seine Zusatzzeilen (docker, kubeadm, terraform) stehen in
+ * `flag-fehlertexte.ts` (`fehlerTexte`, #2006).
+ *
  * Zwei Schreibweisen-Stile: `pflag` (kubectl, docker, helm, argocd, glab: `--x=v`, `--x v`, kurz `-xv`,
  * Ketten kurzer Bool-Flags `-aq`) und `goflag` (terraform, Go-Paket `flag`: `-x=v`, `-x v`, `--x` ≙ `-x`,
  * der Name ist alles vor dem `=`, also `-out=plan` ≠ `-o`).
@@ -21,8 +24,9 @@
  * `--` beendet die Flags, Bool-Flags werten `=true|false` aus (`strconv.ParseBool`), Ketten `-fp` werden je Zeichen
  * gelesen, ein Wert-Flag in der Kette schluckt den Rest (`-nfoo` setzt kein `-f`), der LETZTE Wert gewinnt.
  *
- * Blattmodul (pure Domäne, importiert nur ./util): jede Familie darf es importieren, ohne Zyklus. */
+ * Blattmodul (pure Domäne, importiert nur ./util und, nur als Typen, ./flag-fehlertexte): jede Familie darf es importieren, ohne Zyklus. */
 import { suggest } from "./util";
+import type { FlagFehler, FlagFehlerTexte, ScanFehler } from "./flag-fehlertexte";
 
 /** Was die Prüfung vom Host braucht: die Fehlerausgabe. */
 export interface ErrHost { _err(msg: string, tip?: string): string }
@@ -59,6 +63,9 @@ export interface ArgSpec {
   /** Was das echte Werkzeug vor einen Flag-Fehler der Bibliothek setzt (#2001): `error: ` (kubectl, kubeadm, git), `Error: ` (helm, argocd).
    *  Ohne Angabe gibt es kein Präfix, damit kein Text erfunden wird. */
   readonly fehlerPraefix?: string;
+  /** Der Wortlaut und die Zusatzzeilen eines Werkzeugs mit eigener Flag-Bibliothek (#2006, `flag-fehlertexte.ts`): git, aws s3, curl,
+   *  docker (Usage-Block), kubeadm (Stacktrace-Zeile), terraform (Diagnose-Rahmen). Ohne Angabe gilt der Stil-Text samt `fehlerPraefix`. */
+  readonly fehlerTexte?: FlagFehlerTexte;
   /** Lernhinweise je Flag-Name (`-o`) für Flags, die Spieler aus dem echten Werkzeug kennen. */
   readonly hints?: Readonly<Record<string, string>>;
   /** Echte Flags, die die Sim nicht auswertet (gegen die Quelle belegt, #1996): „Nicht simuliert“. Mit dieser Liste ist das Ziel eine
@@ -125,17 +132,15 @@ function findSpec(specs: readonly FlagSpec[], name: string): FlagSpec | undefine
 }
 
 interface Hit { readonly spec: FlagSpec; readonly value: string | null }
-type ScanError =
-  | { kind: "unknown"; name: string; shorthands?: string }
-  | { kind: "missing"; name: string }
-  | { kind: "bool"; name: string; label: string; value: string }
-  | { kind: "int"; name: string; label: string; value: string; tip: string };
+type ScanError = ScanFehler;
 interface Walk {
   hits: Hit[]; entries: { tok: string; at: number }[]; error: ScanError | null; dashAt: number | null;
   /** Das erste echte, nicht simulierte Flag eines geschlossenen Ziels: meldet erst `firstError`, nach allen echten Fehlern. */
   unsimulated: Extract<ScanError, { kind: "unknown" }> | null;
   /** Das erste Hilfe-Flag (`-h`, `--help`) eines geschlossenen Ziels, an jeder Position: es geht den Pflicht-Flags und Wertprüfern vor (cobra). */
   help: Extract<ScanError, { kind: "unknown" }> | null;
+  /** `FlagFehlerTexte.boolWertEgal`: ein langes Bool-Flag nimmt jeden angeklebten Wert an und ignoriert ihn (curl; der Treffer trägt keinen Wert), statt ihn als `true/false` zu prüfen. */
+  boolWertEgal: boolean;
 }
 interface Step { used: boolean; error: ScanError | null }
 
@@ -150,6 +155,7 @@ function take(flags: readonly FlagSpec[], name: string, attached: string | null,
     w.hits.push({ spec: s, value: v });
     return { used: attached === null, error: null };
   }
+  if (attached !== null && w.boolWertEgal && name.startsWith("--")) { w.hits.push({ spec: s, value: null }); return { used: false, error: null }; }
   if (attached !== null && parseBool(attached) === null) return { used: false, error: { kind: "bool", name, label: s.names.join(", "), value: attached } };
   w.hits.push({ spec: s, value: attached });
   return { used: false, error: null };
@@ -189,7 +195,7 @@ function noteError(spec: ArgSpec, w: Walk, e: ScanError): void {
  *  gemerkt, der Scan läuft weiter (so bleiben die Positionsargumente auch bei einem unbekannten Flag lesbar). */
 function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
   const style = styleOf(spec);
-  const w: Walk = { hits: [], entries: [], error: null, dashAt: null, unsimulated: null, help: null };
+  const w: Walk = { hits: [], entries: [], error: null, dashAt: null, unsimulated: null, help: null, boolWertEgal: spec.fehlerTexte?.boolWertEgal === true };
   for (let i = from; i < t.length; i++) {
     const tok = t[i];
     const rest = restFrom(spec, tok, i);
@@ -207,9 +213,17 @@ function walk(spec: ArgSpec, t: readonly string[], from: number): Walk {
 
 const praefix = (spec: ArgSpec) => spec.fehlerPraefix ?? "";
 
+/** Die Fehlerausgabe eines Flag-Fehlers (#2006): der Wortlaut des Werkzeugs, sonst der Stil-Text (`standard`), darum die Zusatzzeilen des Werkzeugs. */
+function flagError(host: ErrHost, spec: ArgSpec, f: FlagFehler, standard: string, tip?: string): string {
+  const t = spec.fehlerTexte;
+  const text = t?.wortlaut?.(f, spec.cmd) ?? standard;
+  return host._err(t?.rahmen ? t.rahmen(text, spec.cmd, f.kind) : text, tip);
+}
+
 function missingValue(host: ErrHost, spec: ArgSpec, name: string): string {
-  if (styleOf(spec) === "goflag") return host._err("flag needs an argument: " + name);
-  return host._err(praefix(spec) + "flag needs an argument: " + (name.startsWith("--") ? name : "'" + name.slice(1) + "' in " + name));
+  const standard = styleOf(spec) === "goflag" ? "flag needs an argument: " + name
+    : praefix(spec) + "flag needs an argument: " + (name.startsWith("--") ? name : "'" + name.slice(1) + "' in " + name);
+  return flagError(host, spec, { kind: "missing", name }, standard);
 }
 
 function flagList(specs: readonly FlagSpec[]): string[] {
@@ -230,9 +244,9 @@ const flagsKann = (spec: ArgSpec) => spec.flags.length ? "Flags: " + flagList(sp
  *  `unknown shorthand flag: 'x' in -xq`, goflag `flag provided but not defined: -x`. */
 function unknownFlag(host: ErrHost, spec: ArgSpec, e: { name: string; shorthands?: string }): string {
   const tip = spec.hints?.[e.name] ?? "Der Simulator kann: " + flagsKann(spec);
-  if (styleOf(spec) === "goflag") return host._err("flag provided but not defined: " + e.name, tip);
-  if (e.shorthands) return host._err(praefix(spec) + "unknown shorthand flag: '" + e.shorthands[0] + "' in -" + e.shorthands, tip);
-  return host._err(praefix(spec) + "unknown flag: " + e.name, tip);
+  const standard = styleOf(spec) === "goflag" ? "flag provided but not defined: " + e.name
+    : praefix(spec) + (e.shorthands ? "unknown shorthand flag: '" + e.shorthands[0] + "' in -" + e.shorthands : "unknown flag: " + e.name);
+  return flagError(host, spec, { kind: "unknown", ...e }, standard, tip);
 }
 
 function rejectFlag(host: ErrHost, spec: ArgSpec, e: { name: string; shorthands?: string }): string {
@@ -243,16 +257,21 @@ function rejectFlag(host: ErrHost, spec: ArgSpec, e: { name: string; shorthands?
 }
 
 function intError(host: ErrHost, spec: ArgSpec, e: Extract<ScanError, { kind: "int" }>): string {
-  if (styleOf(spec) === "goflag") return host._err('invalid value "' + e.value + '" for flag ' + e.name + ": parse error", e.tip);
-  return host._err(praefix(spec) + 'invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseInt: parsing "' + e.value + '": invalid syntax', e.tip);
+  const standard = styleOf(spec) === "goflag" ? 'invalid value "' + e.value + '" for flag ' + e.name + ": parse error"
+    : praefix(spec) + 'invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseInt: parsing "' + e.value + '": invalid syntax';
+  return flagError(host, spec, e, standard, e.tip);
+}
+
+function boolError(host: ErrHost, spec: ArgSpec, e: Extract<ScanError, { kind: "bool" }>): string {
+  const standard = styleOf(spec) === "goflag" ? "invalid boolean value \"" + e.value + "\" for " + e.name + ": parse error"
+    : praefix(spec) + 'invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseBool: parsing "' + e.value + '": invalid syntax';
+  return flagError(host, spec, e, standard);
 }
 
 function scanErrorText(host: ErrHost, spec: ArgSpec, e: ScanError): string {
   if (e.kind === "unknown") return rejectFlag(host, spec, e);
   if (e.kind === "missing") return missingValue(host, spec, e.name);
-  if (e.kind === "int") return intError(host, spec, e);
-  if (styleOf(spec) === "goflag") return host._err("invalid boolean value \"" + e.value + "\" for " + e.name + ": parse error");
-  return host._err(praefix(spec) + 'invalid argument "' + e.value + '" for "' + e.label + '" flag: strconv.ParseBool: parsing "' + e.value + '": invalid syntax');
+  return e.kind === "int" ? intError(host, spec, e) : boolError(host, spec, e);
 }
 
 /** cobra `ValidateRequiredFlags`: der Text für die nicht gesetzten Pflicht-Flags (alphabetisch) oder `null`. */
@@ -260,7 +279,8 @@ function missingRequired(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
   const missing = (spec.requiredFlags ?? []).filter(n => !w.hits.some(h => h.spec.names.includes(n))).map(n => n.replace(/^-+/, "")).sort();
   if (missing.length === 0) return null;
   const strich = styleOf(spec) === "goflag" ? "-" : "--";
-  return host._err(praefix(spec) + "required flag(s) " + missing.map(n => '"' + n + '"').join(", ") + " not set", "Häng '" + strich + missing[0] + "=<wert>' an.");
+  const standard = praefix(spec) + "required flag(s) " + missing.map(n => '"' + n + '"').join(", ") + " not set";
+  return flagError(host, spec, { kind: "pflicht", namen: missing }, standard, "Häng '" + strich + missing[0] + "=<wert>' an.");
 }
 
 /** Der erste Fehler des Scans (unbekannt, ohne Wert, ungültiger Bool oder Ganzzahl), dann ein fehlendes Pflicht-Flag, dann der erste
@@ -385,6 +405,7 @@ export interface Dispatch<E extends SubEntry<unknown>> {
   /** Familien-Stil und -Hinweise; ein Eintrag mit eigenem Wert überschreibt sie. */
   readonly style?: FlagStyle;
   readonly fehlerPraefix?: string;
+  readonly fehlerTexte?: FlagFehlerTexte;
   readonly hints?: Readonly<Record<string, string>>;
   /** Persistente Flags der Ebene (cobra PersistentFlags, #1491): dürfen vor dem Unterbefehl stehen (`kubectl create -n x deployment`)
    *  und gelten in jedem Ziel darunter; alle anderen Flags kennt nur das Ziel, das sie in seiner eigenen Tabelle nennt. */
@@ -400,7 +421,7 @@ export interface Dispatch<E extends SubEntry<unknown>> {
  *  der Eintrag gewinnt). */
 function specOfSub(cmd: string, e: SubEntry<unknown>, d: Dispatch<SubEntry<unknown>>): ArgSpec {
   const { run: _run, flags, ...eigen } = e;
-  return { ...eigen, cmd, flags: mergeFlags(cmd, d.flags, flags) ?? [], style: e.style ?? d.style ?? "pflag", fehlerPraefix: e.fehlerPraefix ?? d.fehlerPraefix, hints: mergeHints(d.hints, e.hints), realFlags: e.realFlags && [...(d.realFlags ?? []), ...e.realFlags] };
+  return { ...eigen, cmd, flags: mergeFlags(cmd, d.flags, flags) ?? [], style: e.style ?? d.style ?? "pflag", fehlerPraefix: e.fehlerPraefix ?? d.fehlerPraefix, fehlerTexte: e.fehlerTexte ?? d.fehlerTexte, hints: mergeHints(d.hints, e.hints), realFlags: e.realFlags && [...(d.realFlags ?? []), ...e.realFlags] };
 }
 
 /** Persistente Flags (außen) und Flags des Eintrags (innen) zusammen. Dasselbe Objekt zählt einmal; ein gleicher Flag-Name (auch nur
@@ -472,9 +493,9 @@ function isUnbekanntVorUnterbefehl(d: Dispatch<SubEntry<unknown>>, name: string)
  *  einer Gruppe (`kubectl create -f`) kennt die Sim nicht, darum meldet `unknown flag` nur die Wurzel der Familie, nie eine Gruppe (`inGruppe`);
  *  ein globales Flag vor dem Unterbefehl meldet zuerst, auch vor einem echten Fehler dahinter. */
 function vorUnterbefehlError(host: ErrHost, d: Dispatch<SubEntry<unknown>>, e: ScanError, kann: () => string[], inGruppe: boolean): string {
-  if (e.kind !== "unknown") return scanErrorText(host, { cmd: d.cmd, flags: [], style: d.style, fehlerPraefix: d.fehlerPraefix, maxArgs: 0 }, e);
+  if (e.kind !== "unknown") return scanErrorText(host, { cmd: d.cmd, flags: [], style: d.style, fehlerPraefix: d.fehlerPraefix, fehlerTexte: d.fehlerTexte, maxArgs: 0 }, e);
   if (d.realFlags?.includes(e.name)) return notSimulated(host, "das Flag '" + e.name + "' bei '" + d.cmd + "'.", kann(), d.hints?.[e.name]);
-  if (!inGruppe && isUnbekanntVorUnterbefehl(d, e.name)) return unknownFlag(host, { cmd: d.cmd, flags: d.flags ?? [], style: d.style, fehlerPraefix: d.fehlerPraefix, hints: d.hints, maxArgs: 0 }, e);
+  if (!inGruppe && isUnbekanntVorUnterbefehl(d, e.name)) return unknownFlag(host, { cmd: d.cmd, flags: d.flags ?? [], style: d.style, fehlerPraefix: d.fehlerPraefix, fehlerTexte: d.fehlerTexte, hints: d.hints, maxArgs: 0 }, e);
   return notSimulated(host, "das Flag '" + e.name + "' vor dem Unterbefehl.", kann(), vorUnterbefehlHint(e.name, d));
 }
 
@@ -491,7 +512,7 @@ function locateSub(host: ErrHost, d: Dispatch<SubEntry<unknown>>, t: readonly st
 
 /** Die Ebene einer Gruppe: erbt Flags, Stil und Hinweise der Eltern (der eigene Wert gewinnt; Hinweise je Schlüssel). */
 function inherit<E extends SubEntry<unknown>>(d: Dispatch<E>, g: Dispatch<E>): Dispatch<E> {
-  return { ...g, flags: mergeFlags(g.cmd, d.flags, g.flags), realFlags: d.realFlags || g.realFlags ? [...(d.realFlags ?? []), ...(g.realFlags ?? [])] : undefined, style: g.style ?? d.style, fehlerPraefix: g.fehlerPraefix ?? d.fehlerPraefix, hints: mergeHints(d.hints, g.hints) };
+  return { ...g, flags: mergeFlags(g.cmd, d.flags, g.flags), realFlags: d.realFlags || g.realFlags ? [...(d.realFlags ?? []), ...(g.realFlags ?? [])] : undefined, style: g.style ?? d.style, fehlerPraefix: g.fehlerPraefix ?? d.fehlerPraefix, fehlerTexte: g.fehlerTexte ?? d.fehlerTexte, hints: mergeHints(d.hints, g.hints) };
 }
 
 /** Der EINE Kopf jeder Befehlsfamilie: wählt den Eintrag zu `t[at]` und liest dessen Eingabe (`parseCall`).

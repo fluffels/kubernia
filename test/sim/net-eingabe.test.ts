@@ -79,10 +79,10 @@ describe("curl: Flags mit Wert nehmen ihren Wert nicht als URL", () => {
       expect(r.output, c).toContain("200 OK");
     }
   });
-  test("-H am Ende ohne Wert: flag needs an argument", () => {
+  test("-H am Ende ohne Wert: curl meldet `requires parameter` (#2006)", () => {
     const r = run("curl kasse -H");
     expect(r.error).toBe(true);
-    expect(r.output).toContain("flag needs an argument");
+    expect(r.output).toBe("curl: option -H: requires parameter\ncurl: try 'curl --help' or 'curl --manual' for more information");
   });
   test("-i und -sS sind angenommen", () => {
     expect(run("curl -i kasse").output).toContain("200 OK");

@@ -221,7 +221,7 @@ test("git commit: ohne Nachricht, -a, --amend und Pfade lehnen ab (nichts commit
   s.files["a.md"] = "x";
   s.exec("git add a.md");
   assert.match(s.exec("git commit").output!, /Commit-Nachricht fehlt/);
-  assert.match(s.exec("git commit -m").output!, /flag needs an argument/);
+  assert.equal(s.exec("git commit -m").output, "error: switch `m' requires a value");
   assert.match(s.exec("git commit -am x").output!, /Nicht simuliert: das Flag '-a' bei 'git commit'\. Der Simulator kennt nur die Stage/);
   assert.match(s.exec('git commit --amend -m "x"').output!, /das Flag '--amend'/);
   assert.match(s.exec('git commit -m "x" a.md').output!, /Nicht simuliert: 'git commit a\.md/);

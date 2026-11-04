@@ -67,6 +67,9 @@ export function replicasArg(c: Call): number | null {
   return v === null ? null : parseInt(v, 10);
 }
 
+/** Der Builder-Fehler mit Art, aber ohne Namen (`kubectl scale deployment --replicas=2`, `set image deployment`), wörtlich wie `visitorResult` in `builder.go`. */
+export const NO_NAME_ERROR = "error: resource(s) were provided, but no name was specified";
+
 /** Der Builder-Fehler ohne jede Ressource und ohne `-f` (`kubectl set image nginx=nginx:2`), wörtlich wie `NoResourceError` in `builder.go`. */
 export const MISSING_RESOURCE_ERROR = "error: You must provide one or more resources by argument or filename.\nExample resource specifications include:\n   '-f rsrc.yaml'\n   '--filename=rsrc.json'\n   '<resource> <name>'\n   '<resource>'";
 
