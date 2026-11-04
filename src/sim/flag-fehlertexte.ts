@@ -16,12 +16,13 @@
  *  - curl `tool_getparam.c` (`getparameter`, Ausgabe `helpf("option %s: %s", …)`), `tool_helpers.c` (`param2text`), `tool_msgs.c` (`helpf`).
  *  - docker `cli/cobra.go` `FlagErrorFunc`: `%s\n\nUsage:  %s\n\nRun '%s --help' for more information` (`UseLine` = Elternpfad + `Use`).
  *  - kubeadm `cmd/kubeadm/app/util/errors/errors.go` `handleError`/`exitWithCode`: `error: <Text>\nTo see the stack trace of this error execute with --v=5 or higher`.
- *  - terraform `internal/command/arguments/{plan,apply,unlock}.go` (Diagnose „Failed to parse command-line flags“), `views/view.go` `HelpPrompt`.
+ *  - terraform `internal/command/arguments/{plan,apply,unlock}.go` (Diagnose „Failed to parse command-line flags“), `views/view.go` `HelpPrompt`. `unlock.go` gibt es nur auf `main`; im Release v1.17.1 meldet force-unlock `Error parsing command-line flags` ohne Diagnose.
  *
  * Bekannte Grenzen: git zeigt nach `unknown option` den Optionen-Block des Befehls (nicht simuliert); curl nennt das ganze Token
  * (`-sSo`, `--x=v`) statt des Flag-Namens; aws kennt für unbekannte Optionen einen eigenen Pfad (`Unknown options: …`, Text nicht belegt: Stil-Text);
  * aws, git und curl lehnen ein Bool-Flag mit Wert unterschiedlich ab (git immer, aws immer, curl nie), die Sim lehnt nur ungültige Bool-Werte ab;
- * docker `build` (buildx-Alias) und glab (fang-Fehlerhandler, Ausgabe nicht belegt) behalten den Stil-Text. */
+ * docker `build` (buildx-Alias) behält den Stil-Text; glab ebenso (fang `DefaultErrorHandler`: ohne TTY nur der Text, also der Stil-Text, mit TTY gestylt mit `ERROR`-Kopf, nicht nachgebildet; `NewGitLabErrorHandler` nicht geprüft);
+ * kubeadm hängt die Stacktrace-Zeile hier nur an Flag-Fehler, echtes kubeadm hängt sie in `handleError` an jeden Fehler. */
 
 /** Ein Fehler beim Lesen der Flags (der Scan von cliargs; `pflicht` kommt nach dem Scan, aus `requiredFlags`). */
 export type ScanFehler =

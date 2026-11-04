@@ -83,7 +83,7 @@ const SIMPLE_DELETABLE: ReadonlyMap<ResourcePlural, (host: KubectlHost) => { nam
  * `Call` (#1487): `c.args` sind die Namen hinter dem Typ (`web`), die Flags des Ziels stehen überall. */
 type CreateHandler = (host: KubectlHost, c: Call) => string;
 
-/** Der EINE Namens-Vorspann aller create-Handler: genau ein NAME (sonst der echte kubectl-Text samt deutschem
+/** Der EINE Namens-Vorspann aller create-Handler außer deployment (das den Namen mit den Spec-Gründen zusammen meldet, #2006): genau ein NAME (sonst der echte kubectl-Text samt deutschem
  *  Muster) und gültig nach DNS-1123. `names` sind die Argumente hinter dem Typ; ein String ist die Fehlerausgabe. */
 function createName(host: KubectlHost, names: readonly string[], kind: string, muster: string, clientCheck?: () => string | null): { name: string } | string {
   const arity = exactlyOneName(host, names, muster);

@@ -24,7 +24,7 @@
  * `--` beendet die Flags, Bool-Flags werten `=true|false` aus (`strconv.ParseBool`), Ketten `-fp` werden je Zeichen
  * gelesen, ein Wert-Flag in der Kette schluckt den Rest (`-nfoo` setzt kein `-f`), der LETZTE Wert gewinnt.
  *
- * Blattmodul (pure Domäne, importiert nur ./util): jede Familie darf es importieren, ohne Zyklus. */
+ * Blattmodul (pure Domäne, importiert nur ./util und, nur als Typen, ./flag-fehlertexte): jede Familie darf es importieren, ohne Zyklus. */
 import { suggest } from "./util";
 import type { FlagFehler, FlagFehlerTexte, ScanFehler } from "./flag-fehlertexte";
 

@@ -2,11 +2,12 @@
  * die eigenen Parser von git, aws s3 und curl und die Zusatzzeilen von docker, kubeadm und terraform. Belege je Werkzeug: Kopf von
  * `src/sim/flag-fehlertexte.ts`. Dazu die kubectl-Texte aus #2006 (scale ohne Ressource, create deployment mit Aggregat). */
 import { describe, test, expect } from "vitest";
-import { freshSim } from "./helpers";
+import { freshSim, KQSim } from "./helpers";
 import { ARGOCD } from "../../src/sim/argocd";
 import { parseCall, dispatchSub, flag, type ArgSpec, type Dispatch, type ErrHost, type SubEntry } from "../../src/sim/cliargs";
 import { AWS_ARGPARSE, CURL_GETPARAM, dockerFehler, GIT_PARSE_OPTIONS, type FlagFehlerTexte } from "../../src/sim/flag-fehlertexte";
 
+const NS = "Nicht simuliert";
 const out = (cmd: string) => freshSim().exec(cmd).output;
 const erste = (cmd: string) => out(cmd)?.split("\n")[0];
 /** Die Ausgabe ohne den deutschen Tipp (`💡 …`) und ohne Leerzeilen: so steht der Wortlaut des Werkzeugs da. */
@@ -112,13 +113,13 @@ describe("terraform: Diagnose „Failed to parse command-line flags“ (#2006)",
   test("force-unlock: die Diagnose ohne Hilfe-Verweis", () => {
     expect(werkzeug("terraform force-unlock -force=x 1")).toBe('Error: Failed to parse command-line flags\ninvalid boolean value "x" for -force: parse error');
   });
-  test("andere Befehle behalten den Go-Text (Grenze: init, fmt … haben andere Formen)", () => {
-    expect(erste("terraform output -json=x")).not.toContain("Failed to parse");
+  test("Grenze: andere Befehle haben heute keinen erreichbaren Flag-Fehler (keine Flags, kein realFlags), der Rahmen gilt nur für plan, apply, destroy, force-unlock", () => {
+    expect(erste("terraform output -json=x")).toContain(NS);
   });
 });
 
 describe("glab, nslookup: kein belegter Text, kein erfundener (#2006)", () => {
-  test("ein synthetischer Spec ohne `fehlerTexte` meldet weiter den Stil-Text", () => {
+  test("glab hat heute keinen erreichbaren Flag-Fehler; ein synthetischer Spec ohne `fehlerTexte` meldet weiter den Stil-Text", () => {
     const host: ErrHost = { _err: m => m };
     const spec: ArgSpec = { cmd: "glab ci x", flags: [flag(true, "--ref")], maxArgs: 0 };
     expect(parseCall(host, spec, ["--ref"], 0)).toBe("flag needs an argument: --ref");
@@ -128,6 +129,12 @@ describe("glab, nslookup: kein belegter Text, kein erfundener (#2006)", () => {
     const fehlerTexte: FlagFehlerTexte = { wortlaut: f => f.kind === "missing" ? "W:" + f.name : null, rahmen: (t, cmd, k) => "[" + cmd + "|" + k + "] " + t };
     const spec: ArgSpec = { cmd: "tool x", flags: [flag(true, "--ref")], fehlerTexte, maxArgs: 0 };
     expect(parseCall(host, spec, ["--ref"], 0)).toBe("[tool x|missing] W:--ref");
+  });
+  test("ein fehlendes Pflicht-Flag läuft durch `fehlerTexte` (`wortlaut` und `rahmen` mit Art `pflicht`)", () => {
+    const host: ErrHost = { _err: m => m };
+    const fehlerTexte: FlagFehlerTexte = { wortlaut: f => f.kind === "pflicht" ? "P:" + f.namen.join(",") : null, rahmen: (t, cmd, k) => "[" + cmd + "|" + k + "] " + t };
+    const spec: ArgSpec = { cmd: "tool x", flags: [flag(true, "--aa")], requiredFlags: ["--aa"], fehlerTexte, maxArgs: 0 };
+    expect(parseCall(host, spec, [], 0)).toBe("[tool x|pflicht] P:aa");
   });
 });
 
@@ -151,6 +158,14 @@ describe("Wortlaut-Tabellen: jede Art, auch die ohne Weg durch die heutige Flag-
     expect(CURL_GETPARAM.wortlaut?.(bool, "curl")).toBeNull();
     expect(CURL_GETPARAM.wortlaut?.(pflicht, "curl")).toBeNull();
   });
+  test("curl: der Rahmen hängt den `--manual`-Verweis nur an Arten mit curl-Text, nicht an Bool und Pflicht", () => {
+    expect(CURL_GETPARAM.rahmen?.("t", "curl", "pflicht")).toBe("t");
+    expect(CURL_GETPARAM.rahmen?.("t", "curl", "bool")).toBe("t");
+    expect(CURL_GETPARAM.rahmen?.("t", "curl", "missing")).toContain("curl: try");
+  });
+  test("aws: ein Bool-Flag nennt Kurz- und Langform mit Schrägstrich", () => {
+    expect(AWS_ARGPARSE.wortlaut?.(bool, "aws s3 ls")).toBe("argument -A/--all: ignored explicit argument 'x'");
+  });
 });
 
 describe("Vererbung von `fehlerTexte` über die Dispatch-Ebenen (#2006)", () => {
@@ -158,26 +173,48 @@ describe("Vererbung von `fehlerTexte` über die Dispatch-Ebenen (#2006)", () => 
   const run = () => "";
   const ebene: FlagFehlerTexte = { rahmen: t => "EBENE " + t };
   const eintrag: FlagFehlerTexte = { rahmen: t => "EINTRAG " + t };
-  const d = (eigen?: FlagFehlerTexte): Dispatch<SubEntry<() => string>> => ({
-    cmd: "t", fehlerTexte: ebene, table: { x: { run, maxArgs: 0, flags: [flag(true, "--a")], fehlerTexte: eigen }, g: { group: { cmd: "t g", table: { y: { run, maxArgs: 0, flags: [flag(true, "--a")] } } } } },
+  const gruppeTexte: FlagFehlerTexte = { rahmen: t => "GRUPPE " + t };
+  const d = (eigen?: FlagFehlerTexte, gruppe?: FlagFehlerTexte): Dispatch<SubEntry<() => string>> => ({
+    cmd: "t", fehlerTexte: ebene, flags: [flag(true, "--p")], realFlags: ["--real"], table: { x: { run, maxArgs: 0, flags: [flag(true, "--a")], fehlerTexte: eigen }, g: { group: { cmd: "t g", fehlerTexte: gruppe, table: { y: { run, maxArgs: 0, flags: [flag(true, "--a")] } } } } },
   });
   test("der Eintrag gewinnt gegen die Ebene, ohne eigenen Wert gilt der der Ebene", () => {
     expect(dispatchSub(host, d(eintrag), ["t", "x", "--a"], 1)).toBe("EINTRAG flag needs an argument: --a");
     expect(dispatchSub(host, d(), ["t", "x", "--a"], 1)).toBe("EBENE flag needs an argument: --a");
   });
-  test("eine Gruppe erbt den Wert der Ebene darüber", () => {
+  test("eine Gruppe erbt den Wert der Ebene darüber, ein eigener Wert der Gruppe gewinnt", () => {
     expect(dispatchSub(host, d(), ["t", "g", "y", "--a"], 1)).toBe("EBENE flag needs an argument: --a");
+    expect(dispatchSub(host, d(undefined, gruppeTexte), ["t", "g", "y", "--a"], 1)).toBe("GRUPPE flag needs an argument: --a");
+  });
+  test("vor dem Unterbefehl gilt der Wert der Ebene (ohne Wert und unbekanntes Flag der geschlossenen Welt)", () => {
+    expect(dispatchSub(host, d(), ["t", "--p"], 1)).toBe("EBENE flag needs an argument: --p");
+    expect(dispatchSub(host, d(), ["t", "--zzz", "x"], 1)).toBe("EBENE unknown flag: --zzz");
   });
 });
 
 describe("gültige Eingaben bleiben gültig (keine neue Ablehnung, #2006)", () => {
   test.each([
-    "git add -A", "git add --all=true", "aws s3 ls --recursive", "aws s3 ls --recursive=true", "curl -s web", "curl --silent=true web", "curl -o datei web",
-    "docker run -d nginx", "docker ps -a", "kubeadm reset -f", "terraform apply -auto-approve", "kubectl scale deployment web --replicas=2", "kubectl create deployment web --image=x --replicas=0",
+    "git add -A", "git add --all=true", "aws s3 ls --recursive", "aws s3 ls --recursive=true", "docker run -d nginx", "docker ps -a", "kubeadm reset -f", "kubectl create deployment web --image=x --replicas=0",
   ])("%s", cmd => {
     const s = freshSim();
     s.exec("git init");
     expect(s.exec(cmd).output ?? "", cmd).not.toMatch(/requires a value|takes no value|requires parameter|ignored explicit|Failed to parse|Usage:|stack trace|resource\(s\) were provided/);
+  });
+});
+
+describe("gültige Eingaben, die ein erreichbares Ziel brauchen (keine neue Ablehnung, #2006)", () => {
+  const szenario = () => new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1 }], services: [{ name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80 }] });
+  test.each(["curl -s kasse", "curl --silent=true kasse", "curl -o datei kasse"])("%s kommt an", cmd => {
+    const r = szenario().exec(cmd);
+    expect(r.error, cmd).toBeFalsy();
+  });
+  test("kubectl scale mit Ressource und Replicas skaliert", () => {
+    const s = szenario();
+    expect(s.exec("kubectl scale deployment kasse --replicas=2").output).toBe("deployment.apps/kasse scaled");
+  });
+  test("terraform apply -auto-approve wird angenommen (kein Flag-Fehler)", () => {
+    const s = szenario();
+    s.exec("terraform init");
+    expect(s.exec("terraform apply -auto-approve").output ?? "").not.toMatch(/Failed to parse|invalid boolean/);
   });
 });
 
@@ -213,6 +250,7 @@ describe("kubectl create deployment: der apiserver nennt alle Ursachen zusammen 
     const r = s.exec("kubectl create deployment Web --image=x --replicas=-1");
     expect(r.error).toBe(true);
     expect(r.output?.split("\n")[0]).toBe(kopf + "[" + NAME + ", " + REPLICAS + "]");
+    expect(r.output).toContain("DNS-1123");
     expect(s.exec("kubectl get deployments").output).not.toContain("Web");
   });
   test("nur ein ungültiger Name: eine Ursache ohne Klammer, mit DNS-Tipp", () => {

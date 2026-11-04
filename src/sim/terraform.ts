@@ -294,7 +294,7 @@ const TF_STATE: Dispatch<SubEntry<TerraformHandler>> = {
 /** Die Dispatch-Tabelle (terraform nutzt Go-`flag`-Schreibweise). Ein neuer Unterbefehl ist ein Eintrag hier + eine
  *  Funktion oben – der Dispatcher (`terraformCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
 // Kein `fehlerPraefix` (#2001): terraform nutzt das Go-Paket `flag`, dessen Fehler ohne Präfix erscheinen. plan, apply, destroy und force-unlock
-// verpacken ihn in die Diagnose „Failed to parse command-line flags“ (#2006, `flag-fehlertexte.ts`); die übrigen Befehle (init, fmt …) haben andere Formen und behalten den Stil-Text.
+// verpacken ihn in die Diagnose „Failed to parse command-line flags“ (#2006, `flag-fehlertexte.ts`); die übrigen Befehle haben heute keine Flags und keinen erreichbaren Flag-Fehler (Stil-Text). Stand der Belege: force-unlock trägt die Diagnose erst auf `main`, in v1.17.1 meldet es `Error parsing command-line flags`.
 export const TERRAFORM: Dispatch<SubEntry<TerraformHandler>> = { cmd: "terraform", style: STYLE, table: {
   get: { run: tfGet, maxArgs: 0 },
   init: { run: tfInit, maxArgs: 0 },
