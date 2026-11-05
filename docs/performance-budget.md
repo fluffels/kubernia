@@ -53,10 +53,13 @@ aufgebläht → **300 Tag-Daten, aber nur 3 gerenderte Tags** (Pool 3), **60 FPS
 keine Laufzeit-Fehler. Ohne den Umbau wären alle 300 Container gleichzeitig im
 Display-Tree und würden pro Frame durchlaufen.
 
-> **Bewusst noch offen (eigenes Ticket):** Die *dekorativen* dynGroup-Sprites (Helm-
-> Flaggen je Release, Service-Laternen je Service) + ihre Dauer-Tweens skalieren weiter
-> 1:1 mit dem Cluster. Das ist ein separater Render-Pfad (Objekt-Visualisierung, nicht
-> „Tags") und in einem Folge-Ticket erfasst.
+> **Dekorative dynGroup-Sprites (#431):** Die Helm-Flaggen (je Release) und Service-
+> Laternen (je Service) laufen nicht mehr über `repeat: -1`-Dauer-Tweens. Bob und
+> Flackern sind reine Sinus-Funktionen ([`flagBobOffset`, `lampFlickerAlpha`](../src/hud/cull.ts)),
+> die [`clustersync.ts`](../src/scenes/worldscene/clustersync.ts) pro Frame nur für
+> sichtbare Sprites aufruft; Pfosten und Lampe sind cullbar. Die Sprite-Objekte selbst
+> bleiben je Release/Service bestehen (Display-Tree wächst weiter mit dem Cluster),
+> nur die Dauer-Tween-Last entfällt.
 
 ### 3. Lazy-Asset-Loading pro Insel (offen → eigenes Ticket)
 
