@@ -1,6 +1,5 @@
 # 📚 Anlaufstellen — der Index des Projekt-Brains
 
-Kern: [Anlaufstellen](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/referenz/anlaufstellen.md)
 > On-demand-Referenz (#1078): **wo welches Wissen liegt und wann man es liest.** Das Projekt-Brain ist `docs/`, dies der Index ([ADR 0015](../adr/0015-projekt-brain.md)). **Lese-Konvention:** erst hier die eine passende Seite wählen. Brain-Seiten (`docs/**.md`) liest du mit dem `Read`-Tool, nie per `cat`/`sed`/`head`/`Get-Content`; große Seiten nur abschnittsweise (Überschrift greppen, dann `Read` mit `offset`/`limit`). Liegt der Checkout hinter `origin/main`, holt man die Seiten einmal gebündelt (`git archive` in den Scratchpad, dort `Read`); `git show origin/main:<pfad>` (mit `MSYS_NO_PATHCONV=1` in Git-Bash) bleibt die Ausnahme für Einzelfälle, weil es kein `Read`-Äquivalent gibt; das Messskript zählt es als Brain-Lesezugriff. Gegliedert nach den Wissensarten aus [ADR 0013](../adr/0013-docs-als-agentengepflegtes-wiki.md) (#1097). Jede Seite unter `docs/` ist von hier aus erreichbar. Die harten Regeln stehen ausschließlich in [AGENTS.md](../../AGENTS.md); hier steht nur *wo* und *wann*, kein Regeltext.
 >
 > **Nicht hierher gehören:** der laufende Stand (offene Arbeit, Reihenfolge, Blocker) → GitHub-Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`); abgeschlossene Arbeit → PR/Commit/Issue-Kommentar.
@@ -185,8 +184,8 @@ Diese Seiten dieses Repos stammen ganz oder teilweise aus dem Factory-Repo, die 
 | `docs/sandbox-anbinden.md` | ganze Seite | Kern | [Factory: sandbox-anbinden.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/sandbox-anbinden.md); hier Stub ohne Anker |
 | `docs/langfuse-hook-patch.md` | ganze Seite | Kern | [Factory: langfuse-hook-patch.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/langfuse-hook-patch.md); hier Anker-Stubs |
 | `docs/referenz/doku-vorlagen.md` | ganze Seite | Kern | [Factory: doku-vorlagen.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/referenz/doku-vorlagen.md); hier ein Anker-Stub |
-| `docs/referenz/anlaufstellen.md` | Navigation dieses Repos samt Inventar | Projekt | bleibt hier: [anlaufstellen.md](anlaufstellen.md) |
-| `docs/referenz/repo-landkarte.md` | Navigation dieses Repos (Verzeichnisse und Dateien) | Projekt | bleibt hier: [repo-landkarte.md](repo-landkarte.md) |
+| `docs/referenz/anlaufstellen.md` | Navigation dieses Repos samt Inventar | Projekt | bleibt hier: [anlaufstellen.md](anlaufstellen.md) (Factory-Gegenstück: [anlaufstellen.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/referenz/anlaufstellen.md)) |
+| `docs/referenz/repo-landkarte.md` | Navigation dieses Repos (Verzeichnisse und Dateien) | Projekt | bleibt hier: [repo-landkarte.md](repo-landkarte.md) (Factory-Gegenstück: [repo-landkarte.md](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/referenz/repo-landkarte.md)) |
 
 <!-- factory-projekt:ende -->
 
