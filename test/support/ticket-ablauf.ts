@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { FREMD, projektConfig } from "./fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as besitzRaw from "../../scripts/besitz-lib.mjs";
-const platzhalterMuster = (besitzRaw as unknown as { platzhalterMuster: () => RegExp }).platzhalterMuster;
+import * as projektwertRaw from "../../scripts/projektwert-lib.mjs";
+const platzhalterMuster = (projektwertRaw as unknown as { platzhalterMuster: () => RegExp }).platzhalterMuster;
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 

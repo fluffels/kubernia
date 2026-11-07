@@ -1,6 +1,7 @@
 # 🗺️ Repo-Landkarte – wo finde ich was?
 
 Die Datei-Landkarte eines Projekts: welches Subsystem in welcher Schicht liegt und welches Tiefendoc dazugehört. Sie ist Projektinhalt.
+Kern: [Repo-Landkarte](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/referenz/repo-landkarte.md)
 
 <!-- factory-projekt:start -->
 

@@ -26,7 +26,7 @@ Quests, NPCs, Smalltalk und NPC-Standplätze sind **Daten** (`src/content/data/*
 
 ### Variable Platzhalter in Beispielbefehlen (#311)
 
-Einen „ändere-mich"-Wert (selbst gewählter Name, Image, Datei …) schreibt man in Content-Texten (Dialoge, Funk-Aufgaben, Hinweise/`why`, Drills, Quiz `q`/`options`/`explain`, Erklärungen) als **`<token>` in spitzen Klammern** – die CLI-Konvention, z.B. `docker pull <image>`, `docker run -d --name <eigener-name> <image>`, `kubectl describe pod <name>` (`token` = ein Wort aus Buchstaben inkl. Umlauten, Ziffern, Bindestrichen; **Bindestrich statt Unterstrich**). `src/hud/markup.ts` › `fmtCmd` macht daraus beim Rendern ein sichtbares, farbig abgesetztes Badge (die spitzen Klammern bleiben sichtbar) – das ist die **eine Quelle** der Konvention, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album). Echte HTML-Tags (`<code>`, `<b>`, `<i>` …) bleiben unangetastet. **Wörtliche** spitze Klammern, die KEIN „ändere-mich"-Wert sind (Tool-Ausgaben wie `<none>`/`<sensitive>`, Git-Konfliktmarker `<<<<<<<`), gehören weiterhin als `&lt;…&gt;` in die Daten – sie sollen NICHT als Platzhalter erscheinen. Der Wächter `content.test.ts` meldet nicht sichtbar gemachte Platzhalter und ungeschlossene Tags; neue Sammlung oder neues Quest-Feld: [content.md › Anzeigetexte](../../docs/module/content.md#anzeigetexte-und-platzhalter-wächter-311).
+Einen „ändere-mich"-Wert (selbst gewählter Name, Image, Datei …) schreibt man in Content-Texten (Dialoge, Funk-Aufgaben, Hinweise/`why`, Drills, Quiz `q`/`options`/`explain`, Erklärungen) als **`<token>` in spitzen Klammern** – die CLI-Konvention, z.B. `docker pull <image>`, `docker run -d --name <eigener-name> <image>`, `kubectl describe pod <name>` (`token` = ein Wort aus Buchstaben inkl. Umlauten, Ziffern, Bindestrichen; **Bindestrich statt Unterstrich**). `src/hud/markup.ts` › `fmtCmd` macht daraus beim Rendern ein sichtbares, farbig abgesetztes Badge (die spitzen Klammern bleiben sichtbar) – das ist die **eine Quelle** der Konvention, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album). Echte HTML-Tags (`<code>`, `<b>`, `<i>` …) bleiben unangetastet. **Wörtliche** spitze Klammern, die KEIN „ändere-mich"-Wert sind (Tool-Ausgaben wie `<none>`/`<sensitive>`, Git-Konfliktmarker `<<<<<<<`), gehören weiterhin als `&lt;…&gt;` in die Daten – sie sollen NICHT als Platzhalter erscheinen. Der Wächter `content.test.ts` meldet nicht sichtbar gemachte Platzhalter und ungeschlossene Tags; neue Sammlung oder neues Quest-Feld: [docs/module/content.md › Anzeigetexte](../../docs/module/content.md#anzeigetexte-und-platzhalter-wächter-311).
 
 ### Neuer NPC
 
@@ -38,12 +38,12 @@ Identität (Name/Titel/Sprite) in `data/npcs.json`, Smalltalk in `data/smalltalk
 
 ### Quiz-Karte anlegen/ändern (Krabbe Kralle, #368/#597)
 
-Karten liegen in `data/crabquiz/<thema>.json`, **die richtige Antwort immer an Index 0** (`"correct": 0`). Ändert sich eine korrekte Antwort, wird `test/quizcheck.test.ts` rot: bewusst reviewen, dann `npm run quiz:golden`. Tiefe: [content.md › Quiz-Karten](../../docs/module/content.md#quiz-karten-und-golden-file-368597).
+Karten liegen in `data/crabquiz/<thema>.json`, **die richtige Antwort immer an Index 0** (`"correct": 0`). Ändert sich eine korrekte Antwort, wird `test/quizcheck.test.ts` rot: bewusst reviewen, dann `npm run quiz:golden`. Tiefe: [docs/module/content.md › Quiz-Karten](../../docs/module/content.md#quiz-karten-und-golden-file-368597).
 
 ### Der validierende Loader
 
-`loader.ts` + `entities.ts` prüfen beim Start alles und werfen bei kaputten Daten (`ContentValidationError`). Wird eine Regionen-Datei zu groß, in Unterdateien splitten. Tiefe: [content.md › Loader und Granularität](../../docs/module/content.md#loader-und-granularität).
+`loader.ts` + `entities.ts` prüfen beim Start alles und werfen bei kaputten Daten (`ContentValidationError`). Wird eine Regionen-Datei zu groß, in Unterdateien splitten. Tiefe: [docs/module/content.md › Loader und Granularität](../../docs/module/content.md#loader-und-granularität).
 
 ### Content-Chunks (ADR 0018)
 
-Jede Datei unter `data/<dir>/` ist ein eigener Chunk mit Deckel (`check:bundle`, 128 KB); reißt eine ihn, splitten. Jede JSON/`.tmj` muss importiert werden, gleiche bereinigte Namen sind ein Fehler. Tiefe: [content.md › Content-Chunks](../../docs/module/content.md#content-chunks-adr-0018).
+Jede Datei unter `data/<dir>/` ist ein eigener Chunk mit Deckel (`check:bundle`, 128 KB); reißt eine ihn, splitten. Jede JSON/`.tmj` muss importiert werden, gleiche bereinigte Namen sind ein Fehler. Tiefe: [docs/module/content.md › Content-Chunks](../../docs/module/content.md#content-chunks-adr-0018).
