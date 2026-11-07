@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { istProjektOrdner } from "./transkript.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
 
@@ -236,7 +236,7 @@ export function schluesselArt(observations) {
 
 /**
  * Multimenge Soll minus Ist: `fehlend` = Soll-Einträge ohne Gegenstück, `dubletten` = überzählige Ist-Observations
- * (nur melden, nie löschen). Jede Observation deckt höchstens einen Soll-Eintrag.
+ * (nur melden, nie löschen), `unzuordenbar` = die Dubletten ohne Soll-Gegenstück. Jede Observation deckt höchstens einen Soll-Eintrag.
  */
 export function diffMultimenge(soll, observations, art = schluesselArt(observations)) {
   const istSchluessel = (o) => (art === "messageId" ? o.metadata.message_id : fingerabdruck(o.providedModelName ?? o.model, usageAusObservation(o)));
@@ -256,7 +256,11 @@ export function diffMultimenge(soll, observations, art = schluesselArt(observati
   // wie der echte Call): keine Dublette (nichts doppelt gezählt), nur melden; sonst blockiert sie als „mehrdeutig“ das Nachliefern (#1639).
   const uebrig = [...frei.values()].flat();
   const istLeer = (o) => !o?.metadata?.message_id && Object.values(usageAusObservation(o)).every((v) => v === 0);
-  return { fehlend, dubletten: uebrig.filter((o) => !istLeer(o)), leer: uebrig.filter(istLeer), art };
+  const dubletten = uebrig.filter((o) => !istLeer(o));
+  // Überzähliger Schlüssel ohne Soll-Eintrag = fremd (nicht zuordenbar). Trägt der Soll den Schlüssel, sind alle seine Einträge schon
+  // gedeckt: die Dublette ist eine Kopie und kann keinen fehlenden Call verdecken (#213).
+  const sollKeys = new Set(soll.map(sollSchluessel));
+  return { fehlend, dubletten, unzuordenbar: dubletten.filter((o) => !sollKeys.has(istSchluessel(o))), leer: uebrig.filter(istLeer), art };
 }
 
 export const summe = (soll) => soll.reduce((s, e) => ({ input: s.input + e.usage.input, output: s.output + e.usage.output, cacheRead: s.cacheRead + e.usage.cacheRead, cacheWrite: s.cacheWrite + e.usage.cacheWrite5m + e.usage.cacheWrite1h }), leereSumme());

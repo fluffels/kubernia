@@ -1,7 +1,4 @@
-// Kein Shebang: dieses Skript wird über `node scripts/check-diffcoverage.mjs`
-// (npm run check:diffcoverage) gestartet UND von test/diffcoverage.test.ts importiert.
-// Eine `#!`-Zeile bricht genau diesen Test-Import (Vitest/esbuild stolpert über das
-// `#!`), darum bewusst weggelassen — analog zu check-diffsize.mjs / check-size.mjs.
+// Kein Shebang: das Skript wird gestartet UND von test/diffcoverage.test.ts importiert; eine `#!`-Zeile bricht den Test-Import (analog check-diffsize.mjs).
 /**
  * Diff-Coverage-Wächter (#1021) — die geänderten Zeilen eines Slices müssen getestet sein.
  *
@@ -10,17 +7,16 @@
  * Floor (bei ~4000 Domänen-Zeilen fallen 40 neue unter die Rundungsschwelle). Dieser
  * Wächter dreht den Nenner um: gemessen wird nur, was der aktuelle Slice ANFASST.
  *
- * Mechanik: die Hunk-Header aus `git diff -U0 <basis>...HEAD -- <quelle>` liefern die
- * geänderten Zeilen der NEUEN Seite; geschnitten mit den `DA:`-Records aus
- * `coverage/lcov.info` (v8) ergibt das je Zeile „getestet / nicht getestet". Bewertet
+ * Mechanik: die Hunk-Header aus `git diff -U0 <basis>...HEAD -- <Quellwurzeln>` liefern die
+ * geänderten Zeilen der NEUEN Seite (alle Quellwurzeln der Projekt-Config, Endungsliste, ohne `struktur.ohne`); geschnitten mit den
+ * Coverage-Berichten (`coverage.berichte` der Projekt-Config, Standard `coverage/lcov.info`; lcov und JaCoCo, Leser in
+ * scripts/coverage-berichte.mjs) ergibt das je Zeile „getestet / nicht getestet". Jeder konfigurierte Bericht ist Pflicht. Bewertet
  * wird PRO SCHICHT über `layerOf()` aus der Schicht-SSOT scripts/layers.cjs — dieselben
  * Grenzen, an denen auch die Aggregat-Floors in vite.config.ts hängen. Die Basis-Semantik
  * teilt es sich mit check:diffsize (#533): `resolveBase` steht in check-basis.mjs.
  *
  * Die volle Begründung (Floors je Schicht, asymmetrische Degradation, Ratchet) steht als
- * Regel in AGENTS.md › Abdeckung und Bundle. Reines Node-Skript (nur Builtins); die Parse-/
- * Bewertungslogik ist als pure, IO-freie Funktionen exportiert und wird von
- * test/diffcoverage.test.ts importiert — EINE Quelle der Wahrheit.
+ * Regel in docs/agent-harness.md (Testabdeckung wird gemessen). Die Parse-/Bewertungslogik ist als pure Funktionen exportiert (Test: test/diffcoverage.test.ts).
  *
  * Ausführen mit:  npm run check:diffcoverage   (nach: npm run test:coverage)
  */
@@ -29,11 +25,14 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createRequire } from "node:module";
-import { isMeasured, normalizePath, parseDiffLines, resolveBase } from "./check-basis.mjs";
-// Die Diff-Zeilen-Helfer wohnen in der Gate-Lib (#112, Konvention #1398); hier re-exportiert, damit Aufrufer und Tests unverändert bleiben.
-export { isMeasured, normalizePath, parseDiffLines };
-import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
+import { isMeasured, parseDiffLines, resolveBase } from "./check-basis.mjs";
+import { ladeAbdeckung, STANDARD_BERICHTE, berichteAus } from "./coverage-berichte.mjs";
+// Die Diff-Zeilen-Helfer wohnen in der Gate-Lib (#112, Konvention #1398), die lcov-Leser in coverage-berichte.mjs (factory#185, Blatt: nicht re-exportiert).
+export { isMeasured, parseDiffLines };
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istGlob, quellenAus, quellenObjekt } from "./quellwurzeln-lib.mjs";
 import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 // Die Schichtdaten sind CommonJS (der dependency-cruiser-Config `require`t sie) und liegen im Projekt: der Pfad steht in
@@ -44,8 +43,8 @@ if (typeof schichtenPfad !== "string") throw new Error("scripts/docs-gen/config.
 const { LAYERS, layerOf } = createRequire(import.meta.url)(`${WURZEL}${schichtenPfad}`);
 
 /** Wo der v8-Reporter das lcov ablegt (reportsDirectory in vite.config.ts) — relativ zur
- *  Skript-Datei aufgelöst, damit der Wächter unabhängig vom cwd misst. */
-export const LCOV_PATH = fileURLToPath(new URL("../coverage/lcov.info", import.meta.url));
+ *  Skript-Datei aufgelöst, damit der Wächter unabhängig vom cwd misst. Der Standard-Bericht ohne Block `coverage` der Projekt-Config. */
+export const LCOV_PATH = join(WURZEL, ...STANDARD_BERICHTE[0].pfad.split("/"));
 
 /** Mindest-Abdeckung der GEÄNDERTEN Zeilen je Schicht in Prozent; `null` = messen und
  *  berichten, aber nicht gaten (Präsentation/Einstieg hängen an Framework und Oberfläche, per Architektur
@@ -60,71 +59,11 @@ export const LAYER_DIFF_FLOORS = {
   [LAYERS.ENTRY]: null,
 };
 
-/** Parst ein lcov-Info-File zu `Datei → (Zeile → Trefferzahl)`. Es interessieren nur
- *  die `SF:`/`DA:`-Records; `DA:` existiert ausschließlich für AUSFÜHRBARE Zeilen —
- *  Kommentare, Typen und Leerzeilen fehlen also von Haus aus im Nenner. Pure. */
-export function parseLcov(text) {
-  const byFile = new Map();
-  let current = null;
-  for (const raw of String(text).split(/\r?\n/)) {
-    const line = raw.trim();
-    if (line.startsWith("SF:")) {
-      current = normalizePath(line.slice(3));
-      if (!byFile.has(current)) byFile.set(current, new Map());
-      continue;
-    }
-    if (line === "end_of_record") {
-      current = null;
-      continue;
-    }
-    if (!line.startsWith("DA:") || current === null) continue;
-    const [no, hits] = line.slice(3).split(",");
-    const lineNo = Number.parseInt(no, 10);
-    const count = Number.parseInt(hits, 10);
-    if (!Number.isFinite(lineNo)) continue;
-    byFile.get(current).set(lineNo, Number.isFinite(count) ? count : 0);
-  }
-  return byFile;
-}
-
-/** Parst die `BRDA:`-Records eines lcov-Files zu `Datei → (Zeile → { total, taken })` (#1425): je Zeile die
- *  Zahl der Zweige und wie viele davon mindestens einmal genommen wurden. `BRDA:<zeile>,<block>,<zweig>,<taken>`,
- *  `taken` = `-` heißt „nie erreicht“ (zählt als nicht genommen). Kaputte Records werden übersprungen. Pure. */
-export function parseLcovBranches(text) {
-  const byFile = new Map();
-  let current = null;
-  for (const raw of String(text).split(/\r?\n/)) {
-    const line = raw.trim();
-    if (line.startsWith("SF:")) {
-      current = normalizePath(line.slice(3));
-      if (!byFile.has(current)) byFile.set(current, new Map());
-      continue;
-    }
-    if (line === "end_of_record") {
-      current = null;
-      continue;
-    }
-    if (!line.startsWith("BRDA:") || current === null) continue;
-    const teile = line.slice(5).split(",");
-    if (teile.length !== 4) continue;
-    const lineNo = Number.parseInt(teile[0], 10);
-    if (!Number.isFinite(lineNo)) continue;
-    const taken = teile[3] === "-" ? 0 : Number.parseInt(teile[3], 10);
-    if (!Number.isFinite(taken)) continue;
-    const zeilen = byFile.get(current);
-    const e = zeilen.get(lineNo) ?? { total: 0, taken: 0 };
-    e.total++;
-    if (taken > 0) e.taken++;
-    zeilen.set(lineNo, e);
-  }
-  return byFile;
-}
-
 /** Geänderte Zeilen, die ausgeführt wurden (DA > 0), aber mindestens einen ungenommenen Zweig tragen
  *  (z. B. ein `catch` mit Weiterwurf auf derselben Zeile): die Zeilen-Coverage zählt sie als getestet,
  *  der Zweig bleibt unsichtbar. Nur berichtend, kein Gate (v8 meldet implizite Zweige, keine Kalibrierung).
  *  Gemessen werden nur Dateien, für die `isMeasured` gilt. Pure. */
-export function teilweiseGetestet(changed, lcov, branches, quelle = strukturAus(ladeProjektConfig()).quelle) {
+export function teilweiseGetestet(changed, lcov, branches, quelle = quellenAus(ladeProjektConfig())) {
   const partial = [];
   for (const [path, lines] of changed) {
     if (!isMeasured(path, quelle)) continue;
@@ -141,12 +80,15 @@ export function teilweiseGetestet(changed, lcov, branches, quelle = strukturAus(
   return partial;
 }
 
+/** Die Berichtsdateien einer Datei aus `berichteJe` (kann fehlen). Pur. */
+const berichteVon = (berichteJe, path) => berichteJe?.get(path) ?? [];
+
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
  *
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
  *  einen Prozent-Float: `9/10*100` ist in IEEE754 `90.00000000000001`, ein Float-Vergleich
  *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Pure. */
-export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quelle = strukturAus(ladeProjektConfig()).quelle) {
+export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe) {
   const buckets = {};
   for (const layer of Object.values(LAYERS)) {
     buckets[layer] = { covered: 0, total: 0, pct: 100, floor: floors[layer] ?? null, below: false, files: [] };
@@ -174,7 +116,7 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quell
     if (total === 0) continue;
     bucket.total += total;
     bucket.covered += covered;
-    bucket.files.push({ path, total, covered, uncovered });
+    bucket.files.push({ path, total, covered, uncovered, berichte: berichteVon(berichteJe, path) });
   }
 
   const below = [];
@@ -193,10 +135,32 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quell
 /** Git-Optionen des Diff-Laufs; maxBuffer groß, damit ein breiter Diff nicht an ENOBUFS scheitert. */
 export const GIT_OPTIONEN = { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 };
 
-/** Führt die komplette Prüfung aus (Basis → Diff → lcov → Bewertung → Override).
+/** Die Pfadangaben des Diffs je Quellwurzel: eine wörtliche Wurzel unverändert, ein Glob als `:(glob)<wurzel>/**`. Maßgeblich bleibt danach der Filter `isMeasured` (Endungen, `ohne`). */
+export function pfadAngaben(quellen) {
+  return quellenObjekt(quellen).wurzeln.map((w) => (istGlob(w) ? `:(glob)${w}/**` : w));
+}
+
+/** Schneidet die Messung (Zeilen, Zweige) gegen die geänderten Zeilen: Bewertung je Schicht, teilweise Getestetes und die Messfehler (fehlt im Bericht, mehrdeutiger JaCoCo-Pfad). */
+function messe(changed, geladen, quelle) {
+  const verdict = evaluateByLayer(changed, geladen.abdeckung, LAYER_DIFF_FLOORS, quelle, geladen.berichteJe);
+  const mehrdeutigePfade = new Set(geladen.mehrdeutig.map((e) => e.pfad));
+  const missing = verdict.missing.filter((p) => !mehrdeutigePfade.has(p));
+  return { ...verdict, missing, mehrdeutig: geladen.mehrdeutig, partial: teilweiseGetestet(changed, geladen.abdeckung, geladen.zweige, quelle) };
+}
+
+/** Führt die komplette Prüfung aus (Basis → Diff → Berichte → Bewertung → Override).
  *  `runGit`/`readFile`/`env` sind injizierbar, damit der Test ohne git, ohne
- *  Coverage-Lauf und ohne Repo-Zustand deterministisch läuft. */
-export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen = ladeCommitZeilen(), quelle = strukturAus(ladeProjektConfig()).quelle } = {}) {
+ *  Coverage-Lauf und ohne Repo-Zustand deterministisch läuft. `quelle` ist ein String (eine Wurzel) oder `{ wurzeln, endungen, ohne }`,
+ *  `berichte` die Liste aus `berichteAus`, `rootDir` die Wurzel, gegen die Berichtspfade gelten (factory#185). */
+export function checkDiffCoverage({
+  runGit,
+  readFile,
+  env = process.env,
+  zeilen = ladeCommitZeilen(),
+  quelle = quellenAus(ladeProjektConfig()),
+  berichte = berichteAus(ladeProjektConfig()),
+  rootDir = WURZEL,
+} = {}) {
   const git = runGit ?? ((args) => execFileSync("git", args, GIT_OPTIONEN));
   const read = readFile ?? ((p) => readFileSync(p, "utf8"));
   const base = resolveBase(git, env);
@@ -211,7 +175,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen 
     // Zwei-Punkt wiese jede Änderung, die main NACH dem Abzweigen bekam, spiegelverkehrt als
     // Addition dieses Slices aus — fremde Zeilen im Nenner, potenziell falsches Rot. `A...B`
     // misst gegen die Merge-Base.
-    diff = git(["diff", "-U0", `${base}...HEAD`, "--", quelle]);
+    diff = git(["diff", "-U0", `${base}...HEAD`, "--", ...pfadAngaben(quelle)]);
   } catch (err) {
     // Ein zu großer Diff (ENOBUFS) ist ein Messfehler, kein flacher Checkout: rot statt still grün.
     // Jeder andere Fehler (Basis nicht auflösbar, flacher Checkout) bleibt bewusst No-op-grün.
@@ -228,41 +192,49 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen 
     return { skipped: false, failed: reason !== null, base, nothingToMeasure: true, stale: reason !== null, reason, invalidOverrides: invalid };
   }
 
-  let lcovText;
-  try {
-    lcovText = read(LCOV_PATH);
-  } catch {
-    // Quellcode geändert, aber kein Messergebnis da → NICHT still grün melden.
-    return { skipped: false, failed: true, base, noReport: true };
-  }
+  const quellenObj = quellenObjekt(quelle);
+  const geladen = ladeAbdeckung({ berichte, rootDir, lies: read, messDateien: measuredFiles, quellen: quellenObj });
+  // Quellcode geändert, aber (mindestens) ein Bericht fehlt → NICHT still grün melden.
+  if (geladen.fehlend.length > 0) return { skipped: false, failed: true, base, noReport: true, fehlendeBerichte: geladen.fehlend };
 
-  const lcov = parseLcov(lcovText);
-  const verdict = evaluateByLayer(changed, lcov, LAYER_DIFF_FLOORS, quelle);
-  const partial = teilweiseGetestet(changed, lcov, parseLcovBranches(lcovText), quelle);
-  // `below` ist eine COVERAGE-Lücke (bewertbar, darum override-bar), `missing` ein
+  const verdict = messe(changed, geladen, quelle);
+  // `below` ist eine COVERAGE-Lücke (bewertbar, darum override-bar), `missing` und `mehrdeutig` ein
   // MESSfehler — für diese Datei wurde gar nichts gemessen. Ihn durchzuwinken wäre
   // dasselbe „grün ohne Messung", das der noReport-Zweig verbietet: nicht override-bar.
+  const messfehler = verdict.missing.length + verdict.mehrdeutig.length;
   const violated = verdict.below.length > 0;
   const { reason, invalid, versetzt } = sliceOverride(git, base, zeilen.diffcovOverride);
   const allowed = violated && reason !== null;
-  const stale = !violated && verdict.missing.length === 0 && reason !== null;
+  const stale = !violated && messfehler === 0 && reason !== null;
 
   return {
     skipped: false,
     base,
     ...verdict,
-    partial,
     reason,
     allowed,
     stale,
     invalidOverrides: invalid,
     versetzteOverrides: versetzt,
-    failed: (violated && !allowed) || stale || verdict.missing.length > 0,
+    failed: (violated && !allowed) || stale || messfehler > 0,
   };
 }
 
+/** Der Befehl, der die Berichte erzeugt (der Gate-Befehl der Projekt-Config, `scripts/gate-befehl.mjs`). */
+export const COVERAGE_BEFEHL = "node scripts/gate-befehl.mjs coverage";
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
-/** Rendert die Schicht-Zeilen des Reports (gegatete zuerst, dann die berichtenden). */
+/** Pur: ` (aus <Bericht>[, <Bericht>])` oder leer ohne bekannten Bericht. */
+const berichtHinweis = (berichte) => (berichte?.length > 0 ? ` (aus ${berichte.join(", ")})` : "");
+
+/** Pur: die Detailzeilen zu einer roten Schicht (factory#208, factory#215): je Datei mit ungetesteten Zeilen `Datei: ungetestet in Zeile n, m (aus <Bericht>[, <Bericht>])`, der Bericht je Datei, nicht die Liste aller; ohne ungetestete Zeile leer. */
+export function rotZeilen(b) {
+  return b.files
+    .filter((f) => f.uncovered.length > 0)
+    .map((f) => `    ${f.path}: ungetestet in Zeile ${f.uncovered.join(", ")}${berichtHinweis(f.berichte)}`);
+}
+
+/** Rendert die Schicht-Zeilen des Reports (gegatete zuerst, dann die berichtenden); die Rot-Details gehen auf denselben Strom wie die Summenzeile. */
 function renderBuckets(r, { dim, red, green }) {
   for (const [layer, b] of Object.entries(r.buckets)) {
     if (b.total === 0) continue;
@@ -273,10 +245,60 @@ function renderBuckets(r, { dim, red, green }) {
     }
     const paint = b.below ? red : green;
     console.log(paint(`${b.below ? "✖" : "✔"} ${layer}: ${zahl}, Floor ${b.floor} %`));
-    if (!b.below) continue;
-    for (const f of b.files.filter((f) => f.uncovered.length > 0)) {
-      console.error(`    ${f.path}: ungetestet in Zeile ${f.uncovered.join(", ")}`);
-    }
+    if (b.below) for (const z of rotZeilen(b)) console.log(z);
+  }
+}
+
+/** Pur: die Meldung bei fehlenden Berichten: je Bericht eine Zeile „Erwartet: <pfad>“ und der Befehl, der sie erzeugt. */
+export function fehlenderBerichtText(fehlend) {
+  return `${fehlend.map((p) => `Erwartet: ${p}`).join("\n")}\nErst messen lassen:  ${COVERAGE_BEFEHL}`;
+}
+
+/** Pur: die Meldung bei mehrdeutigen JaCoCo-Pfaden: je Eintrag Schlüssel und Kandidaten, dazu der Fix. */
+export function mehrdeutigText(mehrdeutig) {
+  const zeilen = mehrdeutig.map((e) => `    ${e.pfad}: „${e.schluessel}“ gibt es unter ${e.kandidaten.join(", ")}`);
+  return `${zeilen.join("\n")}\n\nDer JaCoCo-Bericht nennt nur paket/Datei, nicht den Ordner: die Zuordnung ist nicht eindeutig, es wurde NICHTS gemessen.\nFix: die Quellwurzeln (struktur.quelle in der Projekt-Config) so fassen, dass die Datei nur unter einer Wurzel liegt, oder eine der gleichnamigen Dateien umbenennen (ein anderer Zuschnitt hilft nur bei überlappenden Wurzeln)`;
+}
+
+/** Die Messfehler (fehlende Berichte, fehlende Datei im Bericht, mehrdeutiger Pfad) als Fehlertext oder `null`; bewusst NICHT über das Override abkürzbar. */
+export function messfehlerText(r, red) {
+  if (r.noReport) return `${red("✖ Kein Coverage-Bericht gefunden — es wurde NICHTS gemessen.")}\n\n${fehlenderBerichtText(r.fehlendeBerichte)}`;
+  if (r.missing.length > 0) {
+    return `${red(`✖ ${r.missing.length} geänderte Quelldatei(en) fehlen im Coverage-Bericht:`)}\n${r.missing.map((p) => `    ${p}`).join("\n")}\n\nFür sie wurde NICHTS gemessen — Bericht veraltet. Neu messen:  ${COVERAGE_BEFEHL}`;
+  }
+  if (r.mehrdeutig.length > 0) return `${red(`✖ ${r.mehrdeutig.length} geänderte Quelldatei(en) mit mehrdeutigem JaCoCo-Pfad:`)}\n${mehrdeutigText(r.mehrdeutig)}`;
+  return null;
+}
+
+/** Der Text zu „nichts zu messen“: die Wurzeln und Endungen, die das Gate misst. */
+function messbereichText(quelle) {
+  const q = quellenObjekt(quelle);
+  return `(Wurzeln: ${q.wurzeln.join(", ")}; Endungen: ${q.endungen.join(" ")})`;
+}
+
+/** Ergebnis ohne Messung (nichts zu messen, Diff nicht lesbar) → Exit-Code oder `null`, wenn gemessen wurde. */
+export function ohneMessung(r, { zeilen, quelle, colors }) {
+  const { red, green, dim } = colors;
+  if (r.nothingToMeasure) {
+    meldeUngueltigeOverrides(r.invalidOverrides, { dim });
+    const text = `dieser Slice ändert keinen gemessenen Quellcode ${messbereichText(quelle)}`;
+    if (!r.stale) console.log(green(`✔ check:diffcoverage ok — ${text}.`));
+    else console.error(red(staleOverrideHinweis(zeilen.diffcovOverride, text)));
+    return r.stale ? 1 : 0;
+  }
+  if (!r.diffUnlesbar) return null;
+  console.error(red("✖ Diff nicht lesbar (Ausgabe über dem Puffer, ENOBUFS) — es wurde NICHTS gemessen."));
+  console.error("Slice verkleinern (check:diffsize) oder den Diff lokal prüfen.");
+  return 1;
+}
+
+function ladeConfigOderBeende(red) {
+  try {
+    const config = ladeProjektConfig();
+    return { quelle: quellenAus(config), berichte: berichteAus(config) };
+  } catch (e) {
+    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
+    process.exit(1);
   }
 }
 
@@ -288,37 +310,22 @@ function main() {
   const colors = { red: (s) => paint("31", s), green: (s) => paint("32", s), dim: (s) => paint("2", s) };
   const { red, green, dim } = colors;
 
-  let quelle;
-  try {
-    quelle = strukturAus(ladeProjektConfig()).quelle;
-  } catch (e) {
-    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
-    process.exit(1);
-  }
-  const r = checkDiffCoverage({ zeilen, quelle });
+  const { quelle, berichte } = ladeConfigOderBeende(red);
+  const r = checkDiffCoverage({ zeilen, quelle, berichte });
 
   if (r.skipped) {
     console.log(dim("• check:diffcoverage übersprungen — keine Vergleichs-Basis (flacher Checkout / nichts gegenüber main)."));
     return;
   }
-  if (r.nothingToMeasure && r.stale) {
-    meldeUngueltigeOverrides(r.invalidOverrides, { dim });
-    console.error(red(staleOverrideHinweis(zeilen.diffcovOverride, `dieser Slice ändert keinen gemessenen Quellcode (${quelle}/**/*.ts)`)));
-    process.exit(1);
-  }
-  if (r.nothingToMeasure) {
-    meldeUngueltigeOverrides(r.invalidOverrides, { dim });
-    console.log(green(`✔ check:diffcoverage ok — dieser Slice ändert keinen gemessenen Quellcode (${quelle}/**/*.ts).`));
-    return;
-  }
-  if (r.diffUnlesbar) {
-    console.error(red("✖ Diff nicht lesbar (Ausgabe über dem Puffer, ENOBUFS) — es wurde NICHTS gemessen."));
-    console.error("Slice verkleinern (check:diffsize) oder den Diff lokal prüfen.");
-    process.exit(1);
-  }
-  if (r.noReport) {
-    console.error(red("✖ Kein Coverage-Report gefunden — es wurde NICHTS gemessen."));
-    console.error(`\nErwartet: ${LCOV_PATH}\nErst messen lassen:  npm run test:coverage`);
+  const ohne = ohneMessung(r, { zeilen, quelle, colors });
+  if (ohne !== null) process.exit(ohne);
+  const fehler = messfehlerText(r, red);
+  if (fehler !== null) {
+    if (r.noReport) console.error(fehler);
+    else {
+      renderBuckets(r, colors);
+      console.error(fehler);
+    }
     process.exit(1);
   }
 
@@ -326,14 +333,6 @@ function main() {
   if (r.partial.length > 0) {
     console.log(dim("• Teilweise getestet (ungetesteter Zweig auf ausgeführter geänderter Zeile, nur berichtet):"));
     for (const p of r.partial) console.log(dim(`    ${p.path}: Zeile ${p.line} (${p.taken} von ${p.total} Zweigen)`));
-  }
-
-  // Messfehler, nicht Coverage-Lücke — bewusst NICHT über das Override abkürzbar.
-  if (r.missing.length > 0) {
-    console.error(red(`✖ ${r.missing.length} geänderte Quelldatei(en) fehlen im Coverage-Report:`));
-    for (const p of r.missing) console.error(`    ${p}`);
-    console.error(`\nFür sie wurde NICHTS gemessen — Report veraltet. Neu messen:  npm run test:coverage`);
-    process.exit(1);
   }
 
   meldeUngueltigeOverrides(r.invalidOverrides, { dim });

@@ -25,7 +25,7 @@
  * NICHT die `rm -rf`-Deny aufweichen — der Workaround über `fs.rmSync` (kein
  * Shell-`rm`) bleibt sauber innerhalb der Least-Privilege-Policy (#901).
  *
- * Lens-Worktrees (#1425): ein registrierter `<worktree-präfix><nr>-lens-r<runde>` bzw. `-lens-m<n>`/`-lens-a<n>` ohne `<worktree-präfix><nr>` (der Umsetzer hat den Worktree
+ * Lens-Worktrees (#1425): ein registrierter `<worktree-präfix><nr>-lens-r<runde>` bzw. `-lens-m<n>`/`-lens-a<n>`/`-lens-c<n>` ohne `<worktree-präfix><nr>` (der Umsetzer hat den Worktree
  * entfernt, die Sabotage-Probe der Test-Lens aber nicht) wird entfernt, wenn er älter als 5 Minuten ist.
  *
  * Lose Dateien (#1476): eine reguläre Datei `<worktree-präfix><nr>…` direkt unter `.claude/worktrees/`, deren `<worktree-präfix><nr>` nicht mehr
@@ -46,7 +46,7 @@
 import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { diagnoseOrphans, entferneLensWorktrees, entferneVerwaisteDateien, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./worktree-aufraeumen.mjs";
+import { aufraeumDiagnose, entferneLensWorktrees, entferneVerwaisteDateien, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./worktree-aufraeumen.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen)
 import { namenOderGrund, worktreeNamenOderGrund } from "./ticket-namen.mjs";
@@ -70,7 +70,7 @@ export function deletedTrackedPaths(cwd, deps = {}) {
   const exec = deps.execSync ?? execSync;
   let out;
   try {
-    out = exec("git status --porcelain -z -- .claude", { cwd, encoding: "utf-8" });
+    out = exec("git status --porcelain -z -- .claude", { cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] });
   } catch {
     return null;
   }
@@ -106,17 +106,47 @@ export function repoRootFromScriptUrl(importMetaUrl) {
  *  - Ordner nach dem Löschversuch noch da, aber LEER (Git-Worktree schon entfernt, meist eine kurze Sperre) →
  *    { blocked: false, warning }: nur eine Warnung, der nächste Stop versucht es erneut (#1411).
  *  - git-Fehler (diagnoseOrphans meldet ok:false) → fail-open, { blocked: false }.
+ *  - Arbeitsplatz (Block `arbeitsplatz` in `deps.config`, factory#89): je Repo der Config, Worktree-Ordner `<wurzel>/.claude/worktrees/<name>`; scheitert `git worktree list` in einem Repo,
+ *    wird in keinem gelöscht (`{ blocked: false, warning }`); ein kaputter Block blockiert mit der Fix-Zeile.
  */
 export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
-  const { ok, orphans, lensOrphans = [], orphanFiles = [], foreignFiles = [], mainRoot, worktreesDir } = diagnoseOrphans(repoRoot, deps);
-  if (!ok) return { blocked: false };
+  let d;
+  try {
+    d = aufraeumDiagnose(deps.config, repoRoot, deps);
+  } catch (e) {
+    return { blocked: true, reason: `Stop-Worktree-Cleanup-Hook (factory#89): ${e instanceof Error ? e.message : e}` };
+  }
+  if (!d.arbeitsplatz) {
+    // Eingebettet wie bisher: ein Repo, ein git-Fehler bleibt still (fail-open).
+    const r = raeumeRepoAuf(d.repos[0], deps, d.repos[0].mainRoot);
+    if (r === null) return { blocked: false };
+    return r.problems.length > 0 ? { blocked: true, reason: `Stop-Worktree-Cleanup-Hook (#908/#952/#1051): ${r.problems.join(" | ")}` } : { blocked: false, removed: r.removed, ...(r.warnungen.length > 0 ? { warning: r.warnungen.join(" ") } : {}) };
+  }
+  // Arbeitsplatz (factory#89): scheitert git in einem Repo, wurde nirgends gelöscht; das ist eine Warnung, nie eine Blockade.
+  if (!d.ok) return { blocked: false, warning: `Worktree-Aufräumen übersprungen: ${d.fehler}` };
+  const ergebnisse = d.repos.map((r) => ({ name: r.name, r: raeumeRepoAuf(r, { ...deps, aufloesung: d.aufloesung }, d.aufloesung.wurzel) })).filter((x) => x.r !== null);
+  const problems = ergebnisse.flatMap(({ name, r }) => r.problems.map((p) => `Repo ${name}: ${p}`));
+  const warnungen = ergebnisse.flatMap(({ name, r }) => r.warnungen.map((w) => `Repo ${name}: ${w}`));
+  const removed = ergebnisse.flatMap(({ r }) => r.removed);
+  const warning = warnungen.length > 0 ? warnungen.join(" ") : undefined;
+  if (problems.length > 0) return { blocked: true, reason: `Stop-Worktree-Cleanup-Hook (#908/#952/#1051): ${problems.join(" | ")}` };
+  return ergebnisse.length === 0 ? { blocked: false } : { blocked: false, removed, ...(warning ? { warning } : {}) };
+}
+
+/**
+ * Der Rumpf je Repo: räumt einen Befund (`diagnoseOrphans`/`diagnoseArbeitsplatz`) auf. `null` bei `ok: false` oder wenn nichts zu tun ist, sonst
+ * `{ problems, warnungen, removed }`. `verlustOrt` ist das Verzeichnis des Datenverlust-Checks (eingebettet der Haupt-Checkout, im Arbeitsplatz die Wurzel).
+ */
+function raeumeRepoAuf(befund, deps, verlustOrt) {
+  const { ok, orphans, lensOrphans = [], orphanFiles = [], foreignFiles = [], mainRoot, worktreesDir } = befund;
+  if (!ok) return null;
 
   // Reparse-Point an Worktree-Stelle: wird NIE gelöscht (rekursives Löschen darf
   // einem Link nicht folgen), aber auch nicht mehr stillschweigend übersehen —
   // `Dirent.isDirectory()` ist für eine Junction false, sie fiel deshalb bisher
   // durch jeden Filter (#1051).
   const suspicious = suspiciousWorktreeEntries(worktreesDir, deps);
-  if (orphans.length === 0 && suspicious.length === 0 && lensOrphans.length === 0 && orphanFiles.length === 0 && foreignFiles.length === 0) return { blocked: false };
+  if (orphans.length === 0 && suspicious.length === 0 && lensOrphans.length === 0 && orphanFiles.length === 0 && foreignFiles.length === 0) return null;
 
   const problems = [];
   const warnungen = [];
@@ -158,9 +188,9 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
   if (orphans.length > 0) {
     // Nur wenn es wirklich etwas zu löschen gibt, kostet der Datenverlust-Check
     // einen git-Aufruf — im Normalfall (leeres .claude/worktrees) null Latenz.
-    const before = deletedTrackedPaths(mainRoot, deps);
+    const before = deletedTrackedPaths(verlustOrt, deps);
     const result = fixOrphans(mainRoot, worktreesDir, orphans, deps);
-    const after = deletedTrackedPaths(mainRoot, deps);
+    const after = deletedTrackedPaths(verlustOrt, deps);
     removed = [...removed, ...result.removed];
     pending = result.pending ?? [];
 
@@ -214,13 +244,7 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
   if (pending.length > 0) {
     warnungen.push(`Worktree-Ordner ${pending.join(", ")} ist leer, aber gerade gesperrt (Git-Worktree ist schon entfernt). Der nächste Stop versucht das Löschen erneut, nichts zu tun.`);
   }
-  const warning = warnungen.length > 0 ? warnungen.join(" ") : undefined;
-  if (problems.length === 0) return { blocked: false, removed, ...(warning ? { warning } : {}) };
-
-  return {
-    blocked: true,
-    reason: `Stop-Worktree-Cleanup-Hook (#908/#952/#1051): ${problems.join(" | ")}`,
-  };
+  return { problems, warnungen, removed };
 }
 
 /**
@@ -236,20 +260,23 @@ export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees,
   const blockiere = (grund) => ({ exit: 2, stdout: JSON.stringify({ decision: "block", reason: grund }), stderr: grund });
   let deps = abschlussDeps;
   let namen;
+  let config;
   if (hookEvent === "SubagentStop") {
     const voll = namenOderGrund("Stop-Hook", abschlussDeps);
     if (voll.grund) return blockiere(voll.grund);
     if (agentType !== voll.namen.agenten.umsetzer) return { exit: 0, stdout: "", stderr: "" };
     namen = voll.namen;
+    config = voll.config;
     deps = { ...abschlussDeps, config: voll.config };
   } else {
     const teil = worktreeNamenOderGrund("Stop-Hook", abschlussDeps);
     if (teil.grund) return blockiere(teil.grund);
-    namen = teil.namen; // Teilobjekt: die Aufräumlogik liest daraus nur `praefixe.worktree` und `lensNameKern`
+    namen = teil.namen;
+    config = teil.config; // Teilobjekt: die Aufräumlogik liest daraus nur `praefixe.worktree` und `lensNameKern`
   }
   // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952) und den Umsetzer-Abschluss prüfen (#1331)
   const gruende = [];
-  const orphanResult = check(repoRoot, { namen });
+  const orphanResult = check(repoRoot, { namen, config });
   if (orphanResult.blocked) gruende.push(orphanResult.reason);
   const abschluss = abschlussBlockade(parseAbschlussInput(stdinText), deps);
   if (abschluss) gruende.push(abschluss);

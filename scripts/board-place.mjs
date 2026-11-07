@@ -4,8 +4,8 @@
  * EINE Listenabfrage, Item-IDs werden wiederverwendet, die Positionen laufen nacheinander mit kurzer
  * Pause — statt je Ticket die komplette Liste neu zu laden (vermeidet das GraphQL-Rate-Limit).
  *
- *   node scripts/board-place.mjs --top 1240 1241 1242        # an die Spitze, aber hinter das ungeclaimte Sammelticket geklemmt
- *   node scripts/board-place.mjs --notfall rot-main --top 1240   # echter Notfall: wirklich ganz oben
+ *   node scripts/board-place.mjs --top 1240 1241 1242        # an die Spitze (ein volles Sammelticket holt der Board-Takt vor sie)
+ *   node scripts/board-place.mjs --notfall rot-main --top 1240   # Notfall: an die Spitze, mit Titelmarkerprüfung
  *   node scripts/board-place.mjs --after 1206 1240 1241      # in dieser Reihenfolge hinter #1206
  *   node scripts/board-place.mjs --dry-run --top 1240        # nur anzeigen
  *   node scripts/board-place.mjs --position 4 1312           # als N. Todo-Item (z.B. Sammelticket, Position laut AGENTS.md)
@@ -21,14 +21,9 @@
  * ans Ende des Ziel-Boards (Status Todo) und entfernt es danach vom Quell-Board (das Issue bleibt). Steht die Nummer auf beiden Boards,
  * wird nur entfernt; ein Item mit Status ungleich Todo wird gemeldet (Exit 1). Idempotent, Abbruch beim ersten Fehler, erneut fahren.
  *
- * Nie vor das ungeclaimte Sammelticket: `--top`, `--after` und `--position` klemmen den Anker hinter das offene, nicht zugewiesene
- * Sammelticket „Harness-Härtung (gesammelt)“ (sonst rückt es nicht nach vorn); die Ausgabe nennt die Klemmung. Nur echte Notfälle
- * (`--notfall <art>`, nur mit `--top`) stehen ganz oben. Das Sammelticket selbst (`--position 4 <nr>`) wird nicht geklemmt.
- *
- * Selbstkorrektur (#1390): vor jedem Einsortieren (außer `--notfall`) schiebt das Skript ein ungeclaimtes Harness-Sammelticket, das
- * hinter der Position laut AGENTS.md steht (z.B. am Board-Ende), dorthin zurück (nur nach vorn, nie in den Kopf); sonst klemmte
- * die Klemmung jedes neue Ticket hinter ein ans Ende gerutschtes Sammelticket. `--dry-run` zeigt es nur an. `--notfall <art>` prüft
- * außerdem den Titelmarker des Tickets (docs/ticket-reihenfolge.md): ohne ihn zählt es nicht zum Kopf, Exit 2.
+ * Der Anker gilt wörtlich (factory#162): keine Klemmung hinter ein Sammelticket, keine Korrektur seiner Position. Das volle Harness-Sammelticket
+ * holt der Board-Takt an die Spitze, die Anlage setzt es auf die Position laut AGENTS.md (`sammelticket-anlegen`). `--notfall <art>` (nur mit `--top`) prüft
+ * den Titelmarker des Tickets (docs/ticket-reihenfolge.md): ohne ihn zählt es nicht zum Kopf, Exit 2.
  *
  * Nummern, die die REST-Board-Liste nicht liefert (frische Items kommen teils lange verzögert), holt ein GraphQL-Fallback
  * (`issue.projectItems`, gebündelte Aliase in einer Abfrage); steht ein OFFENES Issue wirklich nicht im Board (frisch per `gh issue create`
@@ -56,8 +51,7 @@ import {
   missingFromBoard,
   mitWiederholung,
   notfallTitelFehler,
-  planMitKorrektur,
-  positionOderWarnung,
+  planFuerArgs,
   setPosition,
   todoItem,
   umzugsPlan,
@@ -198,7 +192,6 @@ export const ECHTE_PLACE_IO = {
   addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts),
   setPosition: (board, id, afterId) => setPosition(board, id, afterId),
   entferneVomBoard: (board, id) => entferneVomBoard(board, id),
-  positionOderWarnung,
   schlafe: () => sleep(PAUSE_MS),
   log: (z) => console.log(z),
   warn: (z) => console.error(z),
@@ -243,17 +236,8 @@ export async function einsortieren(args, config, io = ECHTE_PLACE_IO) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
     if (fehler) throw abbruch(fehler, 2);
   }
-  const { korrektur, plan } = planMitKorrektur(items, args, args.notfall ? null : io.positionOderWarnung());
-  if (plan.klemmung.geklemmt) io.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
-  const { steps, missing, anchorMissing } = plan;
+  const { steps, missing, anchorMissing } = planFuerArgs(items, args);
   if (anchorMissing) throw abbruch(`Anker #${args.anchor} steht nicht im Board (weder in der REST-Liste noch per GraphQL gefunden).`);
-  if (korrektur) {
-    io.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
-    if (!args.dry) {
-      io.setPosition(board, korrektur.id, korrektur.afterId);
-      await io.schlafe();
-    }
-  }
   for (const [n, { item, afterId }] of steps.entries()) {
     io.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
     if (args.dry) continue;

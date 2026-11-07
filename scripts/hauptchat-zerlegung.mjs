@@ -1,7 +1,7 @@
 // Kein Shebang: wird per `node scripts/hauptchat-zerlegung.mjs` gestartet UND von test/hauptchat-zerlegung.test.ts importiert.
 /**
  * Hauptchat-Kosten nach Tätigkeit (#1356): wofür der Hauptchat Tokens verbraucht.
- * Aufruf, Kategorien und Grenzen: docs/model-routing.md §5 „Hauptchat nach Tätigkeit“.
+ * Aufruf, Kategorien und Grenzen: docs/model-routing.md (Fabrik) › Hauptchat nach Tätigkeit.
  *
  *   node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]
  *

@@ -52,7 +52,7 @@ export function waechterDateien(unsere, ihre) {
 export function waechterHinweis(dateien) {
   if (!dateien.length) return "";
   const rest = dateien.length > 5 ? ` und ${dateien.length - 5} weitere` : "";
-  return `\nWächter-Lauf nötig: npx vitest run test/harness (beide Seiten berühren Wächter-Dateien: ${dateien.slice(0, 5).join(", ")}${rest}).`;
+  return `\nWächter-Lauf nötig: node scripts/gate-befehl.mjs testGezielt test/harness (beide Seiten berühren Wächter-Dateien: ${dateien.slice(0, 5).join(", ")}${rest}).`;
 }
 
 /**

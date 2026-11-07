@@ -42,3 +42,8 @@ export function liesSyncStand(wurzel) {
   }
   return syncStandAusText(text);
 }
+
+/** Bezieher ist, wer einen Sync-Stand hat; auch ein kaputter Stand zählt (fail-closed: nie als Fabrik behandeln). Wirft nie. */
+export function istBezieher(wurzel) {
+  return liesSyncStand(wurzel).zustand !== "fehlt";
+}

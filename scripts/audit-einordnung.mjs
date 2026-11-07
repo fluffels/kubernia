@@ -16,8 +16,12 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { ladeBoardLibs, inboxStart, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
+import { bereiteMeldung } from "./meldung-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
 
@@ -125,7 +129,7 @@ export function zeilenText(b) {
 export function alarmText(b) {
   return {
     titel: `${ALARM_PRAEFIX} ${b.ghsa} in ${b.paket}`,
-    body: `${b.ghsa}: ${b.paket} (critical, ausgelieferte Produktiv-Abhängigkeit). Fix: ${b.fixVerfuegbar ? `ja${b.fixVersion ? ` v${b.fixVersion}` : ""}` : "nein"}.\n\nPrüfauftrag: im Einsatz dieses Projekts ausnutzbar? Wenn ja: fixen (Update/overrides). Wenn nein: Eintrag \`audit-${b.ghsa.toLowerCase()}\` in \`.github/wiedervorlagen.json\` anlegen (fällig +30 Tage) und dieses Ticket schließen. Mechanik: docs/ticket-reihenfolge.md › Audit-Einordnung.`,
+    body: `${b.ghsa}: ${b.paket} (critical, ausgelieferte Produktiv-Abhängigkeit). Fix: ${b.fixVerfuegbar ? `ja${b.fixVersion ? ` v${b.fixVersion}` : ""}` : "nein"}.\n\nPrüfauftrag: im Einsatz dieses Projekts ausnutzbar? Wenn ja: fixen (Update/overrides). Wenn nein: Eintrag \`audit-${b.ghsa.toLowerCase()}\` in \`.github/wiedervorlagen.json\` anlegen (fällig +30 Tage) und dieses Ticket schließen. Mechanik: ${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "audit-einordnung-1628")}.`,
   };
 }
 
@@ -195,23 +199,30 @@ function legeAlarmeAn(alarme, { aktion, log }) {
   return rot;
 }
 
-/** Postet die Zeilen ins jüngste ungeclaimte Sammelticket. Rückgabe: false, wenn keins da ist. */
-function postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log }) {
+/** Postet die Zeilen ins jüngste ungeclaimte Sammelticket (im Bezieher das Rest-Ticket im eigenen Repo), nach der Sperrprüfung (`bereiteMeldung`, ohne Stand-Zeile). Rückgabe: false, wenn die Prüfung anschlägt oder kein Ticket da ist. */
+function postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log, bereite }) {
+  const pruefe = bereite ?? ((z, o) => bereiteMeldung(z, o));
+  const meldung = pruefe(zeilen.map((z) => z.text), { stand: null });
+  if (!meldung.ok) {
+    log(`::error::${meldung.grund}`);
+    return false;
+  }
   const ziel = waehleSammelticket(offene);
   if (!ziel) {
     log("::error::Kein ungeclaimtes Harness-Sammelticket für die Audit-Zeilen.");
     return false;
   }
-  postZeilen(ziel.number, zeilen.map((z) => z.text).join("\n"));
+  postZeilen(ziel.number, meldung.text);
   log(`${zeilen.length} Zeile(n) in #${ziel.number}.`);
   return true;
 }
 
 /** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra)`, `alertsLaden(repo)`, `gh` (`{ text, json }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error } = {}) {
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, gh = { text: ghText, json: ghJson }, bezieher, bereite, log = console.log, err = console.error } = {}) {
   const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
-  const { trocken, libs } = start;
+  const { trocken } = start;
+  const libs = sicherheitsLibs(start.libs, { bezieher, log, gh });
   const { REPO, ladeSammelKontext, offeneTitel, postZeilen, waehleSammelticket } = libs;
   const aktion = zielAktionen({ gh, libs });
   const kontext = ladeSammelKontext();
@@ -228,7 +239,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const alarme = aktionen.filter((a) => a.art === "alarm");
   if (trocken) return trockenLauf(aktionen, log);
   const alarmRot = legeAlarmeAn(alarme, { aktion, log });
-  const zeilenRot = zeilen.length > 0 && !postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log });
+  const zeilenRot = zeilen.length > 0 && !postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log, bereite });
   return alarmRot || zeilenRot ? 1 : 0;
 }
 

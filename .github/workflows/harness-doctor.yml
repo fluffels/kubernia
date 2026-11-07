@@ -1,8 +1,8 @@
 name: Harness-Doctor (Wochenlauf)
 
 # Meldet Lücken der Factory-Voraussetzungen (scripts/harness-doctor.mjs) einmal pro Woche als Zeile im Harness-Sammelticket, mit Abgleich
-# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN; gepostet wird im eigenen Repo mit github.token, in einem fremden Ziel-Repo mit PROJECT_TOKEN; fehlt das Secret,
-# meldet der Lauf genau das als Lücke. Diese Datei ist die Vorlage von `harness-doctor.mjs --einrichten` (ein Wächter hält beide gleich).
+# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN; gepostet wird im eigenen Repo mit github.token, an einer fremden Meldestelle (Schlüssel meldestelle, factory#153) mit MELDESTELLE_TOKEN (Rückfall PROJECT_TOKEN);
+# fehlt PROJECT_TOKEN, meldet der Lauf genau das als Lücke. Diese Datei ist die Vorlage von `harness-doctor.mjs --einrichten` (ein Wächter hält beide gleich).
 
 on:
   schedule:
@@ -38,6 +38,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          MELDESTELLE_TOKEN: ${{ secrets.MELDESTELLE_TOKEN }}
           TROCKEN: ${{ inputs.trocken == true }}
         run: |
           if [ "$TROCKEN" = "true" ]; then node scripts/harness-doctor-melden.mjs --dry-run; else node scripts/harness-doctor-melden.mjs; fi

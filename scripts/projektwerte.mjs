@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { projektwertLauf } from "./besitz-lib.mjs";
+import { projektwertLauf } from "./projektwert-lauf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const USAGE = "Aufruf: node scripts/projektwerte.mjs --check | --write [--wurzel <pfad>]";

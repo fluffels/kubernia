@@ -3,26 +3,28 @@
 // Der Besitz kommt aus einem Tag der Quelle (Inhalte wie `git show <tag>:<pfad>` über `git cat-file --batch`, Ausführbar-Bit aus `git ls-tree`), nie aus dem Arbeitsbaum; der
 // Sync-Stand hält Commit und Tag fest. Ohne `--tag` synct nichts; nur `--entwurf` liest den Arbeitsbaum (Probe, das Drift-Gate bleibt rot).
 // Erst-Übernahme-Schutz und Vorlagen (factory#118, `sync-abgleich-lib.mjs`): eine abweichende Ziel-Datei, die noch nicht im Stand steht, überschreibt erst `--uebernehmen <pfad>`; eine Vorlage wird nur angelegt.
-// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index). Hash und Vergleich
+// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index, er legt fehlende Anker-Stub-Seiten an und erneuert reine Stubs). Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
 // Hinweise ohne Fehler: eine Projektkopie einer Test-Hilfe (nicht verteilt), die von der Quelle abweicht (`testHilfeKopienAbweichend`); ein unbekannter Manifest-Versionsfehler trägt den Werkzeug-Hinweis.
 // Link-Schritt (factory#131, nur mit `--tag`): auf dem Ergebnis des Sync-Plans (neue Texte, neuer Sync-Stand) prüft `linkSchritt` die Factory-Links des Ziels gegen den Baum des Tags
 // und stellt Refs und `.factory/factory-links.json` mit um; ein Link-Befund heißt Exit 1 und nichts geschrieben (auch mit `--trocken`), `--entwurf` macht keinen Link-Schritt.
+// Anker-Stubs (factory#167): eine Seite, auf die ein Kern-Link zeigt und die es im Ziel nicht gibt, legt `planeAnkerStubs` mit den verlinkten Überschriften und Factory-Links auf den Tag an; eine reine Stub-Seite (`istReinerStub`, nur Sync-Ausgabe) erneuert er bei jedem Sync (factory#166), jede andere vorhandene Seite wird nie angefasst.
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
-import { befundZeile, INDEX_PFAD, planeFactoryLinks } from "./factory-links-lib.mjs";
+import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
+import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, versionUnbekannt, wirdVerteilt } from "./besitz-lib.mjs";
+import { rendereProjektwerte } from "./projektwert-lib.mjs";
+import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
 import { testHilfeKopienAbweichend } from "./besitz-extraktion.mjs";
 import { WERKZEUG_HINWEIS } from "./release-tag-lib.mjs";
-import { ueberBudget } from "./kontext-budget-lib.mjs";
-import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
+import { knappeBudgets, ueberBudget } from "./kontext-budget-lib.mjs";
+import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, projektMarkerHinweis, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 
 // Teile der Bibliothek, die die Tests über dieses Modul kennen (das Export-Werkzeug importiert aus der Bibliothek).
@@ -34,7 +36,7 @@ const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
 
 /** Fehler des Quell-Manifests: Schema, Projekt-Config nie Besitz, jede Besitz-Rolle (#1871) eine ganze, verteilte Einheit (die Rollen des Projekts stehen nicht im Manifest). */
 function manifestFehler(manifest, quelleLies) {
-  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}${/^version .* unbekannt/.test(m) ? `
+  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}${versionUnbekannt(m) ? `
 Fix: ${WERKZEUG_HINWEIS}` : ""}`);
   if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
   for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
@@ -72,6 +74,13 @@ function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar) {
   return { text: rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
 }
 
+/** Hinweise auf Dateien im Ziel am Pfad einer Moduleinheit, deren Modul nicht gewählt ist (vermutlich Projektkopie; geschrieben wird nichts). */
+function projektkopienAbgewaehlt(manifest, gewaehlt, zielLies) {
+  return manifest.eintraege
+    .filter((e) => istModulEinheit(e) && !modulGewaehlt(e, gewaehlt) && zielLies(e.pfad) !== null)
+    .map((e) => `Modul '${e.modul}' nicht gewählt, im Ziel liegt ${e.pfad} (Projektkopie?): Modul wählen oder als Projektdatei führen`);
+}
+
 /** Meldungen zu Einheiten des alten Stands, die jetzt nicht mehr verteilt werden (Vorlage, kein Besitz mehr, anderer Ring); im Ziel wird nie gelöscht. */
 function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
   const meldungen = [];
@@ -83,7 +92,7 @@ function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
     }
     const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
     meldungen.push(
-      nurFactory?.modul !== undefined && !modulGewaehlt(nurFactory, gewaehlteModule)
+      nurFactory !== undefined && istModulEinheit(nurFactory) && !modulGewaehlt(nurFactory, gewaehlteModule)
         ? `Modul '${nurFactory.modul}' nicht gewählt (Einheit '${id}'), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
         : nurFactory === undefined
         ? `Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
@@ -143,6 +152,7 @@ export function planeSync({
   const nachPfad = new Map();
   const alle = manifest.eintraege.filter((e) => wirdVerteilt(e) && modulGewaehlt(e, wahl.gewaehlt));
   const verteilt = alle.filter((e) => !istVorlage(e));
+  res.meldungen.push(...projektkopienAbgewaehlt(manifest, wahl.gewaehlt, zielLies));
   const alt = leseAltStand(zielLies);
   for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
   const { erg, fehler: ergFehler } = liesErgaenzungen(verteilt, quelleLies, zielLies);
@@ -157,6 +167,7 @@ export function planeSync({
       const ganz = eintraege.some(istGanzeDatei);
       const ergebnis = ganz ? rendereProjektwerte(srcText, zielConfig, pfad) : wendeTeileAn(eintraege, srcText, zielLf, zielConfig, erg);
       if (!ganz) res.fehler.push(...pruefeErgebnis(pfad, eintraege, srcText, zielLf, ergebnis, erg));
+      res.meldungen.push(...projektMarkerHinweis(pfad, eintraege, zielLf));
       ziele.set(pfad, { ergebnis, zielRoh, zielLf, srcText });
     } catch (err) {
       res.fehler.push(err.message.startsWith(`${pfad}:`) ? err.message : `${pfad}: ${err.message}`);
@@ -271,7 +282,9 @@ function kontextHinweise(plan, ziel) {
   } catch {
     // Config des Ziels nicht lesbar: ohne Ausnahmen messen, die Warnung ist nur ein Hinweis.
   }
-  return ueberBudget({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget: ${k.file} hätte ${k.chars} Zeichen > Budget ${k.budget}; im Ziel wird check:contextsize rot, Projekt-Block kürzen (nie Wächter-gebundene Sätze)`);
+  const ueber = ueberBudget({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget: ${k.file} hätte ${k.chars} Zeichen > Budget ${k.budget}; im Ziel wird check:contextsize rot, Projekt-Block kürzen (nie Wächter-gebundene Sätze)`);
+  const knapp = knappeBudgets({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget knapp: ${k.file} ${k.chars} von ${k.budget} Zeichen (Rest ${k.rest}); der nächste Kern-Zuwachs kann check:contextsize rot machen, Projekt-Block kürzen`);
+  return [...ueber, ...knapp];
 }
 
 /** Trägt die Änderungen des Link-Plans in den Sync-Plan ein: ein Pfad, den der Sync als unverändert zählte, wechselt zu geändert; neue Pfade (der Index) werden angelegt. */
@@ -288,7 +301,7 @@ function verschmelzeLinkDateien(plan, geaendert, platte) {
 }
 
 /**
- * Link-Schritt auf dem Sync-Ergebnis (factory#131): `leser` ist der Leser des Tags (`{ pfade, lies, vorladen }`). Rückgabe `{ fehler, hinweise }`, bei Erfolg sind Refs und Index im `plan.dateien`.
+ * Link-Schritt auf dem Sync-Ergebnis (factory#131): `leser` ist der Leser des Tags (`{ pfade, lies, vorladen }`). Rückgabe `{ fehler, hinweise }`, bei Erfolg sind Refs, Index, angelegte (factory#167) und erneuerte (factory#166) Anker-Stub-Seiten im `plan.dateien`; bei einem Befund liegen die Stubs dort auch, die Kommandozeile schreibt dann nichts.
  * Ohne bestimmbares Factory-Repo (weder `quelle.repo` noch Board mit Rolle factory) gibt es nur einen Hinweis; eine unlesbare Ziel-Config bei bekanntem Repo ist ein Fehler.
  */
 function linkSchritt({ plan, ziel, leser }) {
@@ -304,12 +317,45 @@ function linkSchritt({ plan, ziel, leser }) {
   }
   const platte = liesDatei(ziel);
   const lies = (pfad) => plan.dateien.get(pfad)?.text ?? platte(pfad);
+  const vorhanden = (pfad) => plan.dateien.has(pfad) || existiertImZiel(join(ziel, ...pfad.split("/")));
+  const reineStubs = reineStubPfade({ plan, ziel, platte });
+  const stubs = planeAnkerStubs({ lies, einheiten: Object.keys(plan.stand.einheiten), repo, tag, leser, ausnahmen, vorhanden, reineStubs });
+  for (const [pfad, text] of stubs.dateien) {
+    const erneuert = stubs.erneuert.has(pfad);
+    const alt = erneuert ? platte(pfad) : null;
+    if (alt !== null && normalisiereEol(alt) === text) continue; // erneuerter Stub inhaltsgleich: nichts schreiben (idempotent, CRLF-neutral)
+    plan.dateien.set(pfad, { text: alt === null || eolVon(alt) === "\n" ? text : text.replace(/\n/g, eolVon(alt)), neu: !erneuert, ausfuehrbar: false, stub: true });
+  }
   const dateien = [...new Set([...collectMarkdown(ziel), ...[...plan.dateien.keys()].filter(istGelesenesMarkdown)])];
   const r = planeFactoryLinks({ dateien, lies, repo, einheiten: Object.keys(plan.stand.einheiten), ausnahmen, tag, commit, leser });
   if (r.befunde.length > 0) return { fehler: r.befunde.map(befundZeile), hinweise: [] };
   verschmelzeLinkDateien(plan, r.dateien, platte);
-  return { fehler: [], hinweise: [`Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
+  const angelegt = stubs.dateien.size - stubs.erneuert.size;
+  const stubHinweise = angelegt === 0 ? [] : [`Anker-Stubs: ${angelegt} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
+  const erneuertAnzahl = [...stubs.erneuert].filter((p) => plan.dateien.get(p)?.stub).length;
+  if (erneuertAnzahl > 0) stubHinweise.push(`Anker-Stubs: ${erneuertAnzahl} Seiten erneuert am Tag ${tag}`);
+  return { fehler: [], hinweise: [...stubs.hinweise, ...stubHinweise, `Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
 }
+
+/** Die reinen Stubs des Ziels (factory#166): Markdown-Dateien, die weder der Sync-Plan schreibt noch eine Einheit des Stands sind, reguläre Dateien (kein Symlink, kein Ordner) und `istReinerStub`. */
+function reineStubPfade({ plan, ziel, platte }) {
+  const einheitPfade = new Set(Object.keys(plan.stand.einheiten).map((id) => einheitAusId(id).pfad));
+  const regulaer = (p) => existiertImZiel(join(ziel, ...p.split("/"))) && lstatSync(join(ziel, ...p.split("/"))).isFile();
+  return collectMarkdown(ziel).filter((p) => !plan.dateien.has(p) && !einheitPfade.has(p) && regulaer(p) && istReinerStub(platte(p) ?? ""));
+}
+
+/** Gibt es den Pfad im Ziel (auch als Symlink oder Ordner, hängend eingeschlossen)? Anker-Stubs schreiben nie über etwas, das schon da ist. */
+function existiertImZiel(voll) {
+  try {
+    lstatSync(voll);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Die Art einer Zeile der Ausgabe: `neu (Anker-Stub)` (angelegte Stub-Seite, factory#167), `geändert (Anker-Stub)` (erneuerter reiner Stub, factory#166), `neu (Vorlage)`, `neu` oder `geändert`. */
+const artVon = (d) => (d.stub ? (d.neu ? "neu (Anker-Stub)" : "geändert (Anker-Stub)") : d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert");
 
 /** Link-Phase der Kommandozeile: `{ ok, hinweise }`; bei `ok: false` ist die Meldung schon über `err` ausgegeben (nichts geschrieben). */
 function linkPhase({ opt, plan, ziel, leser, err }) {
@@ -374,7 +420,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
   if (!links.ok) return 1;
   const ausfuehrbarePfade = [];
   for (const [pfad, d] of plan.dateien) {
-    out(`${opt.trocken ? "würde " : ""}${d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert"}: ${pfad}`);
+    out(`${opt.trocken ? "würde " : ""}${artVon(d)}: ${pfad}`);
     if (opt.trocken) continue;
     const voll = join(ziel, ...pfad.split("/"));
     mkdirSync(dirname(voll), { recursive: true });

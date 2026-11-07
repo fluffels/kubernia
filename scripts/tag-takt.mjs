@@ -4,30 +4,45 @@
  * Besitz-PRs seit dem letzten Release-Tag (Form `v1.2.3` aus release-tag-lib.mjs, #90) und das Alter der ältesten ungetaggten Änderung.
  *  - Besitz-PR: ein Commit auf main (erster Elternteil), der einen verteilten Pfad aus `.factory/besitz.json` (Ring `oberflaeche` zählt nicht) oder das
  *    Manifest selbst berührt. Bewusste Grenze: Pfad-Ebene, nicht Block- oder Schlüssel-Ebene; das zählt eher zu viel als zu wenig.
- *  - Ab 3 Besitz-PRs, einem ältesten Commit über 7 Tage oder einer Commit-Zeile `<praefixe.commitZeile>Sync-Dringlich: <grund>` in einem Besitz-Commit
+ *  - Ab `MIN_PRS` Besitz-PRs, einem ältesten Commit über 7 Tage oder einer Commit-Zeile `<praefixe.commitZeile>Sync-Dringlich: <grund>` in einem Besitz-Commit
  *    hält das Skript GENAU EIN Kopf-Ticket „🏷️ Tag v<x> setzen und syncen“ (Board-Spitze, Art `tag`) mit Tag-Vorschlag, PRs, CI-Status des
- *    main-Commits, fertigem Befehl und der Checkliste („Trockenlauf-Sync in einem Bezieher“, CI des Sync-PR je Bezieher). Ein offenes Ticket wird nie verdoppelt, sondern bei
+ *    main-Commits, fertigem Befehl und der Checkliste („Trockenlauf gegen den Probe-Erstbezug“, „Bezieher holen das Update selbst“). Ein offenes Ticket wird nie verdoppelt, sondern bei
  *    Änderung aktualisiert (geclaimt: unberührt) und geschlossen, sobald nichts Ungetaggtes mehr da ist.
- *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach setzt der Agent den Tag und erstellt je Bezieher den Sync-PR.
- *  - Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret = Pre-Flight); ohne ihn bleibt die Checkliste.
+ *  - `MIN_PRS` = aufgerundeter Median der Besitz-PRs je Tag-Abstand, mindestens 3 (factory#162, Messung 2026-11-04 über v0.1.0..v0.8.0: 10 Abstände mit 1, 2, 7, 1, 1, 4, 4, 4, 0, 3 Besitz-PRs, Median 2,5 → 3;
+ *    je 7 Tage kämen 22 PRs heraus, aber nur aus der Anlaufwoche mit zwei überlappenden Fenstern, das trägt keine Schwelle). Das Alters-Signal (7 Tage) und `Sync-Dringlich` bleiben; neu messen, wenn das Alters-Signal öfter auslöst als die Zahl.
+ *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach holen die Bezieher das Update selbst (`factory-update.yml`, ADR 0031).
+ *  - Grenze: die Fabrik schreibt in kein Bezieher-Repo (ADR 0031); der Trockenlauf läuft gegen den Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch).
+ *  - Vor-Tag-Probe (factory#188): die Projekt-Config listet die Bezieher (`bezieher`, `owner/name`); die Checkliste verlangt je Bezieher einen LESENDEN Lauf im Scratch-Klon (Entwurfs-Vorschau, Sync mit lokalem Tag,
+ *    `verify` nach den mechanischen Update-Schritten; nie Push, PR, Issue oder Kommentar; Fortschreibung zu ADR 0031). Rot durch Factory-Besitz oder fehlend heißt: nicht taggen. Kein Cross-Repo-CI (das bräuchte ein Secret): die Ergebnisse trägt der Mensch oder Agent mit `--probe` ein.
+ *  - Milestones (factory#194): ein Milestone, der nach dem Erstellungsdatum des letzten Release-Tags geschlossen wurde, ist ein weiterer Auslöser („Milestone „<titel>“ geschlossen“), schon bei einem
+ *    Besitz-PR (ohne ungetaggten Besitz-PR gibt es nichts zu taggen: `nichts` mit Grund). Gelesen über REST (`milestones?state=closed`) und `git for-each-ref` (`creatordate`); fail-open mit Warnung, ohne Milestones unverändert.
+ *    Der Takt läuft dafür auch beim Ereignis `milestone: closed` (board-takt.yml).
  * Bekannte Grenze: der Titel-Marker `🏷️ Tag ` ist breit; ein von Hand angelegtes, vertrauenswürdiges Issue mit diesem Titelanfang zählt als Tag-Ticket (das Emoji-Präfix ist diesem Takt vorbehalten).
  * In einem Bezieher (es gibt `.factory/sync-stand.json`) tut das Skript nichts. Ohne Release-Tag ebenfalls nichts.
  *
  * Aufruf: node scripts/tag-takt.mjs [--dry-run]   (Workflow: .github/workflows/board-takt.yml)
+ *         node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest …   (Checkliste der Vor-Tag-Probe, `rest` = Rot nur im Projekt des Beziehers: grün mit Befund, factory#215; Repo-Schreibweise egal (GitHub unterscheidet nicht), Ausgabe unter dem Namen der Config; Exit 0 = alle Bezieher grün, 1 = Blocker oder ausstehend, 2 = Aufruf-/Config-Fehler; kein gh-Aufruf)
  * Die Funktionen oben sind pur und getestet (test/tag-takt.test.ts); `main` läuft in test/tag-takt-main.test.ts über injizierte Nähte, die echten git-/gh-Aufrufe unten nicht.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MANIFEST_PFAD as MANIFEST, istGanzeDatei, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD as MANIFEST, istGanzeDatei, manifestAusText, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
-import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
+import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
-import { labelAus } from "./projekt-config-lib.mjs";
-import { WERKZEUG_HINWEIS, teile, vergleicheTags } from "./release-tag-lib.mjs";
+import { bezieherAus, labelAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { WERKZEUG_HINWEIS, mechanischeSchritte, teile, vergleicheTags } from "./release-tag-lib.mjs";
+import { gleichesRepo } from "./repo-form.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+import { geschlosseneMilestones, geschlossenSeit, titelBereinigt } from "./milestone-lib.mjs";
+import { fileURLToPath } from "node:url";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export const TAG_MARKER = "🏷️ Tag ";
 export const MIN_PRS = 3;
@@ -132,11 +147,29 @@ export function bezieherMigrationen(besitz, migrationKey) {
 /** Pur: das Alter der ältesten Änderung in ganzen Tagen (Kommazahl) oder `null`; `datum` ISO. */
 const alterTage = (besitz, jetzt) => (besitz.length === 0 ? null : (jetzt.getTime() - Math.min(...besitz.map((c) => Date.parse(c.datum)))) / TAG_MS);
 
+/** Pur: die Auslöser für ein neues Tag-Ticket: Anzahl, Alter, Dringlich-Signal und seit dem Tag geschlossene Milestones (factory#194; nur mit mindestens einem Besitz-PR, sonst gäbe es nichts zu taggen). */
+function ausloeserVon({ letzterTag, besitz, jetzt, dringlichKey, milestones }) {
+  const tage = alterTage(besitz, jetzt);
+  const dringlich = dringlichSignal(besitz, dringlichKey);
+  const ausloeser = [];
+  if (besitz.length >= MIN_PRS) ausloeser.push(`${besitz.length} Besitz-PRs seit ${letzterTag} (ab ${MIN_PRS})`);
+  if (tage !== null && tage > MAX_ALTER_TAGE) ausloeser.push(`älteste ungetaggte Änderung über ${MAX_ALTER_TAGE} Tage alt`);
+  if (dringlich) ausloeser.push(`Dringlich: ${zelle(dringlich.grund)} (${dringlich.sha.slice(0, 7)})`);
+  if (besitz.length > 0) for (const m of milestones) ausloeser.push(`Milestone „${zelle(titelBereinigt(m.titel))}“ geschlossen`);
+  return ausloeser;
+}
+
+/** Pur: der Log-Grund für `nichts` ohne Auslöser; ein geschlossener Milestone ohne Besitz-PR wird genannt. */
+function keinAusloeserGrund({ letzterTag, besitz, milestones }) {
+  if (besitz.length === 0 && milestones.length > 0) return `Milestone „${zelle(titelBereinigt(milestones[0].titel))}“ geschlossen, aber nichts Ungetaggtes seit ${letzterTag}`;
+  return `${besitz.length} Besitz-PRs, jünger als ${MAX_ALTER_TAGE} Tage, kein Dringlich-Signal`;
+}
+
 /**
- * Pur: die Entscheidung des Takts. `offene` = vertraute offene Issues `[{ number, titel, assignees }]`; Rückgabe `{ aktion, grund, warnungen, nummer?, ausloeser? }`
+ * Pur: die Entscheidung des Takts. `milestones` (optional) = seit dem letzten Tag geschlossene Milestones `[{ nummer, titel, closedAt }]` (`geschlossenSeit`); sie sind ein zusätzlicher Auslöser. `offene` = vertraute offene Issues `[{ number, titel, assignees }]`; Rückgabe `{ aktion, grund, warnungen, nummer?, ausloeser? }`
  * mit `aktion` `anlegen | aktualisieren | schliessen | nichts`. Ohne Release-Tag nichts; ein geclaimtes Ticket bleibt unberührt.
  */
-export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlichKey }) {
+export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlichKey, milestones = [] }) {
   const warnungen = [];
   const tagOffene = offene.filter((i) => i.titel.startsWith(TAG_MARKER)).sort((a, b) => a.number - b.number);
   if (tagOffene.length > 1) warnungen.push(`Mehrere offene Tag-Tickets (${tagOffene.map((i) => `#${i.number}`).join(", ")}): das älteste gilt, keines wird geschlossen.`);
@@ -150,13 +183,8 @@ export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlich
     }
     return { aktion: "aktualisieren", nummer: offen.number, grund: `offenes Ticket #${offen.number}`, warnungen };
   }
-  const tage = alterTage(besitz, jetzt);
-  const dringlich = dringlichSignal(besitz, dringlichKey);
-  const ausloeser = [];
-  if (besitz.length >= MIN_PRS) ausloeser.push(`${besitz.length} Besitz-PRs seit ${letzterTag} (ab ${MIN_PRS})`);
-  if (tage !== null && tage > MAX_ALTER_TAGE) ausloeser.push(`älteste ungetaggte Änderung über ${MAX_ALTER_TAGE} Tage alt`);
-  if (dringlich) ausloeser.push(`Dringlich: ${zelle(dringlich.grund)} (${dringlich.sha.slice(0, 7)})`);
-  if (ausloeser.length === 0) return { aktion: "nichts", grund: `${besitz.length} Besitz-PRs, jünger als ${MAX_ALTER_TAGE} Tage, kein Dringlich-Signal`, warnungen };
+  const ausloeser = ausloeserVon({ letzterTag, besitz, jetzt, dringlichKey, milestones });
+  if (ausloeser.length === 0) return { aktion: "nichts", grund: keinAusloeserGrund({ letzterTag, besitz, milestones }), warnungen };
   return { aktion: "anlegen", grund: ausloeser.join("; "), ausloeser, warnungen };
 }
 
@@ -177,8 +205,61 @@ export function ciZustand(laeufe) {
 
 const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)", unbekannt: "unbekannt" };
 
+/** Ergebnis-Wert der Probe für „Rot nur im Projekt des Beziehers“ (factory#215), neben dem Exit-Code. */
+const PROJEKT_REST = "rest";
+
+/**
+ * Pur (factory#188): die Checklisten-Zeilen der Vor-Tag-Probe je Bezieher. `ergebnisse` = `{ "owner/name": exit }` (erster Exit ≠ 0 der Probe-Kette, sonst 0) oder `"rest"` (factory#215: Rot nur im Projekt des Beziehers, kein Blocker, aber als Befund bzw. Bezieher-Migration festzuhalten).
+ * Rot (Exit ≠ 0 = Rot durch Factory-Besitz nach den mechanischen Update-Schritten, so das Urteil der Probe) ist ein Blocker, ein fehlendes Ergebnis bleibt ausstehend (`offen`, fail-closed: auch das heißt nicht taggen). Ergebnisse zu fremden Repos zählen nicht.
+ */
+export function bezieherProbe({ bezieher, ergebnisse = {} }) {
+  if (bezieher.length === 0) return { zeilen: ["- Keine Bezieher gelistet (Schlüssel `bezieher` der Projekt-Config): nur der Probe-Erstbezug oben."], blocker: [], offen: [] };
+  const blocker = [];
+  const offen = [];
+  const rest = [];
+  const zeilen = bezieher.map((r) => {
+    const code = Object.hasOwn(ergebnisse, r) ? ergebnisse[r] : undefined;
+    if (code === undefined) {
+      offen.push(r);
+      return `- [ ] \`${r}\`: Probe ausstehend (nicht taggen, bis sie grün ist)`;
+    }
+    if (code === 0) return `- [x] \`${r}\`: Probe grün`;
+    if (code === PROJEKT_REST) {
+      rest.push(r);
+      return `- [x] \`${r}\`: Probe grün mit Projekt-Rest (Befund bzw. Bezieher-Migration festhalten, kein Blocker)`;
+    }
+    blocker.push(r);
+    return `- [ ] BLOCKER \`${r}\`: Probe rot (Exit ${code}), nicht taggen`;
+  });
+  return { zeilen, blocker, offen, rest };
+}
+
+/** Pur (factory#188): der Ablauf-Abschnitt der Vor-Tag-Probe (Text und Befehle), nur lesend im Scratch. */
+function probeAblauf({ tag, sha }) {
+  const mechanisch = mechanischeSchritte("<s>/quelle");
+  return [
+    `Vor-Tag-Probe je Bezieher (factory#188; nur lesend: ein Klon im Scratch, nie der Checkout des Beziehers; kein Push, kein PR, kein Issue, kein Kommentar; rot heißt: nicht taggen). Je Bezieher \`<owner/name>\` der Liste unten; \`<s>\` = leerer Scratch-Ordner, \`<checkout>\` = Checkout auf ${sha.slice(0, 7)}:`,
+    "",
+    "```",
+    "git clone --depth 1 https://github.com/<owner/name>.git <s>/bezieher",
+    "git -C <s>/bezieher remote remove origin",
+    "git clone <checkout> <s>/quelle",
+    "git -C <s>/quelle remote remove origin",
+    `git -C <s>/quelle tag ${tag} ${sha}`,
+    `git -C <s>/quelle checkout --detach ${sha}`,
+    "node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --entwurf --trocken",
+    `node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --tag ${tag}`,
+    `cd <s>/bezieher && ${["node scripts/gate-befehl.mjs install", ...mechanisch, "node scripts/gate-befehl.mjs verifyKompakt"].join(" && ")}`,
+    "node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest",
+    "```",
+    "",
+    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verifyKompakt` (fährt jeden Schritt auch nach einem Rot, damit die Probe alle Funde auf einmal zeigt) ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (" + mechanisch.map((b) => "`" + b + "`").join(", ") + "; Quelle `UPDATE_SCHRITTE`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Kopien von Dateien des Rings `oberflaeche`, die der Sync nie liefert, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; meldet der Sync `Kontextbudget knapp`, ist das ein Projekt-Rest (`=rest`); ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker (als Sammelticket-Zeile „Gate-Lücke“ festhalten, im Pre-Flight nennen). An `--probe` geht 0 (kein Rot durch Factory-Besitz), `rest` (Rot nur im Projekt: grün, aber Befund bzw. Bezieher-Migration festhalten) oder ein Exit ≠ 0 (Blocker).",
+    "",
+  ];
+}
+
 /** Pur: Body des Tag-Tickets. `prs` = `besitzCommits`, `aeltestes` = `{ datum, sha }`, `ci` = `ciZustand`. */
-export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [], migrationen = [] }) {
+export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [], migrationen = [], bezieher = [] }) {
   const wt = `.claude/worktrees/tag-${tag}`;
   const zeilen = prs.slice(0, MAX_ZEILEN).map((c) => `- ${c.pr} ${zelle(c.betreff)} (${c.datum.slice(0, 10)})`);
   if (prs.length > MAX_ZEILEN) zeilen.push(`- … und ${prs.length - MAX_ZEILEN} weitere`);
@@ -194,7 +275,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `Besitz-PRs seit ${letzterTag} (${prs.length}):`,
     ...zeilen,
     "",
-    "Bezieher-Migration (Commit-Zeilen der Besitz-PRs, je Bezieher zu erledigen):",
+    "Bezieher-Migration (Commit-Zeilen der Besitz-PRs, vom Bezieher beim Update zu erledigen):",
     ...(migrationen.length > 0 ? migrationen.map((m) => `- ${m.pr} ${zelle(m.text)}`) : ["- keine gemeldet"]),
     "",
     "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün). Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout, darum aus einem eigenen Worktree auf dem Commit (das Entfernen nur mit cwd außerhalb des Worktrees):",
@@ -208,17 +289,19 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `git worktree remove ${wt}`,
     "```",
     "",
+    ...(bezieher.length > 0 ? probeAblauf({ tag, sha }) : []),
     "Checkliste:",
-    `- [ ] Trockenlauf-Sync je Bezieher gegen dessen frischen Stand, nie gegen einen lokalen Checkout hinter \`origin/main\`: erst \`gh repo clone <bezieher> <leerer-ordner> -- --depth 1\` (oder \`git -C <checkout> fetch origin\` und \`git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>\`), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <leerer-ordner> --entwurf --trocken\` (die Bezieher nennt die Maintainerin oder \`arbeitsplatz.repos\` in der Projekt-Config des Arbeitsplatzes, der sie führt; \`node scripts/arbeitsplatz.mjs pfade\` nennt im Factory-Repo keinen Bezieher). Er meldet auch die Kontextgröße gegen das Budget des Ziels`,
+    `- [ ] Trockenlauf gegen den Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): einen leeren Scratch-Ordner anlegen, die Probe-Config als \`${PROJEKT_CONFIG}\` und eine AGENTS.md mit den Kern-Markern ${markerStart("kern")} und ${markerEnde("kern")} hineinkopieren (ohne sie bricht der Sync ab, weil die Marker im Ziel fehlen), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <scratch-ordner> --entwurf --trocken\`. Er meldet auch die Kontextgröße gegen das Budget der Quelle`,
+    ...(bezieher.length > 0 ? bezieherProbe({ bezieher }).zeilen : []),
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
-    `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“: im Bezieher erst \`node scripts/ticket-lock.mjs claim <nr>\` für dieses Ticket, dann den Worktree anlegen; ein vorhandener Worktree lässt den Claim mit Exit 4 scheitern. Plan-Nachweis im Sync-PR: \`<Präfix des Beziehers>Plan: ohne — Factory-Sync ${tag}\` (der Bezieher-Wächter kennt nur den eigenen Planer). Vor dem PR im Bezieher \`npm run verify:kompakt\` voll fahren, gezielte Tests ersetzen es nicht. Anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`). ${WERKZEUG_HINWEIS} Im Ziel danach \`npm run docs:gen\` fahren und mitcommitten (Refs und Index der Factory-Links schreibt der Sync mit; \`npm run check:factorylinks -- --schreiben --quelle <checkout auf ${sha.slice(0, 7)}>\` nur als Reparaturweg, falls \`docs:gen\` neue Factory-Links erzeugt hat); bei einer Kontext-Warnung den Projekt-Block kürzen, nie Wächter-gebundene Sätze (Wächter binden Projekt-Block-Sätze wörtlich)`,
-    "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf fährt kein verify); rot durch Factory-Besitz: Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
-    "- [ ] Bezieher-Migrationen (Abschnitt oben) je Bezieher erledigt; Projektkopien abgelöster Kern-Tests im Bezieher abgleichen (projekteigen bleibt nur die Abdeckung der Projektwerte)",
-    "- [ ] Befunde aus dem Sync: Kern-Befunde als Zeile ins Harness-Sammelticket der Factory, nur den Bezieher betreffende als Issue ins Bezieher-Repo",
-    "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen und deren CI grün ist (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
+    `- [ ] Bezieher holen das Update selbst (\`factory-update.yml\`, wöchentlich, Issue „🔄 Factory-Update“; ihr Agent fährt \`factory-sync --tag ${tag}\`, die Gates des Beziehers melden tote Verweise und Modul-Kopien). Die Fabrik schreibt in kein Bezieher-Repo: kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar (${factorySeiteIn(WURZEL, "docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md")}). ${WERKZEUG_HINWEIS}`,
+    "- [ ] Melden Bezieher Rot durch Factory-Besitz (Kommentar im Sammelticket): Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
+    "- [ ] Rückmeldungen fremder Bezieher seit dem letzten Tag (Meldestelle) gesichtet: je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke: …“",
+    "- [ ] Auffälligkeit zu einem Bezieher: als Sammelticket-Zeile „Gate-Lücke: welches Bezieher-Gate hätte es melden müssen“, nie als Schreibzugriff auf den Bezieher",
+    "- [ ] Ticket schließen, sobald der Tag gepusht ist (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
-    "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: docs/agent-harness.md › Tag-Takt (#103).",
+    "Grenze: Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031); geprüft wird nur lesend im Scratch (Probe-Erstbezug, bei gelisteten Bezieherinnen deren Klon), den Rest melden die Gates der Bezieher beim Update. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: " + factorySeiteIn(WURZEL, "docs/agent-harness.md", "tag-takt-factory103") + ".",
   ].join("\n");
 }
 
@@ -241,6 +324,24 @@ function tagManifest(io, letzterTag) {
   return g.manifest ?? { eintraege: [] };
 }
 
+/**
+ * Die seit dem letzten Tag geschlossenen Milestones (factory#194), fail-open: ohne `io.ladeMilestones` leer; unlesbar oder ein nicht parsebares Tag-Datum ergibt eine Warnung ohne Milestone-Auslöser.
+ * Das Tag-Datum wird nur gelesen, wenn überhaupt ein Milestone geschlossen ist.
+ */
+function ladeMilestoneAusloeser(io, letzterTag, log) {
+  if (!io.ladeMilestones || !letzterTag) return [];
+  try {
+    const geschlossen = geschlosseneMilestones(io.ladeMilestones());
+    if (geschlossen.length === 0) return [];
+    const datum = io.tagDatum(letzterTag);
+    if (Number.isNaN(Date.parse(datum))) throw new Error(`Datum von ${letzterTag} nicht lesbar`);
+    return geschlossenSeit(geschlossen, datum);
+  } catch (err) {
+    log(`::warning::Milestones nicht lesbar (${fehlerText(err)}): Milestone-Auslöser entfällt`);
+    return [];
+  }
+}
+
 /** Liest alles Nötige; wirft bei einem Git-Fehler. `io.ladeLaeufe` darf werfen (dann `unbekannt`). */
 function sammle(io, log) {
   const letzterTag = vergleicheTags(io.tags());
@@ -255,7 +356,7 @@ function sammle(io, log) {
   } catch (err) {
     log(`CI-Status nicht lesbar (${fehlerText(err)}), im Ticket steht „unbekannt“.`);
   }
-  return { letzterTag, besitz, sha, ci, migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
+  return { letzterTag, besitz, sha, ci, milestones: ladeMilestoneAusloeser(io, letzterTag, log), migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], bezieher: io.bezieher ?? [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
 }
 
 /** Führt die Aktion aus. Rückgabe: true bei Fehler. */
@@ -287,11 +388,33 @@ function fuehreAus(e, io, log) {
 }
 
 /** Pur: Soll-Titel und Soll-Body des Tickets. */
-function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen }) {
+function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen, bezieher }) {
   const tag = naechsterTag(letzterTag, besitz, entfernt);
   const aeltestes = besitz.reduce((a, c) => (Date.parse(c.datum) < Date.parse(a.datum) ? c : a));
   const ausloeser = e.ausloeser ?? [`${besitz.length} Besitz-PRs seit ${letzterTag}`];
-  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen }) };
+  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen, bezieher }) };
+}
+
+/** Checklistenzeile `- [ ] <rest>` bzw. `* [x] <rest>`: Gruppe 1 = Haken, Gruppe 2 = Rest. */
+const HAKEN_ZEILE = /^\s*[-*] \[([ xX])\] (.*?)\r?$/;
+
+/**
+ * Pur (factory#215): übernimmt die Haken des offenen Tickets in den neu gebauten Body. Eine offene Zeile (`[ ]`) des neuen Bodys wird `[x]`, wenn der alte Body dieselbe Zeile
+ * (gleicher Text nach der Checkbox) mit `[x]` oder `[X]` hat; ein geänderter Text verliert den Haken (die Zeile ist neu zu prüfen). Ein Takt-Lauf überschreibt so keine abgehakte Arbeit.
+ */
+export function uebernimmHaken(altBody, neuBody) {
+  const erledigt = new Set();
+  for (const zeile of String(altBody ?? "").split("\n")) {
+    const m = HAKEN_ZEILE.exec(zeile);
+    if (m && m[1] !== " ") erledigt.add(m[2]);
+  }
+  return String(neuBody)
+    .split("\n")
+    .map((zeile) => {
+      const m = HAKEN_ZEILE.exec(zeile);
+      return m && m[1] === " " && erledigt.has(m[2]) ? zeile.replace("[ ]", "[x]") : zeile;
+    })
+    .join("\n");
 }
 
 /** Pur: stimmt das offene Ticket mit dem Soll überein? */
@@ -299,12 +422,14 @@ const istAktuell = (offen, soll) => offen?.titel === soll.titel && offen.body ==
 
 /** Entscheidung samt Soll-Ticket (`soll` bei anlegen/aktualisieren); ein bereits aktuelles Ticket wird zu `nichts`. */
 function plane({ io, daten, offene, trocken }) {
-  let e = entscheideTagTakt({ letzterTag: daten.letzterTag, besitz: daten.besitz, jetzt: io.jetzt(), offene, dringlichKey: io.dringlichKey });
+  let e = entscheideTagTakt({ letzterTag: daten.letzterTag, besitz: daten.besitz, jetzt: io.jetzt(), offene, dringlichKey: io.dringlichKey, milestones: daten.milestones });
   if (e.aktion === "anlegen" && !trocken) e = bestaetigeTagAnlegen(e, { zweit: io.frischeOffene });
   if (trocken && e.geclaimt && daten.besitz.length > 0) return { ...e, soll: sollTicket(e, daten) };
   if (e.aktion !== "anlegen" && e.aktion !== "aktualisieren") return e;
-  const soll = sollTicket(e, daten);
-  if (e.aktion === "aktualisieren" && istAktuell(offene.find((i) => i.number === e.nummer), soll)) return { ...e, aktion: "nichts", grund: "Ticket ist aktuell", soll };
+  const neu = sollTicket(e, daten);
+  const offen = e.aktion === "aktualisieren" ? offene.find((i) => i.number === e.nummer) : undefined;
+  const soll = offen ? { ...neu, body: uebernimmHaken(offen.body, neu.body) } : neu;
+  if (e.aktion === "aktualisieren" && istAktuell(offen, soll)) return { ...e, aktion: "nichts", grund: "Ticket ist aktuell", soll };
   return { ...e, soll };
 }
 
@@ -347,8 +472,66 @@ export function manifestLaden(wurzel) {
   return g.manifest;
 }
 
-/** Einstieg. `deps` (Tests): `start`, `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `env` (Standard `process.env`; liefert `PROJECT_TOKEN`), `ladeManifest`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), env = process.env, ladeManifest = () => manifestLaden(wurzel) } = {}) {
+/** Aufrufzeile der Vor-Tag-Probe. */
+const PROBE_AUFRUF = "Aufruf: node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest [--probe …]   (je Bezieher der Liste `bezieher` der Projekt-Config; nicht kombinierbar mit --dry-run)";
+
+/** Pur: `<owner/name>=<exit>` oder `<owner/name>=rest` (Rot nur im Projekt, factory#215) → `{ repo, code }` (`code` = Zahl oder `PROJEKT_REST`) oder `null`. */
+const probeWert = (text) => {
+  const m = /^([^=\s]+\/[^=\s]+)=(\d{1,3}|rest)$/.exec(text);
+  return m ? { repo: m[1], code: m[2] === PROJEKT_REST ? PROJEKT_REST : Number(m[2]) } : null;
+};
+
+/** Pur: die `--probe`-Angaben als `{ ergebnisse }` je Bezieher (Name der Config, Schreibweise egal) oder mit `ungueltig` = der ersten unbrauchbaren Angabe (Form, unbekanntes Repo, doppelt). */
+export function probeErgebnisse(angaben, bezieher) {
+  const ergebnisse = {};
+  for (const roh of angaben) {
+    const w = probeWert(roh);
+    const repo = w ? bezieher.find((b) => gleichesRepo(b, w.repo)) : undefined;
+    if (!w || repo === undefined || Object.hasOwn(ergebnisse, repo)) return { ergebnisse, ungueltig: roh };
+    ergebnisse[repo] = w.code;
+  }
+  return { ergebnisse };
+}
+
+/**
+ * Einstieg `--probe` (factory#188): liest die Ergebnisse der Vor-Tag-Probe und gibt die Checkliste aus; Exit 0 nur, wenn jeder gelistete Bezieher ein Ergebnis 0 hat,
+ * 1 bei einem Blocker oder einem ausstehenden Bezieher, 2 bei Aufruf- oder Config-Fehler (unbekanntes Repo, kein Exit-Wert, doppelt). Kein gh-Aufruf.
+ */
+export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), log = console.log, err = console.error } = {}) {
+  const { werte, fehler } = flagsLesen(argv, { probe: { type: "string", multiple: true } });
+  if (fehler) {
+    err(`${fehler.text}\n${PROBE_AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  let bezieher;
+  try {
+    bezieher = bezieherAus(ladeConfig());
+  } catch (e) {
+    log(fehlerMeldung(e, { praefix: "Tag-Takt: Projekt-Config nicht lesbar: " }));
+    return AUFRUF_EXIT;
+  }
+  const { ergebnisse, ungueltig } = probeErgebnisse(werte.probe, bezieher);
+  if (ungueltig !== undefined) {
+    err(`--probe ${ungueltig}: erwartet wird je Bezieher einmal <owner/name>=<exit>|rest mit einem Repo aus bezieher (${bezieher.join(", ") || "Liste leer"})\n${PROBE_AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  const r = bezieherProbe({ bezieher, ergebnisse });
+  log(r.zeilen.join("\n"));
+  if (r.blocker.length > 0) log(`Vor-Tag-Probe: BLOCKER ${r.blocker.join(", ")}: nicht taggen.`);
+  if (r.rest.length > 0) log(`Vor-Tag-Probe: Projekt-Rest bei ${r.rest.join(", ")}: als Befund festhalten.`);
+  if (r.offen.length > 0) log(`Vor-Tag-Probe: ausstehend ${r.offen.join(", ")}: nicht taggen, bis die Probe läuft.`);
+  return r.blocker.length + r.offen.length === 0 ? 0 : 1;
+}
+
+/** Einstieg. `deps` (Tests): `start`, `ladeConfig` (nur `--probe`), `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `env` (Standard `process.env`; liefert `PROJECT_TOKEN`), `ladeManifest`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), env = process.env, ladeManifest = () => manifestLaden(wurzel), ladeConfig } = {}) {
+  if (argv.some((a) => a === "--probe" || a.startsWith("--probe="))) {
+    if (istBezieher(wurzel)) {
+      log("Tag-Takt: Bezieher-Repo (Sync-Stand vorhanden), nichts zu tun.");
+      return 0;
+    }
+    return probeEinstieg(argv, { ladeConfig, log, err });
+  }
   const s = await start(argv, { skript: "tag-takt", praefix: "Tag-Takt: Projekt-Config nicht lesbar: ", log, err });
   if (s.code !== undefined) return s.code;
   const { config, libs } = s;
@@ -357,10 +540,11 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
   const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness"), env });
   const io = {
     log,
-    istBezieher: () => liesSyncStand(wurzel).zustand !== "fehlt",
+    istBezieher: () => istBezieher(wurzel),
     tags: () => git(["tag", "--merged", "HEAD"]).split(/\r?\n/).map((t) => t.trim()).filter(Boolean),
     ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", "--no-renames", `${tag}..HEAD`, "--"]),
     ladeManifest,
+    bezieher: bezieherAus(config),
     headSha: () => git(["rev-parse", "HEAD"]).trim(),
     zeigeDatei: (ref, pfad) => {
       try {
@@ -369,6 +553,8 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
         return null;
       }
     },
+    ladeMilestones: () => gh.json(["api", "--paginate", "--slurp", `repos/${REPO}/milestones?state=closed&per_page=100`]),
+    tagDatum: (tag) => git(["for-each-ref", "--format=%(creatordate:iso-strict)", `refs/tags/${tag}`]).trim(),
     ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/runs?head_sha=${sha}&event=push&per_page=30`, "--jq", ".workflow_runs"]),
     ladeOffene: () => {
       const kontext = ladeSammelKontext({ ladeKommentare: () => [] });

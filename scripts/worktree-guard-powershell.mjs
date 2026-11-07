@@ -41,7 +41,7 @@
  */
 import { statSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
-import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
+import { analyse, jeSchutzWurzel, neuerWorktreeHinweis, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
 import { INTERPRETER_NAMEN, SHELLS, SKRIPT_LAUFZEITEN, baseName } from "./shell-tabellen.mjs";
 import { GIT_COMMIT_PUSH } from "./worktree-guard-tabellen.mjs";
 import { MAX_INTERPRETER, parseHookInput } from "./hook-io.mjs";
@@ -263,10 +263,11 @@ function gitZiel(rest, start, vars, istOrdnerStart) {
  *  vorangehenden ORTSWECHSELS (für && / ||: true = gelungen, false = fehlgeschlagen, null = der Vorgänger war kein auswertbarer
  *  Ortswechsel; nur ein ausgewerteter Ortswechsel darf einen Nachfolger überspringen, bei jedem anderen Vorgänger
  *  (`git diff --quiet || git commit`) läuft der Nachfolger, im Zweifel wird geblockt). */
-function neuerLauf({ cwd, repoRoot, deps, tiefe }) {
+function neuerLauf({ cwd, repoRoot, deps, tiefe, schutz }) {
   return {
     cwd,
     repoRoot,
+    schutz,
     deps,
     tiefe,
     vars: new Map(),
@@ -284,8 +285,9 @@ function blockiert(k, dir, was) {
     block: true,
     reason:
       `git ${was} ist im geteilten main-Checkout (${ctx.toplevel ?? dir}) blockiert (PowerShell-Tool). ` +
-      "Bitte im eigenen `git worktree` arbeiten (AGENTS.md § Git-Workflow): z.B. `git -C <worktree-pfad> commit …` " +
-      "oder zuerst `Set-Location <worktree-pfad>`. (#735, #1311)",
+      "Bitte im eigenen `git worktree` arbeiten (AGENTS.md § Eigener Worktree): z.B. `git -C <worktree-pfad> commit …` " +
+      "oder zuerst `Set-Location <worktree-pfad>`. (#735, #1311)" +
+      (k.schutz?.repo ? ` Neuer Worktree: ${neuerWorktreeHinweis(k.deps, k.schutz)}` : ""),
   };
 }
 
@@ -350,7 +352,7 @@ function interpreterUmweg(k, raw, toks, cmd) {
     const skript = interpreterSkript(k, toks, name);
     let r = null;
     if (skript && SHELLS.has(name)) r = bashBruecke(k, skript, name);
-    else if (skript && /^(iex|invoke-expression|pwsh|powershell)$/.test(name)) r = bewertePowerShell({ command: skript, cwd: k.ort, repoRoot: k.repoRoot, deps: k.deps, tiefe: k.tiefe + 1 });
+    else if (skript && /^(iex|invoke-expression|pwsh|powershell)$/.test(name)) r = bewertePowerShell({ command: skript, cwd: k.ort, repoRoot: k.repoRoot, deps: k.deps, tiefe: k.tiefe + 1, schutz: k.schutz });
     if (r && (r.block || r.ask)) return r;
   }
   if (!GIT_COMMIT_PUSH.test(raw)) return null;
@@ -389,9 +391,11 @@ const ueberspringt = (sep, ortStatus) => (sep === "&&" && ortStatus === false) |
  * (Tests); Standard: echtes Dateisystem und `resolveGitContext` aus dem Bash-Hook.
  * @returns {{ block: boolean, ask?: boolean, reason?: string }} (`ask`: das Ziel eines `bash -c`-Strings ist nicht bestimmbar)
  */
-export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0 }) {
+export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0, schutz }) {
   if (!command || !cwd) return { block: false }; // nicht entscheidbar → fail-open
-  const k = neuerLauf({ cwd, repoRoot, deps, tiefe });
+  // Tiefe 0: jede Schutz-Wurzel einzeln (Session-Repo, im Arbeitsplatz jedes Repo der Config, factory#89); tiefer gilt die Wurzel des Aufrufers.
+  if (tiefe === 0 && schutz === undefined) return jeSchutzWurzel(repoRoot, deps, (w) => bewertePowerShell({ command, cwd, repoRoot: w.wurzel, deps, tiefe, schutz: w }));
+  const k = neuerLauf({ cwd, repoRoot, deps, tiefe, schutz });
   let frage = null;
   let vorherSep = ";";
   for (const stmt of zerlege(command)) {

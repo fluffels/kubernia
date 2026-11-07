@@ -13,7 +13,7 @@
  *   <praefixe.commitZeile>Plan: <Planer>               |  <praefixe.commitZeile>Plan: ohne — <Begründung>
  *   <praefixe.commitZeile>Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
  *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
- *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap hinaus ohne Rückfrage (Ursache im PR); mehr gibt nur die Maintainerin frei; erhöht die Obergrenze.
+ *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap hinaus ohne Rückfrage (Ursache im PR, Review- und Abnahme-Zusatzpässe zählen gemeinsam); mehr ist rot, außer mit Review-Override samt Freigabe-Beleg (factory#162 L10); erhöht die Obergrenze.
  *   Optional `abnahmefix=1` (#1808): die eine Delta-Runde nach einem Abnahme-Fix, eigenes Budget neben dem Cap (Obergrenze + 1, nur bei überschrittenem Review-Cap).
  *
  * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: der Nachweis ist Selbstauskunft.
@@ -98,15 +98,30 @@ function bewerteBlocker(review, zeilen) {
   return fehler;
 }
 
+/** Das Feld `zusatzpass=<anzahl>:<ursache>`: ungültig oder über `MAX_ZUSATZPAESSE` (Review- und Abnahme-Zusatzpässe zählen gemeinsam) ist rot;
+ *  mehr als die Zahl gibt nur die Maintainerin frei (Review-Override samt Freigabe-Beleg). Pure. */
+function bewerteZusatzpass(zp, zeilen) {
+  const R = zeilen.review;
+  if (zp && "ungueltig" in zp) {
+    return [`${R}: zusatzpass=${zp.ungueltig} ungültig (erwartet: zusatzpass=<anzahl ≥ 1>:<Ursache>).`];
+  }
+  if (zp && zp.anzahl > MAX_ZUSATZPAESSE) {
+    return [
+      `${R}: zusatzpass=${zp.anzahl} überschreitet die Freigabe ohne Rückfrage (höchstens ${MAX_ZUSATZPAESSE}, Review- und Abnahme-Zusatzpässe zusammen). ` +
+        `Mehr gibt nur die Maintainerin frei: ${zeilen.reviewOverride}: #<nr> <Freigabe-Beleg>.`,
+    ];
+  }
+  return [];
+}
+
 /** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap
  *  fährt der Umsetzer ohne Rückfrage, mehr gibt nur die Maintainerin frei; der Nachweis bleibt Selbstauskunft.
  *  Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
 function bewerteRunden(review, zeilen) {
   const R = zeilen.review;
   const zp = review.zusatzpass ?? null;
-  if (zp && "ungueltig" in zp) {
-    return [`${R}: zusatzpass=${zp.ungueltig} ungültig (erwartet: zusatzpass=<anzahl ≥ 1>:<Ursache>).`];
-  }
+  const zpFehler = bewerteZusatzpass(zp, zeilen);
+  if (zpFehler.length) return zpFehler;
   const af = review.abnahmefix ?? null;
   if (af && typeof af === "object") {
     return [`${R}: abnahmefix=${af.ungueltig} ungültig (erwartet: abnahmefix=1, die eine Delta-Runde nach einem Abnahme-Fix).`];

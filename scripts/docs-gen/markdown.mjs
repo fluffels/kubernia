@@ -1,16 +1,19 @@
 // Kein Shebang (siehe docs-gen.mjs). Gemeinsame Markdown-/Frontmatter-Helfer der Generatoren und
 // des Doku-Drift-Wächters (#1355, #1392): Markdown sammeln, Code-Fences erkennen, Frontmatter lesen,
-// dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (nur Builtins).
+// dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (Builtins und das Blatt `regex-lib.mjs`).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, sep } from "node:path";
+import { escapeRegex, SCHRITT_NAME } from "../regex-lib.mjs";
 
 /**
  * Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). Richtlinie (Gegenstück: `zelle` in scripts/abnahme.mjs): `cell` maskiert generierte Zellen mit
- * Code-Spans, darum nur die Pipe: in Code-Spans sind Backslashes literal, eine Verdopplung zeigte sie doppelt (der CodeQL-Alert `js/incomplete-sanitization`
- * dazu ist als „won't fix“ geschlossen). Freitext aus fremder Quelle maskiert `zelle` mit Backslash zuerst, dann Pipe.
+ * Code-Spans, darum nur die Pipe: in Code-Spans sind Backslashes literal, eine Verdopplung zeigte sie doppelt. Beleg (GitHub-Markdown-API, GFM):
+ * `\|` maskiert die Pipe auch hinter einem Backslash (`a\\|b` bleibt eine Zelle und zeigt `a\|b`), eine Backslash-Verdopplung ist also nicht nötig.
+ * Das Aufteilen und Verbinden an `|` statt `replace` ändert nichts am Ergebnis, vermeidet aber das CodeQL-Muster `js/incomplete-sanitization`
+ * (der Alert blockierte Bezieher-PRs). Freitext aus fremder Quelle maskiert `zelle` mit Backslash zuerst, dann Pipe.
  */
 export function cell(value) {
-  return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+  return String(value).split("|").join("\\|").replace(/\r?\n/g, " ");
 }
 
 /**
@@ -19,7 +22,7 @@ export function cell(value) {
  */
 export function parseNpmRunMentions(md) {
   const found = new Set();
-  for (const m of md.matchAll(/\bnpm\s+run\s+([a-zA-Z0-9:_-]+)/g)) found.add(m[1]);
+  for (const m of md.matchAll(new RegExp(String.raw`\bnpm\s+run\s+(${SCHRITT_NAME})`, "g"))) found.add(m[1]);
   if (/\bnpm\s+test\b/.test(md)) found.add("test");
   return found;
 }
@@ -136,11 +139,6 @@ export function mermaidText(s) {
     .replace(/</g, "#lt;")
     .replace(/>/g, "#gt;")
     .replace(/\r?\n/g, " ");
-}
-
-/** Maskiert die Regex-Metazeichen der Kern-Funktion ohne `/` und `-`, wie bisher in docs-gen (bewusste Kopie der Kern-Funktion: der docs-gen-Kern importiert nur `node:*` und sich selbst, ein Import aus `ticket-namen.mjs` schlösse den Zyklus `projekt-config-lib` → `spezifikation-lib` → `markdown` → `ticket-namen`; der Drift-Test steht in `test/harness/ticket-namen.test.ts`). Pur. */
-export function escapeRegex(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**
@@ -358,30 +356,37 @@ export function linkZiel(datei, pfad) {
   return r === "." ? "" : r;
 }
 
+/** Der Markup-Schritt von Überschriften: `[text](url)` wird `text`, Inline-Markup-Zeichen entfallen (gemeinsam für `slugify` und die Stub-Überschriften). */
+export const entferneMarkup = (text) => text.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_~]/g, "");
+
 /** GitHub-Überschriften-Slug: klein, Markup entfernt, Satzzeichen/Emoji raus,
  *  Leerzeichen → Bindestrich. Duplikate hängt der Aufrufer mit -1/-2 an. */
 export function slugify(headingText) {
-  return headingText
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url) → text
-    .replace(/[`*_~]/g, "") // Inline-Markup-Zeichen entfernen
+  return entferneMarkup(headingText)
     .trim()
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s_-]/gu, "") // nur Buchstaben/Zahlen/Space/_/- behalten
     .replace(/\s/g, "-");
 }
 
+/** Alle Überschriften einer Markdown-Datei mit Ort: `{ ebene, slug, zeile }` (`zeile` 0-basiert, Index in die Zeilen des Textes; GitHub-Slugs inkl. -1/-2
+ *  bei Duplikaten). Code-Fences ausgeblendet (die Zeilenzahl bleibt), damit `#`-Kommentare nicht zählen. */
+export function ueberschriftenStellen(md) {
+  const stellen = [];
+  const seen = new Map();
+  stripFencedCode(md)
+    .split(/\r?\n/)
+    .forEach((line, zeile) => {
+      const m = line.match(/^(#{1,6})\s+(.*\S)\s*$/);
+      if (!m) return;
+      const base = slugify(m[2]);
+      const n = seen.get(base) ?? 0;
+      seen.set(base, n + 1);
+      stellen.push({ ebene: m[1].length, slug: n === 0 ? base : `${base}-${n}`, zeile });
+    });
+  return stellen;
+}
+
 /** Alle Überschriften-Anker einer Markdown-Datei (GitHub-Slugs inkl. -1/-2 bei
  *  Duplikaten). Code-Fences ausgeblendet, damit `#`-Kommentare nicht zählen. */
-export function collectHeadingSlugs(md) {
-  const slugs = [];
-  const seen = new Map();
-  for (const line of stripFencedCode(md).split(/\r?\n/)) {
-    const m = line.match(/^(#{1,6})\s+(.*\S)\s*$/);
-    if (!m) continue;
-    const base = slugify(m[2]);
-    const n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    slugs.push(n === 0 ? base : `${base}-${n}`);
-  }
-  return slugs;
-}
+export const collectHeadingSlugs = (md) => ueberschriftenStellen(md).map((h) => h.slug);

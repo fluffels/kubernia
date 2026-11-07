@@ -28,6 +28,9 @@
  *    der Lockfile nicht frisch regeneriert → Drift. `npm ci` selbst deckt die
  *    tiefere Baum-/Hash-Integrität weiterhin in der CI ab (zweite Grenze).
  *
+ * Umfang: die Wurzel und jedes per `git ls-files` getrackte `package-lock.json` in einem Unterordner (gegen die `package.json` daneben); ein Unterordner mit
+ * `package.json` ohne Lockfile wird übersprungen, ein Git-Fehler bricht ab (fail-closed).
+ *
  * Reines Node-Skript (nur Builtins), plattformübergreifend.
  *
  * Ausführen mit:  npm run check:lockfile   (oder als Teil von: npm run verify)
@@ -113,7 +116,14 @@ export function auditLockfile({ pkg, lock }) {
 
 /** Formuliert einen Befund als lesbare rote Zeile. Pure (für den Test mitprüfbar). */
 export function describeProblem(p) {
+  const text = beschreibe(p);
+  return p.datei ? `${p.datei}: ${text}` : text;
+}
+
+function beschreibe(p) {
   switch (p.kind) {
+    case "missing-package":
+      return "package.json neben dem getrackten Lockfile fehlt oder ist kaputt — Lockfile kann nicht geprüft werden.";
     case "missing-lockfile":
       return "package-lock.json fehlt oder ist kein Objekt — Lockfile kann nicht geprüft werden.";
     case "lockfile-version":
@@ -135,18 +145,40 @@ export function describeProblem(p) {
   }
 }
 
-/** Liest package.json + package-lock.json von der Platte und prüft sie. `rootDir`
- *  überschreibbar (Test/Aufruf). Ein fehlender/kaputter Lockfile wird als Befund
- *  gemeldet, nicht als Absturz. */
-export function checkLockfile(rootDir = ROOT) {
-  const pkg = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
+/** Prüft ein Paketverzeichnis (`dir` relativ zu `rootDir`, "" = Wurzel): ein fehlender/kaputter Lockfile wird als Befund gemeldet (auditLockfile), nicht als Absturz. */
+function pruefeVerzeichnis(rootDir, dir) {
+  const lesen = (name) => JSON.parse(readFileSync(join(rootDir, dir, name), "utf8"));
+  const datei = dir === "" ? "package-lock.json" : `${dir}/package-lock.json`;
+  let pkg;
+  try {
+    pkg = lesen("package.json");
+  } catch (err) {
+    if (dir === "") throw err; // die Wurzel ohne package.json ist kein Befund, sondern ein Aufruf-Fehler
+    return [{ kind: "missing-package", datei }];
+  }
   let lock;
   try {
-    lock = JSON.parse(readFileSync(join(rootDir, "package-lock.json"), "utf8"));
+    lock = lesen("package-lock.json");
   } catch {
     lock = null; // fehlend/kaputt → auditLockfile meldet missing-lockfile
   }
-  return auditLockfile({ pkg, lock });
+  const { problems } = auditLockfile({ pkg, lock });
+  return dir === "" ? problems : problems.map((p) => ({ ...p, datei }));
+}
+
+/** Verzeichnisse (relativ, ohne die Wurzel) mit einem getrackten `package-lock.json`; ein Git-Fehler wirft (fail-closed: ohne Liste wäre nichts geprüft). */
+function getrackteLockVerzeichnisse(rootDir) {
+  const aus = execFileSync("git", ["-C", rootDir, "ls-files", "-z", "--", ":(glob)**/package-lock.json"], { encoding: "utf8" });
+  return aus.split("\0").filter((p) => p.endsWith("/package-lock.json")).map((p) => p.slice(0, -"/package-lock.json".length));
+}
+
+/** Liest package.json + package-lock.json der Wurzel und jedes getrackten package-lock.json in Unterordnern (gegen die package.json daneben) und prüft sie.
+ *  Regel: ein getrackter Lockfile wird immer geprüft; ein Unterordner mit package.json ohne Lockfile bleibt außen vor. `rootDir`
+ *  überschreibbar (Test/Aufruf). Ein fehlender/kaputter Lockfile wird als Befund gemeldet, nicht als Absturz; ein Fehler von git wirft. */
+export function checkLockfile(rootDir = ROOT) {
+  const problems = pruefeVerzeichnis(rootDir, "");
+  for (const dir of getrackteLockVerzeichnisse(rootDir)) problems.push(...pruefeVerzeichnis(rootDir, dir));
+  return { ok: problems.length === 0, problems };
 }
 
 /** Autor-Mails von Dependabot enthalten `dependabot[bot]` (`<id>+dependabot[bot]@users.noreply.github.com`). */

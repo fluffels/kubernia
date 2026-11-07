@@ -13,6 +13,9 @@ import { zerlegeRepo } from "./repo-form.mjs";
 /** Das Ziel-Repo der Harness-Befunde (#76): das Repo, dessen Issues das Factory-Board führt (`boards[].repo`, sonst das eigene Repo). Dort liegt das Harness-Sammelticket. */
 export const ZIEL = zielRepo("factory");
 
+/** Eine Position hinter jedem realistischen Todo-Ende: `board-place --position` klemmt auf das letzte freie Item. */
+export const ENDE_POSITION = 999999;
+
 const BOARD_PLACE = fileURLToPath(new URL("./board-place.mjs", import.meta.url));
 
 /**
@@ -38,9 +41,18 @@ export function platziereOben(nr, art, token = process.env.PROJECT_TOKEN, repo =
   exec(process.execPath, [BOARD_PLACE, ...(repo ? ["--repo", repo] : []), "--notfall", art, "--top", String(nr)], { env: { ...process.env, GH_TOKEN: token }, stdio: "inherit" });
 }
 
-/** Das jüngste offene, ungeclaimte Harness-Sammelticket in `repo` (Standard: das Ziel-Repo; per Einzelabruf bestätigt, Vertrauen über dessen Owner) oder null. `offene` aus `normalizeOffene`. */
-export const waehleSammelticket = (offene, repo = ZIEL, api = (args) => ghJson(args, { token: zielToken(repo) })) =>
-  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => api(["api", `repos/${repo}/issues/${nr}`]), zerlegeRepo(repo).owner);
+/**
+ * Sortiert Ticket `nr` per `board-place.mjs --position` ans Ende der Todo-Spalte (eine Position hinter dem Ende klemmt auf das letzte freie Item), im Ziel-Repo `repo` nur, wenn gesetzt.
+ * Wirft ohne Token und bei einem Fehler des Skripts. `exec` ist die Test-Naht des Prozessaufrufs.
+ */
+export function platziereAmEnde(nr, token = process.env.PROJECT_TOKEN, repo = undefined, exec = execFileSync) {
+  if (!token) throw new Error("PROJECT_TOKEN fehlt: das Ticket steht nicht am Ende der Todo-Spalte.");
+  exec(process.execPath, [BOARD_PLACE, ...(repo ? ["--repo", repo] : []), "--position", String(ENDE_POSITION), String(nr)], { env: { ...process.env, GH_TOKEN: token }, stdio: "inherit" });
+}
+
+/** Das jüngste offene, ungeclaimte Sammelticket mit dem Titel `titel` (Standard: das Harness-Sammelticket) in `repo` (Standard: das Ziel-Repo; per Einzelabruf bestätigt, Vertrauen über dessen Owner) oder null. `offene` aus `normalizeOffene`. */
+export const waehleSammelticket = (offene, repo = ZIEL, api = (args) => ghJson(args, { token: zielToken(repo) }), titel = SAMMELTICKET_TITEL) =>
+  waehleBestaetigtes(kandidatenSammelticket(offene, titel), (nr) => api(["api", `repos/${repo}/issues/${nr}`]), zerlegeRepo(repo).owner);
 
 /** Token für Aufrufe gegen `repo` (Standard: das Ziel-Repo): `PROJECT_TOKEN` bei einem fremden Ziel-Repo, sonst `undefined` (Standard-`GH_TOKEN`), siehe `tokenFuerZiel`. */
 export const zielToken = (repo = ZIEL, env = process.env) => tokenFuerZiel({ ziel: repo, eigenes: REPO, env });
@@ -49,20 +61,21 @@ export const zielToken = (repo = ZIEL, env = process.env) => tokenFuerZiel({ zie
 export const postZeilen = (nr, text, repo = ZIEL, token = zielToken(repo), exec = undefined) =>
   ghText(["api", `repos/${repo}/issues/${nr}/comments`, "-f", `body=${text}`], { token, ...(exec ? { exec } : {}) });
 
-/** Nummern der offenen Harness-Sammeltickets (exakter Titel, auch geclaimte) aus `normalizeOffene`. Pur. */
-export const sammelticketNummern = (offene) => offene.filter((i) => i.titel === SAMMELTICKET_TITEL).map((i) => i.number);
+/** Nummern der offenen Sammeltickets mit dem Titel `titel` (Standard: das Harness-Sammelticket; exakter Titel, auch geclaimte) aus `normalizeOffene`. Pur. */
+export const sammelticketNummern = (offene, titel = SAMMELTICKET_TITEL) => offene.filter((i) => i.titel === titel).map((i) => i.number);
 
 /**
  * Der gemeinsame Abruf der Inbox-Skripte: `{ rohe, offene, kommentare, owner }` = offene Issues des Ziel-Repos (REST-Seiten, `loadOpenIssuePages`), deren Normalform,
  * die Kommentare (`[{ user, body }]`, ungefiltert) aller offenen Harness-Sammeltickets dort und der Owner des Ziel-Repos (für `istVertraut`). Das Vertrauensfilter wendet der Aufrufer an (`vertrauteBodies`,
- * `istBekannt`). `io` ist für Tests austauschbar (Default: echtes `gh`).
+ * `istBekannt`). `io` ist für Tests austauschbar (Default: echtes `gh`); `io.repo` (factory#153) liest statt des Ziel-Repos die Meldestelle; `io.titel` liest die Kommentare der Sammeltickets mit diesem Titel (Standard: das Harness-Sammelticket).
  */
 export function ladeSammelKontext(io = {}) {
-  const token = "token" in io ? io.token : zielToken();
-  const ladeOffene = io.ladeOffene ?? ((t) => loadOpenIssuePages(ZIEL, { token: t }));
+  const repo = io.repo ?? ZIEL;
+  const token = "token" in io ? io.token : zielToken(repo);
+  const ladeOffene = io.ladeOffene ?? ((t) => loadOpenIssuePages(repo, { token: t }));
   const ladeKommentare = io.ladeKommentare ?? ((nr, repo, t) => issueKommentare(nr, (args) => JSON.parse(ghText(args, { token: t })), repo));
   const rohe = ladeOffene(token);
   const offene = normalizeOffene(rohe);
-  const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr, ZIEL, token).map((k) => ({ user: k.user, body: k.body })));
-  return { rohe, offene, kommentare, owner: zerlegeRepo(ZIEL).owner };
+  const kommentare = sammelticketNummern(offene, io.titel).flatMap((nr) => ladeKommentare(nr, repo, token).map((k) => ({ user: k.user, body: k.body })));
+  return { rohe, offene, kommentare, owner: zerlegeRepo(repo).owner };
 }

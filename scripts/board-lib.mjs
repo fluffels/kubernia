@@ -8,12 +8,13 @@
  * Nur Node-Builtins, analog zu den anderen scripts/-Wächtern.
  */
 import { readFileSync } from "node:fs";
-import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, ladeProjektConfig, repoAusUrl } from "./projekt-config-lib.mjs";
+import { ghJson, ghText } from "./gh-cli.mjs";
+import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, ladeProjektConfig, meldestelleAus, repoAusUrl } from "./projekt-config-lib.mjs";
 import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 import { brauchtRepo } from "./board-plan-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { AUFRUF_EXIT } from "./flag-lib.mjs";
+import { milestoneAus } from "./milestone-lib.mjs";
 
 // Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie oder ist sie ungültig, bricht schon der Import ab (kein stiller
 // Standardwert, #1611): mit einer ✖-Zeile samt Fix und Exit 2 (Config-Fehler wie ein Aufruf-Fehler, AUFRUF_EXIT) statt einem Stacktrace
@@ -41,6 +42,9 @@ export function boardFuerRolle(rolle) {
 
 /** Das Repo (`owner/name`), dessen Issues das Board der Rolle führt (`boards[].repo` der Config, sonst `config.repo`). Immer aus der Config, nie aus `GITHUB_REPOSITORY`. */
 export const zielRepo = (rolle) => boardRepo(boardFuerRolle(rolle), PROJEKT);
+
+/** Die Meldestelle dieses Projekts (factory#153): Schlüssel `meldestelle` der Config, sonst das Repo des Boards mit Rolle `factory`. */
+export const MELDESTELLE = meldestelleAus(PROJEKT);
 
 // Die Trennregel (Rolle zu den Labels) liegt in projekt-config-lib (die CLI braucht sie ohne diesen Import); hier weiter exportiert.
 export { boardRolleFuer };
@@ -175,8 +179,11 @@ export const SAMMELTICKET_TITEL = "Harness-Härtung (gesammelt)";
 /** Titel des Sammeltickets für Langfuse-Befunde (Mechanik: docs/ticket-reihenfolge.md). */
 export const LANGFUSE_SAMMELTICKET_TITEL = "Langfuse-Befunde (gesammelt)";
 
-/** Alle Sammeltickets, die das Einsortieren kennt (die Klemmung rechnet mit allen, nicht nur mit dem Harness-Sammelticket). */
-export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL];
+/** Titel des freiwilligen Sammeltickets für Codequalität außerhalb des Slices (im eigenen Repo des Beziehers, nur mit `labels.codequalitaet`; Mechanik: docs/ticket-reihenfolge.md). */
+export const CODEQUALITAET_SAMMELTICKET_TITEL = "Codequalität (gesammelt)";
+
+/** Alle Sammeltickets, die das Einsortieren kennt (die Ankersuche und das Einsortieren kennen alle, nicht nur das Harness-Sammelticket). */
+export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL, CODEQUALITAET_SAMMELTICKET_TITEL];
 
 /** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). `nach`: der Vorgänger (`--vorgaenger`); nur strikt jüngere Tickets zählen (der Vorgänger und ältere Tickets davor sind kein „schon vorhanden“). Pur. */
 export function kandidatenSammelticket(offene, titel, { nach = null } = {}) {
@@ -269,6 +276,22 @@ export function kopfEnde(items) {
   return ende;
 }
 
+/** Arten der Notfälle, vor die das Harness-Sammelticket nicht rückt (factory#162): echte Notfälle, nicht Status-, Dependabot-, Forum- oder Wiedervorlage-Tickets. */
+export const SPITZEN_NOTFALL_ARTEN = ["rot-main", "security"];
+
+/**
+ * Index des ersten Items hinter den Notfall-Items im Kopf (factory#162): das letzte offene Item (auch geclaimt) vor `kopfEnde`, dessen Titel mit
+ * dem Marker einer Art aus `SPITZEN_NOTFALL_ARTEN` beginnt, plus eins; ohne Notfall im Kopf 0. Ein Status-Ticket über dem Notfall stört nicht. Pur.
+ */
+export function spitzenEnde(items) {
+  const marker = NOTFAELLE.filter((n) => SPITZEN_NOTFALL_ARTEN.includes(n.art)).map((n) => n.marker);
+  let ende = 0;
+  for (const [idx, i] of items.slice(0, kopfEnde(items)).entries()) {
+    if (i.state === "open" && marker.some((m) => String(i.title ?? "").startsWith(m))) ende = idx + 1;
+  }
+  return ende;
+}
+
 /** True, wenn das Item mit der Nummer schon im Kopf (vor `kopfEnde`) steht: dann muss es nicht mehr nach oben. Pur. */
 export function imKopf(items, nr) {
   const idx = items.findIndex((i) => i.number === nr);
@@ -287,53 +310,13 @@ export function sammelticketItem(items, ohne = []) {
 }
 
 /**
- * Der Sammelblock des Boards: die ungeclaimten Sammeltickets (alle Titel aus `SAMMELTICKET_TITEL_LISTE`), die ab dem ungeclaimten
- * Harness-Sammelticket bis zum nächsten offenen, ungeclaimten Nicht-Sammelticket aufeinander folgen. Ohne ungeclaimtes
- * Harness-Sammelticket beginnt der Block hinter dem Kopf (`kopfEnde`: Status-, Notfall-, Dependabot-, Forum-Ticket stehen
- * regelkonform oben und stören ihn nicht). Geschlossene, geclaimte und gerade einsortierte (`ohne`) Items überspringt der Block, sie beenden ihn nicht.
- * In Board-Reihenfolge. Pur.
- */
-export function sammelblock(items, ohne = []) {
-  const harness = sammelticketItem(items, ohne);
-  const start = harness ? items.findIndex((i) => i.id === harness.id) : kopfEnde(items);
-  const block = [];
-  for (const i of items.slice(start)) {
-    if (i.state !== "open" || !ungeclaimt(i) || ohne.includes(i.number)) continue;
-    if (!SAMMELTICKET_TITEL_LISTE.includes(i.title)) break;
-    block.push(i);
-  }
-  return block;
-}
-
-/**
- * Neue Tickets landen nie VOR den ungeclaimten Sammeltickets (sonst rücken sie nicht nach vorn): der Klemm-Anker ist das am
- * weitesten hinten stehende von (a) dem ungeclaimten Harness-Sammelticket, wo es auch steht, und (b) den ungeclaimten
- * Sammeltickets im Sammelblock (`sammelblock`). Ist der Anker `null` (Spitze) oder steht er im Board davor, wird
- * dieser Anker genommen. Der Anker selbst, alles dahinter, ein Anker außerhalb der Liste (meldet der Aufrufer), ein Board ohne
- * ungeclaimtes Sammelticket und `notfall` bleiben unverändert. Das Sammelticket selbst klemmt nicht (es steht in `numbers`).
- * Liefert `{ anker, geklemmt, sammelticket }`. Pur.
- */
-export function klemmeAnker(items, ankerNr, { numbers = [], notfall = false } = {}) {
-  const unveraendert = { anker: ankerNr, geklemmt: false, sammelticket: null };
-  if (notfall) return unveraendert;
-  const kandidaten = [sammelticketItem(items, numbers), ...sammelblock(items, numbers)].filter(Boolean);
-  if (kandidaten.length === 0) return unveraendert;
-  const idx = (item) => items.findIndex((i) => i.id === item.id);
-  const ziel = kandidaten.reduce((hinten, k) => (idx(k) > idx(hinten) ? k : hinten));
-  const ankerIdx = ankerNr === null ? -1 : items.findIndex((i) => i.number === ankerNr);
-  if (ankerNr !== null && ankerIdx < 0) return unveraendert;
-  if (ankerIdx >= idx(ziel)) return unveraendert;
-  return { anker: ziel.number, geklemmt: true, sammelticket: ziel.number };
-}
-
-/**
- * Der ganze Planungsweg von board-place (--top/--after/--position, Klemmung, Notfall) als pure Funktion: `args` wie aus parseArgs
- * (`anchor`, `position`, `numbers`, `notfall`). Liefert den Plan von planPlacements plus `klemmung` (`{ geklemmt, sammelticket }`).
+ * Der ganze Planungsweg von board-place (--top/--after/--position) als pure Funktion: `args` wie aus parseArgs
+ * (`anchor`, `position`, `numbers`). Der Anker gilt wörtlich, ohne Klemmung hinter ein Sammelticket (factory#162: das Sammelticket holt der Board-Takt
+ * nach Füllstand an die Spitze). Liefert den Plan von planPlacements.
  */
 export function planFuerArgs(items, args) {
   const anker = args.position ? ankerNummerFuerPosition(items, args.position, args.numbers[0]) : (args.anchor ?? null);
-  const k = klemmeAnker(items, anker, { numbers: args.numbers, notfall: !!args.notfall });
-  return { ...planPlacements(items, args.numbers, k.anker), klemmung: { geklemmt: k.geklemmt, sammelticket: k.sammelticket } };
+  return planPlacements(items, args.numbers, anker);
 }
 
 /**
@@ -456,7 +439,7 @@ export function normalizeOffene(pages) {
  * Antwort von `gh api --paginate --slurp <Board-Pfad>/items` (Liste von Seiten) →
  * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), contentId (node_id des Issues), number, status, title, assignees, state, body, labels, autor, blockedBy }`
  * (die letzten vier liest `naechstes-ticket.mjs`; Feldform `issue_dependencies_summary` belegt per Probe 2026-10-08: 151 von 151 Items tragen
- * `blocked_by`, `total_blocked_by`, `blocking`, `total_blocking`; ein Wert über 0 wurde noch nie beobachtet). Pur, damit die Form
+ * `blocked_by`, `total_blocked_by`, `blocking`, `total_blocking`; `blocked_by` über 0 liest `naechstes-ticket.mjs` als Sperre, `spezifikation.mjs anlegen` setzt sie nativ). Pur, damit die Form
  * mit einer echten JSON-Probe testbar ist. Bricht laut ab bei unerwarteter Form, statt Nummern still
  * als fehlend zu melden. Drafts und PRs fliegen raus. REST statt GraphQL: das Core-Kontingent ist
  * getrennt vom GraphQL-Kontingent, das bei Board-Arbeit binnen Minuten leer war.
@@ -484,6 +467,8 @@ export function normalizeItems(pages) {
       labels: Array.isArray(i.content.labels) ? i.content.labels.map((l) => (typeof l === "string" ? l : l?.name)).filter((n) => typeof n === "string" && n !== "") : [],
       autor: typeof i.content.user?.login === "string" && i.content.user.login !== "" ? { login: i.content.user.login, type: i.content.user.type ?? "" } : null,
       blockedBy: Number.isFinite(i.content.issue_dependencies_summary?.blocked_by) ? i.content.issue_dependencies_summary.blocked_by : 0,
+      // Milestone des Issues (Release-Planung, factory#194): `milestone: { nummer, titel, state, faellig }`, nur wenn gesetzt und lesbar (sonst fehlt der Schlüssel).
+      ...milestoneFeld(i.content.milestone),
     }));
 }
 
@@ -754,25 +739,7 @@ export function entferneVomBoard(board, itemId, opts = {}) {
   graphql(MUTATION_DELETE, { p: board.projectId, i: itemId }, opts);
 }
 
-/**
- * Der Planungsweg von main als pure Funktion (#1390): zuerst die Selbstkorrektur des ungeclaimten Harness-Sammeltickets (nicht bei
- * `--notfall`, nicht wenn das Sammelticket selbst einsortiert wird), dann `planFuerArgs` auf der korrigierten Liste. `n` = Position
- * laut AGENTS.md; `null` heißt „Position unbekannt“: dann entfällt die Korrektur, der Plan läuft ohne sie. Liefert
- * `{ korrektur, items, plan }` (`korrektur` null, wenn nichts zu korrigieren war).
- */
-export function planMitKorrektur(items, args, n) {
-  const ticket = args.notfall || n === null ? null : sammelticketItem(items, args.numbers);
-  const korrektur = ticket ? sammelticketKorrektur(items, n) : null;
-  const korrigiert = korrektur ? verschiebe(items, korrektur.id, korrektur.afterId) : items;
-  return { korrektur, items: korrigiert, plan: planFuerArgs(korrigiert, args) };
-}
-
-/** Position laut AGENTS.md (SSOT) oder null mit Warnung, wenn die Datei nicht lesbar ist oder die Zahl nicht eindeutig (nur die Selbstkorrektur entfällt). */
-export function positionOderWarnung(lies = positionLautAgentsMd) {
-  try {
-    return lies();
-  } catch (e) {
-    console.error(`⚠ Sammelticket-Selbstkorrektur übersprungen: ${fehlerText(e)}`);
-    return null;
-  }
-}
+const milestoneFeld = (roh) => {
+  const m = milestoneAus(roh);
+  return m === null ? {} : { milestone: m };
+};

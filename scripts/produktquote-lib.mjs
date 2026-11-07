@@ -14,17 +14,26 @@ import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 export const PRODUKT_QUOTE = 3;
 
 /** Härtungs-Takt (Füllstand): so viele Befund-Kommentare vertrauter Nicht-Bot-Autoren muss das ungeclaimte Harness-Sammelticket tragen, bevor der Takt es
- *  hinter den Kopf holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`PRODUKT_QUOTE`) gekoppelt. */
+ *  an die Spitze (hinter 🚨/🔒) holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`PRODUKT_QUOTE`) gekoppelt. */
 export const HARNESS_TAKT_KOMMENTARE = 10;
+
+/** Die eine Quelle der Zeilenerkennung eines Sammeltickets: eine Checkbox-Zeile (`- [ ]`, auch `*`, eingerückt, offen oder abgehakt `[x]`). Füllstand und Zeilenzählung benutzen sie beide. */
+export const BEFUND_ZEILE = /^\s*[-*]\s+\[[ xX]\]/;
+
+/** Wie `BEFUND_ZEILE`, aber nur offene Zeilen (`[ ]`). */
+export const BEFUND_ZEILE_OFFEN = /^\s*[-*]\s+\[ \]/;
+
+/** Hat der Kommentartext mindestens eine Befund-Zeile (`BEFUND_ZEILE`)? Pur. */
+export const hatBefundZeile = (body) => String(body ?? "").split(/\r?\n/).some((z) => BEFUND_ZEILE.test(z));
 
 /**
  * Füllstand des Harness-Sammeltickets: Zahl der Kommentare (REST `repos/<repo>/issues/<nr>/comments`, flache Liste) von vertrauten Autoren
- * (`istVertraut`: Repo-Owner oder vertrauter Bot) ohne `[bot]`-Login, also nur Menschen-Kommentare des Owners. Kommentare ohne `user.login`
- * zählen nicht. Wirft, wenn `kommentare` keine Liste ist. Pur.
+ * (`istVertraut`: Repo-Owner oder vertrauter Bot) ohne `[bot]`-Login, also nur Menschen-Kommentare des Owners, mit mindestens einer Befund-Zeile
+ * (`hatBefundZeile`; Fließtext ohne `- [ ]` ist keine abhakbare Zeile und zählt nicht). Kommentare ohne `user.login` zählen nicht. Wirft, wenn `kommentare` keine Liste ist. Pur.
  */
 export function befundKommentare(kommentare, owner) {
   if (!Array.isArray(kommentare)) throw new Error("kommentare muss eine Liste sein.");
-  return kommentare.filter((k) => istVertraut(k?.user, owner) && !/\[bot\]$/i.test(String(k.user.login))).length;
+  return kommentare.filter((k) => istVertraut(k?.user, owner) && !/\[bot\]$/i.test(String(k.user.login)) && hatBefundZeile(k.body)).length;
 }
 
 /**
@@ -132,8 +141,8 @@ export function holeQuotenCommits({ quellen, lies }) {
 /**
  * Der Sammelticket-Stand aus einer Issue-Liste `[{ number, title, state, closedAt, assignees }]` (state ohne Groß/Klein, assignees eine Liste
  * oder fehlend): `abschluss` = jüngstes geschlossenes Harness-Sammelticket mit gültigem `closedAt` (`{ number, closedAt }` oder null),
- * `sammelIssues` = Nummern aller Sammeltickets beider Titel (offen wie geschlossen), `inArbeit` = Nummer eines offenen Harness-Sammeltickets
- * mit Assignee oder null. Das Langfuse-Sammelticket zählt nur zu `sammelIssues`. Wirft, wenn `issues` keine Liste ist. Pur.
+ * `sammelIssues` = Nummern aller Sammeltickets aller Titel aus `SAMMELTICKET_TITEL_LISTE` (offen wie geschlossen), `inArbeit` = Nummer eines offenen Harness-Sammeltickets
+ * mit Assignee oder null. Das Langfuse- und das Codequalität-Sammelticket zählen nur zu `sammelIssues`. Wirft, wenn `issues` keine Liste ist. Pur.
  */
 export function sammelStand(issues) {
   if (!Array.isArray(issues)) throw new Error("issues muss eine Liste sein.");

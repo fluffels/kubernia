@@ -13,11 +13,14 @@ import {
   einheitId,
   einheitText,
   jsonSchluesselSpanne,
+  markerHinweis,
   normalisierterEinheitText,
-  rendereProjektwerte,
+  PROJEKT_BLOCK_ENDE,
+  PROJEKT_BLOCK_START,
   setzeBlock,
   setzeJsonSchluessel,
 } from "./besitz-lib.mjs";
+import { rendereProjektwerte } from "./projektwert-lib.mjs";
 
 const PROJEKT_PFAD = PROJEKT_CONFIG;
 
@@ -49,12 +52,21 @@ function ergaenzterWert(e, srcText, span, erg) {
   return JSON.stringify(ziel, null, 2).replace(/\n/g, `\n${einrueckung}`);
 }
 
+/** Nicht-fataler Hinweis (leer, wenn nichts fehlt): Der Sync ersetzt nur Kern-Blöcke, fehlen im Ziel die Projekt-Marker, nennt er die fehlenden Zeilen wörtlich. Aufruf nur nach `wendeTeileAn`: eine Block-Einheit in einer fehlenden Zieldatei wirft dort schon, `zielLf` ist hier also nie `null`. Bekannte Grenze: der Hinweis gilt für jede Datei mit Block-Einheit (heute nur AGENTS.md), und ein Marker zählt, wenn er irgendwo im Text steht. */
+export function projektMarkerHinweis(pfad, eintraege, zielLf) {
+  if (!eintraege.some((e) => e.block !== undefined)) return [];
+  const fehlend = [PROJEKT_BLOCK_START, PROJEKT_BLOCK_ENDE].filter((m) => !zielLf.includes(m));
+  if (fehlend.length === 0) return [];
+  const erwartet = fehlend.length === 2 ? `Erwartet je eine Zeile ${fehlend[0]} und ${fehlend[1]}` : `Erwartet: ${fehlend[0]}`;
+  return [`${pfad}: Projekt-Marker fehlen (der Sync bricht nicht ab). ${erwartet} um den Projekt-Block (Konvention, Doctor-Punkt Projektdateien)`];
+}
+
 /** Wendet alle Teil-Einheiten einer Datei nacheinander auf den Zieltext an (LF-normalisiert). Wirft bei Marker- oder JSON-Fehlern. */
 export function wendeTeileAn(eintraege, srcText, zielLf, zielConfig, erg) {
   let arbeit = zielLf;
   for (const e of eintraege) {
     if (e.block !== undefined) {
-      if (arbeit === null) throw new Error(`${einheitId(e)}: Datei fehlt im Ziel, die Marker fehlen`);
+      if (arbeit === null) throw new Error(`${einheitId(e)}: Datei fehlt im Ziel, die Marker fehlen. ${markerHinweis(e.block)}`);
       arbeit = setzeBlock(arbeit, e.block, rendereProjektwerte(einheitText(e, srcText), zielConfig, einheitId(e)));
     } else {
       if (arbeit === null) arbeit = "{\n}\n";

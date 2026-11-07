@@ -1,6 +1,6 @@
 // Kein Shebang: wird per `node scripts/subagent-laufzeit.mjs` gestartet UND von test/subagent-laufzeit.test.ts importiert.
 /**
- * Laufzeit eines Subagent-Typs (#1382), z. B. der Planer-Laufzeit aus docs/model-routing.md § Planer-Laufzeit.
+ * Laufzeit eines Subagent-Typs (#1382), z. B. der Planer-Laufzeit aus docs/model-routing.md (Fabrik) › Planer-Laufzeit.
  *
  *   node scripts/subagent-laufzeit.mjs --von <ISO> [--bis <ISO>] [--agent <name> | --typen] [--ticket <nr>…] [--ohne <nr>…] [--schnitt <ISO>] [--projekt <slug>] [--json]
  *

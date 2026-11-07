@@ -65,7 +65,9 @@ import { execFileSync } from "node:child_process";
 import { statSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { arbeitsplatzAus, standardzweigVon, worktreeBefehl } from "./arbeitsplatz-lib.mjs";
 import { buildDenyOutput, parseHookInput } from "./hook-io.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 import { analyse } from "./worktree-guard-eval.mjs";
 import { coarseProtected, fromMsysPath, pathFor } from "./worktree-guard-tabellen.mjs";
@@ -150,25 +152,64 @@ export function resolveGitContext(cwd, repoRoot, deps = {}) {
   return { relevant: true, toplevel: mine.top, isMainWorktree };
 }
 
-/** Beispielzeile für den neuen Worktree aus der Projekt-Config; ohne nutzbare Config steht der Grund samt Fix-Zeile statt des Beispiels (der Block bleibt). */
-function neuerWorktreeHinweis(deps) {
-  const { namen, grund } = namenOderGrund("Worktree-Guard", deps);
-  if (grund) return grund;
-  return `\`git fetch origin && git worktree add .claude/worktrees/${namen.worktreeName("<nr>")} -b ${namen.branchName("<nr>", "<slug>")} origin/main\` (vom frischen origin/main, #772).`;
+/**
+ * Die Orte, deren Haupt-Checkout der Guard schützt (factory#89): immer das Session-Repo (`repoRoot`), im Arbeitsplatz zusätzlich jedes Repo der Config
+ * (`{ wurzel: <repo.pfad>, repo, aufloesung }`), auch wenn das Arbeitsverzeichnis die Arbeitsplatz-Wurzel ist. Wirft nie: ohne lesbare Config, eingebettet oder bei
+ * kaputtem Block bleibt es beim Session-Repo (ein Totalblock würde auch Commits im Worktree verhindern). `deps.config` ersetzt das Laden (Test).
+ */
+export function schutzWurzeln(repoRoot, deps = {}) {
+  const eigen = [{ wurzel: repoRoot }];
+  try {
+    const config = deps.config ?? ladeProjektConfig({ rootDir: repoRoot, pruefen: false });
+    if (config?.arbeitsplatz === undefined) return eigen;
+    const aufloesung = arbeitsplatzAus(config, repoRoot);
+    return [...eigen, ...aufloesung.repos.map((repo) => ({ wurzel: repo.pfad, repo, aufloesung }))];
+  } catch {
+    return eigen;
+  }
 }
 
-const BLOCK_REASON = (top, deps) =>
+/** Wertet `bewerte(schutzWurzel)` je Schutz-Wurzel aus: ein Block geht vor einer Rückfrage, diese vor dem Durchlassen. Eine Quelle für den Bash- und den PowerShell-Guard. */
+export function jeSchutzWurzel(repoRoot, deps, bewerte) {
+  let frage = null;
+  for (const w of schutzWurzeln(repoRoot, deps)) {
+    const r = bewerte(w);
+    if (r?.block) return r;
+    frage ??= r?.ask ? r : null;
+  }
+  return frage ?? { block: false };
+}
+
+/** Beispielzeile für den neuen Worktree aus der Projekt-Config; ohne nutzbare Config steht der Grund samt Fix-Zeile statt des Beispiels (der Block bleibt). Im Arbeitsplatz (`w.repo`) der Befehl des getroffenen Repos. */
+export function neuerWorktreeHinweis(deps, w = {}) {
+  const { namen, grund } = namenOderGrund("Worktree-Guard", deps);
+  if (grund) return grund;
+  const worktreeName = namen.worktreeName("<nr>");
+  const branchName = namen.branchName("<nr>", "<slug>");
+  if (!w.repo) return `\`${worktreeBefehl({ aufloesung: { betriebsart: "eingebettet" }, worktreeName, branchName })}\` (vom frischen origin/main, #772).`;
+  const befehl = worktreeBefehl({ aufloesung: w.aufloesung, repo: w.repo, worktreeName, branchName });
+  return `\`${befehl}\` (vom frischen origin/${standardzweigVon(w.repo)}, #772) bzw. \`node scripts/arbeitsplatz.mjs worktree <nr> <slug> --repo ${w.repo.name}\`.`;
+}
+
+const BLOCK_REASON = (top, deps, w) =>
   `git commit/push würde im geteilten main-Checkout (${top}) laufen und ist blockiert. ` +
   `Aus einem worktree: \`git -C <worktree> …\` (ändert die Shell-cwd nicht) oder \`cd <worktree> && git …\`, ` +
-  `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Git-Workflow): ` +
-  `${neuerWorktreeHinweis(deps)} (#735)`;
+  `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Eigener Worktree): ` +
+  `${neuerWorktreeHinweis(deps, w)} (#735)`;
 
 /** Gesamtentscheidung: `block` nur, wenn (a) das Kommando commit/push ist, (b) cwd bekannt ist, (c) mindestens ein
- *  Ziel-Verzeichnis zu diesem Repo gehört UND (d) dort der Haupt-Checkout liegt (kein Linked Worktree). `ask`, wenn
+ *  Ziel-Verzeichnis zu einem geschützten Repo gehört (Session-Repo, im Arbeitsplatz jedes Repo der Config, `schutzWurzeln`) UND (d) dort der Haupt-Checkout liegt (kein Linked Worktree). `ask`, wenn
  *  nichts blockt, aber ein Ziel/Inhalt nicht statisch bestimmbar ist (siehe Kopfkommentar). Sonst durchlassen. */
 export function decide({ cwd, command, repoRoot, deps = {} }) {
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
-  const d = { ...deps, kontextCache: deps.kontextCache ?? new Map(), repoRoot };
+  const kontextCache = deps.kontextCache ?? new Map();
+  return jeSchutzWurzel(repoRoot, deps, (w) => entscheideFuer({ cwd, command, w, deps, kontextCache }));
+}
+
+/** Die Entscheidung gegen EINE Schutz-Wurzel (`repoRoot` = `w.wurzel`, auch für `ausserhalbRepo`). */
+function entscheideFuer({ cwd, command, w, deps, kontextCache }) {
+  const repoRoot = w.wurzel;
+  const d = { ...deps, kontextCache, repoRoot };
   let found;
   try {
     found = analyse(command, cwd, d);
@@ -177,7 +218,7 @@ export function decide({ cwd, command, repoRoot, deps = {} }) {
   }
   for (const target of found.targets) {
     const ctx = resolveGitContext(target, repoRoot, d);
-    if (ctx.relevant && ctx.isMainWorktree) return { block: true, reason: BLOCK_REASON(ctx.toplevel, deps) };
+    if (ctx.relevant && ctx.isMainWorktree) return { block: true, reason: BLOCK_REASON(ctx.toplevel, deps, w) };
   }
   for (const [dir, a] of found.asks) {
     const ctx = resolveGitContext(dir, repoRoot, d);

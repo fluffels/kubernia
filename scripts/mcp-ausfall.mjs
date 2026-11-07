@@ -15,6 +15,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { REPO_NAME_QUELLE } from "./arbeitsplatz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig, umgebungsWert } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
@@ -63,18 +64,39 @@ export function logBasis({ plattform, env, home }) {
   return join(env.XDG_CACHE_HOME || join(home, ".cache"), "claude-cli-nodejs");
 }
 
-/** Pfad des Hauptcheckouts zu einer Wurzel, die auch ein Worktree darunter sein darf. Pur. */
-export const hauptWurzel = (wurzel) => String(wurzel).replace(/[\\/]+$/, "").replace(/[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$/, "");
+/** Worktree-Ordner unter `.claude/worktrees/`: eingebettet `<name>`, im Arbeitsplatz `<repo>/<name>` (Repo-Segment, factory#89). */
+const EINGEBETTET_ENDE = /[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$/;
+const ARBEITSPLATZ_ENDE = new RegExp(String.raw`[\\/]\.claude[\\/]worktrees[\\/]${REPO_NAME_QUELLE}[\\/][^\\/]+$`);
+
+/**
+ * Pfad des Hauptcheckouts zu einer Wurzel, die auch ein Worktree darunter sein darf (`.claude/worktrees/<name>`). Mit `mitArbeitsplatz` (Config mit Block `arbeitsplatz`)
+ * ist es die Arbeitsplatz-Wurzel und der Worktree liegt unter `.claude/worktrees/<repo>/<name>`; ohne die Angabe lässt der Aufbau `<repo>/<name>` den Pfad unverändert (er wäre sonst nicht von einem tieferen Pfad zu unterscheiden). Pur.
+ */
+export const hauptWurzel = (wurzel, mitArbeitsplatz = false) => String(wurzel).replace(/[\\/]+$/, "").replace(mitArbeitsplatz ? ARBEITSPLATZ_ENDE : EINGEBETTET_ENDE, "");
 
 /**
  * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<praefixe.worktree>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
  * `FACTORY_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es nur den lazy gelesenen Altpräfix, keine Worktree-Angabe). Ohne `praefixe.worktree` in der Config wirft die Funktion mit Fix-Zeile.
  */
-export const standPfad = (wurzel, env, tmp, config) => umgebungsWert(env, "FACTORY_MCP_AUSFALL_STAND") || join(tmp, `${worktreePraefix(config ?? ladeProjektConfig())}mcp-ausfall-${slug(hauptWurzel(wurzel))}.json`);
+export function standPfad(wurzel, env, tmp, config) {
+  const vorgabe = umgebungsWert(env, "FACTORY_MCP_AUSFALL_STAND");
+  if (vorgabe) return vorgabe;
+  const c = config ?? ladeProjektConfig();
+  return join(tmp, `${worktreePraefix(c)}mcp-ausfall-${slug(hauptWurzel(wurzel, c?.arbeitsplatz !== undefined))}.json`);
+}
 
-/** Projekt-Ordner (Hauptcheckout und seine Worktrees) unter den Namen des Basisordners; Suffix `""` = Hauptcheckout. Pur. */
-export function projektOrdner(namen, wurzel) {
-  const haupt = slug(hauptWurzel(wurzel));
+/** Hat die Config (oder, ohne Angabe, die geladene) einen Block `arbeitsplatz`? Wirft nie (ohne lesbare Config `false`). */
+const istArbeitsplatz = (config) => {
+  try {
+    return (config ?? ladeProjektConfig({ pruefen: false })).arbeitsplatz !== undefined;
+  } catch {
+    return false;
+  }
+};
+
+/** Projekt-Ordner (Hauptcheckout und seine Worktrees) unter den Namen des Basisordners; Suffix `""` = Hauptcheckout. `mitArbeitsplatz` wie bei `hauptWurzel`. Pur. */
+export function projektOrdner(namen, wurzel, mitArbeitsplatz = false) {
+  const haupt = slug(hauptWurzel(wurzel, mitArbeitsplatz));
   const praefix = `${haupt}--claude-worktrees-`;
   return namen.filter((n) => n === haupt || n.startsWith(praefix)).map((n) => ({ ordner: n, suffix: n.slice(haupt.length) }));
 }
@@ -197,7 +219,7 @@ export function parseSeit(arg, jetzt, standardStunden = 24) {
   return new Date(jetzt - standardStunden * 3600_000).toISOString();
 }
 
-function lies(basis, wurzel, server, seit) {
+function lies(basis, wurzel, server, seit, mitArbeitsplatz) {
   const alle = [];
   let namen;
   try {
@@ -206,7 +228,7 @@ function lies(basis, wurzel, server, seit) {
     return null;
   }
   const seitMs = Date.parse(seit);
-  for (const p of projektOrdner(namen, wurzel)) {
+  for (const p of projektOrdner(namen, wurzel, mitArbeitsplatz)) {
     // Alle `mcp-logs-*`-Ordner des Projekts, nicht nur die Server aus `.mcp.json`: user-scope-Server (langfuse) haben dort keinen Eintrag.
     let ordnerNamen;
     try {
@@ -274,7 +296,7 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
     }
     const seit = sessionstart ? parseSeit(standSeit, jetzt) : parseSeit(seitArg, jetzt);
     const basis = logBasis({ plattform, env, home });
-    const befunde = lies(basis, wurzel, server, seit);
+    const befunde = lies(basis, wurzel, server, seit, istArbeitsplatz(config));
     const variablen = server.filter((s) => s.type === "http").map((s) => [s, fehlendeVariablen(s, env)]).filter(([, f]) => f.length)
       .map(([s, f]) => `${s.name}: Umgebungsvariable(n) ${f.join(", ")} nicht gesetzt (Header-Platzhalter), der Server verbindet voraussichtlich nicht`);
     const unbekannt = server.filter((s) => !BEKANNTE_ARTEN.includes(s.type)).map((s) => `${s.name}: Server-Art "${s.type}" kennt mcp-ausfall nicht (ungeprüft)`);

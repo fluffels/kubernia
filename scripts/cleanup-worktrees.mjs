@@ -21,7 +21,7 @@
  * Skript räumt stattdessen über `fs.rmSync` auf (kein Shell-`rm`, `Bash(node:*)`
  * bleibt erlaubt).
  *
- * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<praefixe.worktree><nr>-lens-r<runde>` bzw. `-lens-m<n>` (Merge-Delta-Lens) bzw. `-lens-a<n>` (Abnahme-Fix-Delta-Lens, Skill `review-lenses`). Bleibt so ein
+ * Lens-Worktrees (#1425): die Test-Lens sabotiert in `<praefixe.worktree><nr>-lens-r<runde>` bzw. `-lens-m<n>` (Merge-Delta-Lens) bzw. `-lens-a<n>` (Abnahme-Fix-Delta-Lens) bzw. `-lens-c<n>` (CI-Fix-Delta-Lens nach dem Nachweis, Skill `review-lenses`). Bleibt so ein
  * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `<praefixe.worktree><nr>` weg ist, fehlt er in der Waisen-Sicht oben
  * (die kennt nur unregistrierte Ordner). `verwaisteLensWorktrees` findet sie, `entferneLensWorktrees` räumt sie per
  * `git worktree remove --force` und prüft das Ergebnis.
@@ -49,12 +49,14 @@ import { ticketNamen } from "./ticket-namen.mjs";
 import {
   MIN_ORPHAN_AGE_MS,
   PR_LIMIT,
+  aufraeumDiagnose,
   branchesAufraeumen,
   diagnoseOrphans,
   entferneLensWorktrees,
   entferneVerwaisteDateien,
   fixOrphans,
   formatHalter,
+  gitOrteAus,
   localWorktreeDirs,
   suspiciousWorktreeEntries,
 } from "./worktree-aufraeumen.mjs";
@@ -106,7 +108,7 @@ export function branchenModus(root, loeschen, {
  * Einstieg, liefert in jedem Pfad den Exit-Code zurück (nie `process.exit`; der Aufrufer setzt `process.exitCode`). `--branches` gibt den Code von
  * `modus(root, loeschen, { namen })` weiter (`loeschen` nur mit `--fix`). `deps` (Tests): `modus`, `root`, `diagnoseDeps` (Nähte von `diagnoseOrphans`, z. B. `execSync`).
  */
-export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))), diagnoseDeps = {} } = {}) {
+export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))), diagnoseDeps = {}, config: configIn, ausfuehren = execFileSync } = {}) {
   const { werte, fehler } = flagsLesen(argv, { fix: { type: "boolean" }, branches: { type: "boolean" } });
   if (fehler) {
     console.error(`${fehler.text}
@@ -116,12 +118,15 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
   const FIX = werte.fix === true;
   const ROOT = root;
   let namen;
+  let config;
   try {
-    namen = ticketNamen(ladeProjektConfig());
+    config = configIn ?? ladeProjektConfig();
+    namen = ticketNamen(config);
   } catch (e) {
     console.error(`Worktree-Aufräumen abgebrochen: ${e instanceof Error ? e.message : e}`);
     return 1;
   }
+  if (config.arbeitsplatz !== undefined) return arbeitsplatzMain({ config, basis: ROOT, namen, FIX, branches: werte.branches === true, modus, diagnoseDeps, ausfuehren });
   if (werte.branches) {
     return modus(ROOT, FIX, { namen });
   }
@@ -129,19 +134,61 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
   console.log("=== Worktree-Diagnose ===\n");
   console.log(`Root: ${ROOT}`);
 
-  const { ok, orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = diagnoseOrphans(ROOT, { ...diagnoseDeps, namen });
-  if (!ok) {
+  const befund = diagnoseOrphans(ROOT, { ...diagnoseDeps, namen });
+  if (!befund.ok) {
     console.error("git worktree list fehlgeschlagen — Diagnose abgebrochen.");
     return 1;
   }
+  return repoAufraeumen(befund, { FIX, namen, fs: diagnoseDeps });
+}
 
-  const dirs = localWorktreeDirs(worktreesDir);
+/**
+ * Betriebsart Arbeitsplatz (factory#89): ein Lauf über alle Repos der Config. `--branches` ruft `modus` je Repo (git im Repo, gh mit dessen cwd),
+ * sonst Diagnose und Aufräumen je Repo (Kopf `=== Repo <name> … ===`); scheitert `git worktree list` in einem Repo, wird in keinem gelöscht.
+ * Ordner direkt unter `<wurzel>/.claude/worktrees`, die zu keinem Repo der Config gehören, werden nur gemeldet. Exit = Maximum der Repo-Codes.
+ */
+function arbeitsplatzMain({ config, basis, namen, FIX, branches, modus, diagnoseDeps, ausfuehren }) {
+  let d;
+  let orte;
+  try {
+    ({ orte } = gitOrteAus(config, basis));
+    d = branches ? null : aufraeumDiagnose(config, basis, { ...diagnoseDeps, namen });
+  } catch (e) {
+    console.error(`Worktree-Aufräumen abgebrochen: ${e instanceof Error ? e.message : e}`);
+    return 1;
+  }
+  if (branches) {
+    return Math.max(...orte.map((ort) => {
+      console.log(`=== Repo ${ort.name} (${ort.pfad}) ===`);
+      return modus(ort.pfad, FIX, { namen, ghJson: (args) => ghJson(args, { exec: (cmd, a, o) => ausfuehren(cmd, a, { ...o, cwd: ort.pfad }) }) });
+    }));
+  }
+  console.log("=== Worktree-Diagnose (Arbeitsplatz) ===\n");
+  console.log(`Wurzel: ${d.aufloesung.wurzel}`);
+  if (!d.ok) {
+    console.error(`${d.fehler}\nWorktree-Diagnose abgebrochen, in keinem Repo wurde etwas gelöscht.`);
+    return 1;
+  }
+  const wurzelOrdner = join(d.aufloesung.wurzel, ".claude", "worktrees");
+  const fremd = localWorktreeDirs(wurzelOrdner, diagnoseDeps).filter((n) => !orte.some((o) => o.name === n));
+  if (fremd.length > 0) console.log(`Ordner unter ${wurzelOrdner} ohne Repo in arbeitsplatz.repos (nie automatisch gelöscht): ${fremd.join(", ")}\n`);
+  const codes = d.repos.map((befund) => {
+    console.log(`=== Repo ${befund.name} (${befund.worktreesDir}) ===`);
+    return repoAufraeumen(befund, { FIX, namen, aufloesung: d.aufloesung, fs: diagnoseDeps });
+  });
+  return Math.max(...codes);
+}
+
+/** Diagnose-Ausgabe und Aufräumen für den Befund EINES Repos (`diagnoseOrphans` bzw. ein Eintrag von `diagnoseArbeitsplatz`); Exit-Code dieses Repos. */
+function repoAufraeumen(befund, { FIX, namen, aufloesung, fs }) {
+  const { orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = befund;
+  const dirs = localWorktreeDirs(worktreesDir, fs);
   console.log(`Worktrees-Ordner: ${worktreesDir}`);
   console.log(`Lokal vorhanden: ${dirs.length} Ordner\n`);
 
   // Reparse-Points an Worktree-Stelle sind nie ein normaler Ordner (#1051) und
   // werden NIE gelöscht — nur gemeldet, mit dem Auflöse-Befehl.
-  const suspicious = suspiciousWorktreeEntries(worktreesDir);
+  const suspicious = suspiciousWorktreeEntries(worktreesDir, fs);
   if (suspicious.length > 0) {
     console.error(`Symlink/Junction an Worktree-Stelle (${suspicious.length}) — NICHT automatisch löschbar:`);
     for (const name of suspicious) {
@@ -208,11 +255,11 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
   }
 
   console.log("Pruning veralteter git-Einträge + Löschen...");
-  const lens = entferneLensWorktrees(mainRoot, worktreesDir, lensOrphans);
-  const dateien = entferneVerwaisteDateien(mainRoot, worktreesDir, orphanFiles);
+  const lens = entferneLensWorktrees(mainRoot, worktreesDir, lensOrphans, { ...fs, aufloesung });
+  const dateien = entferneVerwaisteDateien(mainRoot, worktreesDir, orphanFiles, { ...fs, aufloesung });
   for (const name of dateien.removed) console.log(`  ✓ ${name} (lose Datei) entfernt`);
   for (const name of lens.removed) console.log(`  ✓ ${name} (Lens-Worktree) entfernt`);
-  const { removed, errors: ordnerFehler, pending, refused: ordnerRefused, halter: ordnerHalter } = fixOrphans(mainRoot, worktreesDir, orphans);
+  const { removed, errors: ordnerFehler, pending, refused: ordnerRefused, halter: ordnerHalter } = fixOrphans(mainRoot, worktreesDir, orphans, { ...fs, aufloesung });
   const errors = [...ordnerFehler, ...lens.errors, ...dateien.errors];
   const refused = [...ordnerRefused, ...lens.refused, ...dateien.refused];
   const halter = { ...ordnerHalter, ...lens.halter };

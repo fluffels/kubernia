@@ -2,7 +2,7 @@
 // lauf-ergebnis): Median, Cache-Pausen-Schwellen, Ticketnummer und Ticketfilter stehen genau einmal hier, damit die
 // Skripte nicht auseinanderlaufen.
 import { repoSegment } from "./arbeitsplatz-lib.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 
 /** Median einer Zahlenliste (gerade Anzahl: Mittel der beiden mittleren), nicht endliche Werte ignoriert, `null` bei leerer Liste. */
 export function median(werte) {

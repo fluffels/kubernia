@@ -9,7 +9,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { istEchtesModell, vereinigungsLaenge } from "./mess-lib.mjs";
-import { transkriptZeilen } from "./transkript.mjs";
+import { toolPaare, transkriptZeilen } from "./transkript.mjs";
 import { patchAus, patchPfade } from "./patch-zugriff.mjs";
 import { ticketAusRef } from "./ticket-refs.mjs";
 
@@ -30,19 +30,14 @@ function promptAus(zeilen) {
 
 /** Tool-Intervalle (tool_use → tool_result) und ob am Ende ein Tool-Aufruf offen ist. */
 function toolIntervalle(zeilen) {
-  const offen = new Map();
   const intervalle = [];
-  for (const r of zeilen) {
-    if (!gueltig(r?.timestamp) || !Array.isArray(r.message?.content)) continue;
-    for (const c of r.message.content) {
-      if (r.type === "assistant" && c?.type === "tool_use" && c.id) offen.set(c.id, ms(r.timestamp));
-      else if (r.type === "user" && c?.type === "tool_result" && offen.has(c.tool_use_id)) {
-        intervalle.push([offen.get(c.tool_use_id), ms(r.timestamp)]);
-        offen.delete(c.tool_use_id);
-      }
-    }
+  let offeneTools = 0;
+  const istAufruf = (r, c) => r?.type === "assistant" && c?.type === "tool_use" && Boolean(c.id) && gueltig(r.timestamp);
+  for (const { use, ergebnis } of toolPaare(zeilen, { istAufruf })) {
+    if (ergebnis && gueltig(ergebnis.row.timestamp)) intervalle.push([ms(use.row.timestamp), ms(ergebnis.row.timestamp)]);
+    else offeneTools++;
   }
-  return { intervalle, offeneTools: offen.size };
+  return { intervalle, offeneTools };
 }
 
 /** Kosten eines Laufs in $ aus PRICES (nur aufgezeichnete Usage); `null`, sobald ein Call ohne Preis ist oder es keinen Call gibt, nie 0. */

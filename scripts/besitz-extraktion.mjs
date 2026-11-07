@@ -1,8 +1,9 @@
 // Extraktionsliste, Bezug und Test-Hülle (ADR 0022 F10): was außer dem Besitz ins Factory-Repo zieht, Struktur-Prüfung der Liste `.factory/extraktion.json`,
-// Bezug eines Tests zum Besitz und die Test-Hülle. Node-Builtins, projekt-config-lib und besitz-lib (Ringe); besitz-lib importiert diese Datei nie (zyklenfrei).
+// Bezug eines Tests zum Besitz und die Test-Hülle. Importe: `node:path`, `projekt-config-lib` (`PROJEKT_CONFIG`), `regex-lib` (`escapeRegex`) und aus `besitz-lib` nur `normalisiereEol`, `NUR_FACTORY` und `RINGE`; besitz-lib importiert diese Datei nie (zyklenfrei).
 import { posix } from "node:path";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { normalisiereEol, NUR_FACTORY, RINGE } from "./besitz-lib.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 
 // ── Extraktionsliste (ADR 0022 F10) ──────────────────────────────────────────
 // `.factory/extraktion.json` legt geschlossen fest, was außer dem Besitz ins Factory-Repo zieht (Kern-Tests, Test-Hilfen,
@@ -67,9 +68,8 @@ const ART_NAMEN = Object.keys(extraktionsArten(""));
 /** Arten, die ins Factory-Repo ziehen: alle außer `projekt-test` (bleibt im Projekt). */
 export const MITZIEHEND = ART_NAMEN.filter((a) => a !== "projekt-test");
 
-/** Regex eines Pfadmusters: `*` steht für beliebig viele Zeichen außer `/`, alles andere wörtlich (jedes Zeichen außer Buchstaben, Ziffern und `_` wird maskiert). */
-export const musterRegex = (muster) =>
-  new RegExp(`^${muster.split("*").map((t) => [...t].map((c) => (/\w/.test(c) ? c : `\\${c}`)).join("")).join("[^/]*")}$`);
+/** Regex eines Pfadmusters: `*` steht für beliebig viele Zeichen außer `/`, alles andere wörtlich (maskiert per `escapeRegex`). */
+export const musterRegex = (muster) => new RegExp(`^${muster.split("*").map(escapeRegex).join("[^/]*")}$`);
 
 /** Alle String-Muster einer Schutzlisten-Datei (`.github/protected-paths.json`): Vereinigung aller String-Arrays; `null` bei kaputtem JSON. Die eine Auslegung der Datei. */
 export function schutzlistenMuster(text) {

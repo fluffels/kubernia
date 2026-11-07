@@ -133,7 +133,7 @@ export function sortiereDateien(worktreesDir, dateien, registered, deps = {}) {
   for (const name of dateien) {
     const m = muster.exec(name);
     if (!m) fremd.push(name);
-    else if (!registered.has(join(worktreesDir, m[1]).replace(/\\/g, "/"))) kandidaten.push(name);
+    else if (!registered.has((deps.schluessel ?? ((p) => p))(join(worktreesDir, m[1]).replace(/\\/g, "/")))) kandidaten.push(name);
   }
   const { alt, jung } = splitByAge(worktreesDir, kandidaten, deps);
   return { verwaist: alt, jung, fremd };
@@ -184,6 +184,37 @@ export function suspiciousWorktreeEntries(worktreesDir, deps = {}) {
 }
 
 /**
+ * Der Ordner, unter dem für `mainRoot` gelöscht werden darf (pur): eingebettet `<mainRoot>/.claude/worktrees` (wie bisher), im Arbeitsplatz der `worktreeOrdner`
+ * des Repos aus `arbeitsplatzAus`, dessen `pfad` `mainRoot` ist (Schrägstriche normalisiert, unter win32 ohne Groß-/Kleinschreibung). Kein solches Repo: `null`.
+ */
+export function erwarteterWorktreeOrdner(mainRoot, aufloesung, platform = process.platform) {
+  if (aufloesung?.betriebsart !== "arbeitsplatz") return norm(join(mainRoot, ".claude", "worktrees"));
+  const schluessel = platform === "win32" ? (p) => norm(p).toLowerCase() : norm;
+  const repo = aufloesung.repos.find((r) => schluessel(r.pfad) === schluessel(mainRoot));
+  return repo ? norm(repo.worktreeOrdner) : null;
+}
+
+/**
+ * Schritt 2 des Gurts (factory#89): `{ expected }` oder `{ reason }`. `worktreesDir` muss exakt der erwartete Ordner sein (`erwarteterWorktreeOrdner`; ein `mainRoot` ohne Repo
+ * der Config im Arbeitsplatz lehnt er ab), und im Arbeitsplatz zusätzlich ein echtes Verzeichnis, kein Link (rekursives Löschen folgt keinem Link).
+ */
+function pruefeWorktreeOrdner(mainRoot, worktreesDir, deps) {
+  const expected = erwarteterWorktreeOrdner(mainRoot, deps.aufloesung, deps.platform);
+  if (expected === null) return { reason: `mainRoot ${norm(mainRoot)} ist kein Repo aus arbeitsplatz.repos` };
+  const arbeitsplatz = deps.aufloesung?.betriebsart === "arbeitsplatz";
+  if (norm(worktreesDir) !== expected) {
+    return { reason: `worktreesDir ist nicht ${arbeitsplatz ? "der Worktree-Ordner des Repos" : "<mainRoot>/.claude/worktrees"} (erwartet ${expected}, bekam ${norm(worktreesDir)})` };
+  }
+  if (!arbeitsplatz) return { expected };
+  try {
+    const st = (deps.lstatSync ?? lstatSync)(worktreesDir);
+    return st.isSymbolicLink() || !st.isDirectory() ? { reason: `Worktree-Ordner ist kein echtes Verzeichnis (Link?): ${expected}` } : { expected };
+  } catch {
+    return { reason: `Worktree-Ordner nicht statbar: ${expected}` };
+  }
+}
+
+/**
  * Schutzgurt vor dem `rmSync` (#1051) — `{ safe, reason? }`.
  *
  * Anlass: Beim Aufräumen eines Ticket-Worktrees wurden ALLE versionierten Dateien unter
@@ -193,6 +224,8 @@ export function suspiciousWorktreeEntries(worktreesDir, deps = {}) {
  * beweisbar ein echtes Verzeichnis ECHT UNTERHALB von
  * `<mainRoot>/.claude/worktrees/` ist. Dieser Pfad läuft unbeaufsichtigt bei
  * jedem Turn-Ende (#952) und träfe sonst die Dateien, die den Agenten steuern.
+ * Im Arbeitsplatz (`deps.aufloesung`, factory#89) gilt statt `<mainRoot>/.claude/worktrees` der Worktree-Ordner des Repos aus der Config
+ * (`erwarteterWorktreeOrdner`), der zusätzlich ein echtes Verzeichnis sein muss; ein `mainRoot` ohne Repo der Config lehnt der Gurt ab.
  */
 export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}, art = "dir") {
   const lstat = deps.lstatSync ?? lstatSync;
@@ -210,15 +243,10 @@ export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}, 
     return { safe: false, reason: `Ordnername enthält einen Pfad-Trenner: ${name}` };
   }
 
-  // 2) worktreesDir exakt <mainRoot>/.claude/worktrees — fängt einen
-  //    Auflösungsfehler, der den Löschpfad eine Ebene zu hoch zeigen liesse.
-  const expected = norm(join(mainRoot, ".claude", "worktrees"));
-  if (norm(worktreesDir) !== expected) {
-    return {
-      safe: false,
-      reason: `worktreesDir ist nicht <mainRoot>/.claude/worktrees (erwartet ${expected}, bekam ${norm(worktreesDir)})`,
-    };
-  }
+  // 2) worktreesDir exakt der erwartete Ordner (eingebettet <mainRoot>/.claude/worktrees, im Arbeitsplatz der Ordner des Repos aus der Config, factory#89).
+  const ordner = pruefeWorktreeOrdner(mainRoot, worktreesDir, deps);
+  if (ordner.reason !== undefined) return { safe: false, reason: ordner.reason };
+  const expected = ordner.expected;
 
   // 3) Defense in Depth: das Ziel muss ECHT unterhalb liegen, nie gleich sein.
   const target = norm(join(worktreesDir, name));
@@ -270,8 +298,8 @@ export function splitByAge(worktreesDir, names, deps = {}) {
 
 /** Pure Berechnung: welche `dirs` (Ordnernamen relativ zu `worktreesDir`) sind
  *  NICHT in `registered` (Set absoluter, `/`-normalisierter Pfade). */
-export function computeOrphans(worktreesDir, dirs, registered) {
-  return dirs.filter((name) => !registered.has(join(worktreesDir, name).replace(/\\/g, "/")));
+export function computeOrphans(worktreesDir, dirs, registered, schluessel = (p) => p) {
+  return dirs.filter((name) => !registered.has(schluessel(join(worktreesDir, name).replace(/\\/g, "/"))));
 }
 
 /**
@@ -299,13 +327,53 @@ export function diagnoseOrphans(cwd, deps = {}) {
   }
 
   const mainRoot = allPaths[0];
-  const worktreesDir = join(mainRoot, ".claude", "worktrees");
-  const registered = new Set(allPaths);
+  return befundVon({ allPaths, registered: new Set(allPaths), mainRoot, worktreesDir: join(mainRoot, ".claude", "worktrees"), namen, deps });
+}
+
+/** Der Befund eines Worktree-Ordners (Ordner-, Lens- und Datei-Waisen) gegen die Menge `registered`; `schluessel` normalisiert Pfade für den Vergleich (Standard: unverändert). */
+function befundVon({ allPaths, registered, mainRoot, worktreesDir, namen, deps, schluessel = (p) => p }) {
   const dirs = localWorktreeDirs(worktreesDir, deps);
-  const { alt: orphans, jung: young } = splitByAge(worktreesDir, computeOrphans(worktreesDir, dirs, registered), deps);
+  const { alt: orphans, jung: young } = splitByAge(worktreesDir, computeOrphans(worktreesDir, dirs, registered, schluessel), deps);
   const { alt: lensOrphans, jung: lensYoung } = splitByAge(worktreesDir, verwaisteLensWorktrees(allPaths, worktreesDir, namen), deps);
-  const dateien = sortiereDateien(worktreesDir, localWorktreeFiles(worktreesDir, deps), registered, { ...deps, namen });
+  const dateien = sortiereDateien(worktreesDir, localWorktreeFiles(worktreesDir, deps), registered, { ...deps, namen, schluessel });
   return { ok: true, orphans, young, lensOrphans, lensYoung, orphanFiles: dateien.verwaist, youngFiles: dateien.jung, foreignFiles: dateien.fremd, mainRoot, worktreesDir };
+}
+
+/**
+ * Diagnose im Arbeitsplatz (factory#89): `orte` aus `gitOrteAus`. Zuerst `git worktree list` in ALLEN Repos; scheitert eines oder liefert es nichts,
+ * ist das Ergebnis `{ ok: false, fehler }` und der Aufrufer löscht in keinem Repo (fail-closed). Sonst `{ ok: true, repos: [{ name, ...Befund }] }`:
+ * Ordner- und Datei-Waisen eines Repos gelten gegen die VEREINIGUNG der registrierten Pfade aller Repos (ein aktiver Worktree von Repo B wird nie
+ * als Waise von Repo A gemeldet), Lens-Waisen nur gegen die Liste des eigenen Repos. `mainRoot` ist der erste Listeneintrag, `worktreesDir` der Worktree-Ordner aus der Config.
+ */
+export function diagnoseArbeitsplatz(orte, deps = {}) {
+  const namen = deps.namen ?? ladeTicketNamen();
+  const schluessel = (deps.platform ?? process.platform) === "win32" ? (p) => p.toLowerCase() : (p) => p;
+  const listen = [];
+  for (const ort of orte) {
+    let pfade = [];
+    try {
+      pfade = registeredWorktreePaths(ort.pfad, deps);
+    } catch {
+      /* leere Liste: unten fail-closed */
+    }
+    if (pfade.length === 0) {
+      return { ok: false, fehler: `git worktree list scheiterte in Repo ${ort.name} (${ort.pfad}), in keinem Repo wurde etwas gelöscht\nFix: Pfad in arbeitsplatz.repos prüfen (git -C ${ort.pfad} worktree list)` };
+    }
+    listen.push({ ort, pfade });
+  }
+  const registered = new Set(listen.flatMap(({ pfade }) => pfade.map(schluessel)));
+  const repos = listen.map(({ ort, pfade }) => ({ name: ort.name, ...befundVon({ allPaths: pfade, registered, mainRoot: pfade[0], worktreesDir: ort.worktreeOrdner, namen, deps, schluessel }) }));
+  return { ok: true, repos };
+}
+
+/**
+ * Weiche für Stop-Hook und CLI (factory#89): ohne Block `arbeitsplatz` (eingebettet) `{ arbeitsplatz: false, ok: true, repos: [{ name: null, ...diagnoseOrphans(basis) }] }`
+ * (der Befund kann selbst `ok: false` sein, wie bisher), im Arbeitsplatz `{ arbeitsplatz: true, aufloesung, ...diagnoseArbeitsplatz }`. Wirft bei kaputtem Block (Fix-Zeile aus `arbeitsplatzAus`).
+ */
+export function aufraeumDiagnose(config, basis, deps = {}) {
+  if (config?.arbeitsplatz === undefined) return { arbeitsplatz: false, ok: true, repos: [{ name: null, ...diagnoseOrphans(basis, deps) }] };
+  const { aufloesung, orte } = gitOrteAus(config, basis);
+  return { arbeitsplatz: true, aufloesung, ...diagnoseArbeitsplatz(orte, deps) };
 }
 
 /**

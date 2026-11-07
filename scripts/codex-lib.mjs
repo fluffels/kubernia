@@ -1,5 +1,5 @@
 // Codex-Setup-Adapter; kein Einstieg, kein Netzwerk und kein Zugriff auf Authentifizierungswerte.
-import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
@@ -66,6 +66,20 @@ function sichererPfad(root, pfad) {
   if (!/^\.codex\/[a-zA-Z0-9./-]+$/.test(pfad) || pfad.trim() !== pfad || pfad.split("/").includes("..")) throw new Error("Ungültiger Setup-Zielpfad");
   const ziel = join(root, pfad); ohneSymlinks(ziel); return ziel;
 }
+/** Vergleicht vorhandene Rollen-Dateien mit dem Soll (endpunktunabhängig); rein lesend, folgt keinem Symlink. */
+export function lokaleRollenMaengel(root, config, mcp) {
+  const ordner = join(root, ".codex", "agents");
+  ohneSymlinks(ordner);
+  if (!lstatSync(ordner, { throwIfNoEntry: false })?.isDirectory()) return [];
+  const soll = Object.fromEntries(Object.entries(setupDateien(mcp, config, "http://localhost/")).filter(([k]) => k.startsWith(".codex/agents/")).map(([k, t]) => [k.slice(".codex/agents/".length), t]));
+  const maengel = [];
+  for (const name of readdirSync(ordner).sort()) {
+    const datei = join(ordner, name); ohneSymlinks(datei);
+    if (!(name in soll)) maengel.push(`Codex-Rolle verwaist: .codex/agents/${name} (keine Rolle mehr; Datei löschen)`);
+    else if (!lstatSync(datei).isFile() || readFileSync(datei, "utf8") !== soll[name]) maengel.push(`Codex-Rolle veraltet: .codex/agents/${name} (Datei löschen, dann node scripts/codex-setup.mjs --langfuse-url <URL> --write)`);
+  }
+  return maengel;
+}
 /** Alle Quellen/Ziele/Kollisionen vor erstem Schreiben prüfen; identische Dateien bleiben unverändert. */
 export function schreibeSetup(root, dateien) {
   root = pruefeAusgabe(root);
@@ -73,7 +87,7 @@ export function schreibeSetup(root, dateien) {
   for (const [pfad, text] of Object.entries(dateien)) {
     const ziel = sichererPfad(root, pfad);
     if (!existsSync(ziel)) neu.push([ziel, pfad, text]);
-    else if (!lstatSync(ziel).isFile() || readFileSync(ziel, "utf8") !== text) throw new Error(`Lokaler Entwurf abweichend: ${pfad}; nichts überschrieben`);
+    else if (!lstatSync(ziel).isFile() || readFileSync(ziel, "utf8") !== text) throw new Error(`Lokaler Entwurf abweichend: ${pfad}; nichts überschrieben. Fix: Datei löschen, dann node scripts/codex-setup.mjs --langfuse-url <URL> --write`);
   }
   for (const [ziel, , text] of neu) { mkdirSync(dirname(ziel), { recursive: true }); writeFileSync(ziel, text, { flag: "wx" }); }
   return neu.map(([, pfad]) => pfad);

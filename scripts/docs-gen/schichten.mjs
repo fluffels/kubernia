@@ -5,7 +5,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { escapeRegex, MERMAID_FRONTMATTER } from "./markdown.mjs";
+import { escapeRegex } from "../regex-lib.mjs";
+import { MERMAID_FRONTMATTER } from "./markdown.mjs";
 
 const kern = createRequire(import.meta.url)("../schichten-kern.cjs");
 
@@ -39,7 +40,7 @@ export function schichtVon(pfad, modell) {
   const id = layerVonModell.get(modell)(p);
   // Außerhalb der Quellwurzel gilt die Auffang-Schicht nicht (der Kern liefert sie als Rest).
   const auffang = modell.schichten.find((s) => s.muster === null);
-  return id === auffang.id && !p.startsWith(modell.quellwurzel) ? null : id;
+  return id === auffang.id && !kern.quellwurzelnAus(modell).some((q) => p.startsWith(q)) ? null : id;
 }
 
 /** Reihenfolge-Index: Schichten in Modell-Reihenfolge, Externe dahinter. */
@@ -92,7 +93,7 @@ export function renderDiagramm(modell, kanten) {
   const zeilen = [];
   for (const s of modell.schichten) {
     const titel = s.technik ? `${s.label} · ${s.technik}` : s.label;
-    const unten = s.muster === null ? `alles übrige unter ${modell.quellwurzel}` : s.wurzeln.join(" · ");
+    const unten = s.muster === null ? `alles übrige unter ${kern.quellwurzelnAus(modell).join(" · ")}` : s.wurzeln.join(" · ");
     zeilen.push(`  s_${s.id}["${titel}${unten ? `<br/>${unten}` : ""}"]`);
   }
   for (const x of modell.extern) zeilen.push(`  x_${x.id}{{"${x.label}"}}`);
@@ -152,22 +153,26 @@ function cruise(rootDir, args, pruefbefehl) {
 }
 
 /**
- * Konsistenz der `schichten.cruise`-Argumente mit der Quellwurzel des Modells (#1428 Z13): die Config nennt das Cruise-Ziel und das
- * `--collapse`-Muster als Text; stünde dort ein anderes Verzeichnis als `SCHICHT_MODELL.quellwurzel`, verdichtete das Diagramm
- * still das Falsche. Prüft nur, was vorhanden ist: ein `dependency-cruiser`-Aufruf braucht das Ziel `<quellwurzel ohne Slash>` als
- * erstes Argument danach, ein `--collapse` das Muster `^(<quellwurzel>|node_modules)/[^/]+/`. Liefert die Meldung oder `null`. Pur.
+ * Konsistenz der `schichten.cruise`-Argumente mit den Quellwurzeln des Modells (#1428 Z13, factory#184): die Config nennt das Cruise-Ziel und das
+ * `--collapse`-Muster als Text; stünde dort ein anderes Verzeichnis als die Quellwurzeln des Modells, verdichtete das Diagramm
+ * still das Falsche. Prüft nur, was vorhanden ist: ein `dependency-cruiser`-Aufruf braucht die Ziele `<quellwurzel ohne Slash>` (je Wurzel eins, in Modell-Reihenfolge) als
+ * erste Argumente danach, ein `--collapse` das Muster `^(<quellwurzel>|…|node_modules)/[^/]+/`. Liefert die Meldung oder `null`. Pur.
  */
 export function pruefeCruiseArgs(args, modell) {
-  const q = modell.quellwurzel.replace(/\/$/, "");
+  const wurzeln = kern.quellwurzelnAus(modell);
+  const qs = wurzeln.map((w) => w.replace(/\/$/, ""));
+  const q = qs.join(" ");
+  const roh = wurzeln.join(", ");
   const liste = Array.isArray(args) ? args.map(String) : [];
   const bin = liste.findIndex((a) => /dependency-cruiser/.test(a));
-  if (bin >= 0 && liste[bin + 1] !== q) {
-    return `schichten.cruise: Ziel „${liste[bin + 1] ?? "(fehlt)"}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ des Schicht-Modells (erwartet: ${q})`;
+  const ziele = liste.slice(bin + 1, bin + 1 + qs.length);
+  if (bin >= 0 && ziele.join(" ") !== q) {
+    return `schichten.cruise: Ziel „${ziele.length === 0 ? "(fehlt)" : ziele.join(" ")}“ passt nicht zur Quellwurzel „${roh}“ des Schicht-Modells (erwartet: ${q})`;
   }
   const c = liste.indexOf("--collapse");
-  const soll = `^(${escapeRegex(q)}|node_modules)/[^/]+/`;
+  const soll = `^(${qs.map(escapeRegex).join("|")}|node_modules)/[^/]+/`;
   if (c >= 0 && liste[c + 1] !== soll) {
-    return `schichten.cruise: --collapse „${liste[c + 1] ?? "(fehlt)"}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ (erwartet: ${soll})`;
+    return `schichten.cruise: --collapse „${liste[c + 1] ?? "(fehlt)"}“ passt nicht zur Quellwurzel „${roh}“ (erwartet: ${soll})`;
   }
   return null;
 }

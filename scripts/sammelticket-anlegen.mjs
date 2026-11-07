@@ -5,17 +5,20 @@
  * lief einmal nicht bis zur Position, das Ticket stand am Board-Ende und klemmte jedes neue `--top`-Ticket dorthin.
  *
  *   node scripts/sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run]   # Harness-Sammelticket auf der Position laut AGENTS.md
- *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top hinter den Sammelblock)
+ *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top an die Spitze)
+ *   node scripts/sammelticket-anlegen.mjs codequalitaet [--vorgaenger <nr>] [--dry-run]   # Codequalität-Sammelticket im eigenen Repo (factory#156)
  *
- * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` korrigiert es nur die
+ * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` prüft es nur die
  * Position). Sonst: Issue per REST anlegen (Harness-Label der Config, kein Assignee, kein Such-Index), ins Board holen (Status Todo),
  * auf Position bringen (`sammelticketKorrektur`), dann prüfen: die Board-Liste liefert Neues verzögert, darum bis zu 5 Ladeversuche mit
  * Pause; steht das Ticket falsch, wird es bis zu zweimal neu gesetzt (sonst Exit 1). Erscheint es nie in der Liste, warnt das Skript
- * (Exit 0): `board-place.mjs` und der Board-Takt (`board-takt.mjs`) korrigieren die Position beim nächsten Lauf selbst.
+ * (Exit 0); ein volles Sammelticket holt der Board-Takt (`board-takt.mjs`) an die Spitze, die Position korrigiert niemand nachträglich.
  * Race-fest (#1561): `vorhanden` wird per Direktabruf (`repos/<repo>/issues/<nr>`) bestätigt, weil die Listen-Abfrage nachhinkt (ein gerade geschlossenes
  * Ticket stand noch als offen und ungeclaimt darin, Evidenz #1560/#1561). Nach dem Anlegen und nach der Positions-Schleife läuft ein Dubletten-Check:
  * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0; ein Item, das schon im Board stand, bleibt dort geschlossen liegen); hat das eigene
  * schon Kommentare, warnt es nur.
+ * `codequalitaet` ist freiwillig: nur mit `labels.codequalitaet` in der Projekt-Config (Label, das auf das Produkt-Board des eigenen Repos führt); ohne
+ * Label meldet das Skript „nichts angelegt“ (Exit 0, ohne gh-Aufruf). Das Ticket kommt hinter den Kopf des Produkt-Boards (ohne Klemmung hinter andere Sammeltickets, factory#162).
  * Mit `--vorgaenger <nr>` nennt der Body den Vorgänger; `blockiert durch #<nr>` steht nur drin, solange er offen ist.
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
@@ -23,7 +26,9 @@
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
+import { BEFUND_ZEILE, BEFUND_ZEILE_OFFEN } from "./produktquote-lib.mjs";
 import {
+  CODEQUALITAET_SAMMELTICKET_TITEL,
   LANGFUSE_SAMMELTICKET_TITEL,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
@@ -31,24 +36,31 @@ import {
   ergaenzeFehlende,
   ghJson,
   kandidatenSammelticket,
+  kopfEnde,
   waehleBestaetigtes,
   loadItems,
   loadOpenIssuePages,
   normalizeOffene,
   REPO,
-  planMitKorrektur,
+  planFuerArgs,
   positionLautAgentsMd,
-  positionOderWarnung,
   sammelticketKorrektur,
   setPosition,
   todoItem,
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
-import { boardRolleFuer, labelAus, ladeProjektConfig, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { istBezieher as istBezieherWurzel } from "./sync-stand-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+import { echteVerknuepfung, verknuepfeBlocker } from "./blocker-lib.mjs";
+import { fileURLToPath } from "node:url";
 
-const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
+
+const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL, codequalitaet: CODEQUALITAET_SAMMELTICKET_TITEL };
+const KEIN_LABEL_TEXT = "labels.codequalitaet ist in der Projekt-Config nicht gesetzt: kein Codequalität-Sammelticket in diesem Projekt, nichts angelegt.";
 const PRUEF_VERSUCHE = 5;
 const PRUEF_PAUSE_MS = 3000;
 const NEU_SETZEN_MAX = 2;
@@ -57,7 +69,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Argumente → `{ art, vorgaenger, top, dry }` oder null bei falscher Benutzung (unbekanntes, fehlendes, doppeltes Flag, Art nicht als
- * erstes Positionsargument). `--vorgaenger` gilt nur für `harness`, `--top` nur für `langfuse`. Pur.
+ * erstes Positionsargument). `--vorgaenger` gilt für `harness` und `codequalitaet`, `--top` nur für `langfuse`. Pur.
  */
 export function parseArgs(argv) {
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" }, vorgaenger: { type: "string" }, top: { type: "boolean" } }, { positionale: true });
@@ -79,7 +91,7 @@ export function parseArgs(argv) {
  * fremdtext-lib.mjs). `nurOffen` (Standard) zählt nur `[ ]`, sonst auch `[x]`. Kommentare ohne Checkbox, fremde oder ohne `user` zählen nicht. Pur.
  */
 export function zaehleBefundZeilen(kommentare, { vertraut, nurOffen = true }) {
-  const muster = nurOffen ? /^\s*[-*]\s+\[ \]/ : /^\s*[-*]\s+\[[ xX]\]/;
+  const muster = nurOffen ? BEFUND_ZEILE_OFFEN : BEFUND_ZEILE;
   let n = 0;
   for (const k of kommentare) {
     if (!vertraut(k.user ?? null)) continue;
@@ -100,16 +112,20 @@ export function zustandVonIssue(issue) {
 
 const ZUSATZ = { "in-arbeit": " (dort in Arbeit)" };
 
+const ANHAENGEN = "Befunde als Kommentar anhängen, je Zeile `- [ ] …` (Fließtext ohne Checkbox zählt weder als Zeile noch füllt er das Ticket).";
+const BODY_ZEILE = {
+  harness: () => `Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). ${ANHAENGEN}`,
+  langfuse: () => `Sammelticket für Befunde aus Langfuse-Daten (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "langfuse-befunde-gesammelt")}). ${ANHAENGEN}`,
+  codequalitaet: () => `Sammelticket für Codequalität außerhalb des Slices: fehlender Test, zu lange oder umständliche Funktion, doppeltes Muster (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "codequalität-gesammelt")}). Im Slice des Tickets behebt der Umsetzer sofort, hier steht nur, was außerhalb liegt. ${ANHAENGEN}`,
+};
+
 /**
  * Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). Blocker-Zeile `<blocker> #N` (Wort aus `sprache.spezifikation.blocker`, Pflicht dann) bei jedem offenen (auch unlesbaren) Vorgänger, mit dem Zusatz,
  * dass die Sperre nur gilt, solange er offen ist (die Zeile bleibt nach dessen Merge stehen); „(dort in Arbeit)“ nur bei `in-arbeit`. Pur.
  */
 export function sammelticketBody({ art, vorgaenger = null, vorgaengerZustand = "zu", blocker }) {
   if (!Object.hasOwn(TITEL, art)) throw new Error(`Unbekannte Art: ${String(art)}`);
-  const zeilen =
-    art === "harness"
-      ? ["Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). Befunde als Kommentar `- [ ] …` anhängen."]
-      : ["Sammelticket für Befunde aus Langfuse-Daten (docs/ticket-reihenfolge.md › Langfuse-Befunde (gesammelt)). Befunde als Kommentar `- [ ] …` anhängen."];
+  const zeilen = [BODY_ZEILE[art]()];
   if (vorgaenger !== null) zeilen[0] += ` Nachfolger von #${vorgaenger}${ZUSATZ[vorgaengerZustand] ?? ""}.`;
   if (vorgaenger !== null && vorgaengerZustand !== "zu") {
     zeilen.push("", blockerZeile([vorgaenger], { blocker }, `(nur solange #${vorgaenger} offen ist)`));
@@ -133,28 +149,70 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 }
 
 /**
- * Pur (#76, ADR 0022 F10): wohin das Sammelticket gehört. Beide Arten tragen das Harness-Label und liegen laut Trennregel auf dem Factory-Board,
- * also im Repo, dessen Issues dieses Board führt (`boards[].repo`, ohne Schlüssel das eigene Repo). Liefert `{ rolle, repo, owner }`; `owner` ist
+ * Pur (factory#156): das Label, mit dem das Sammelticket der Art angelegt wird: `harness`/`langfuse` tragen `labels.harness`, `codequalitaet` das freiwillige
+ * `labels.codequalitaet` der Config; fehlt oder leer ist es → `null` (kein Codequalität-Sammelticket in diesem Projekt, es wird nichts angelegt).
+ */
+export function sammelLabel(config, art) {
+  if (art !== "codequalitaet") return labelAus(config, "harness");
+  const l = config?.labels?.codequalitaet;
+  return typeof l === "string" && l.trim() !== "" ? l : null;
+}
+
+/**
+ * Pur (factory#156): der Platzierungsplan des neuen Codequalität-Sammeltickets `nr` (steht schon in `items`): hinter dem Kopf des Boards (letztes Kopf-Item als Anker,
+ * ohne Kopf die Spitze), ohne Klemmung hinter andere Sammeltickets (factory#162). Das Füllstand-Gate in naechstes-ticket.mjs hält es bis zur Schwelle zurück.
+ */
+export function codequalitaetPlan(items, nr) {
+  const ende = kopfEnde(items);
+  return planFuerArgs(items, { anchor: ende > 0 ? items[ende - 1].number : null, numbers: [nr] });
+}
+
+/**
+ * Pur (#76, ADR 0022 F10): wohin das Sammelticket gehört. Harness und Langfuse tragen das Harness-Label und liegen laut Trennregel auf dem Factory-Board; `codequalitaet` (Label aus `sammelLabel`)
+ * liegt auf dem Produkt-Board des eigenen Repos. Ziel ist das Repo, dessen Issues das Board der Rolle führt (`boards[].repo`, ohne Schlüssel das eigene Repo). Liefert `{ rolle, repo, owner }`; `owner` ist
  * der Besitzer des Ziel-Repos (Vertrauensgrenze der Einzelabrufe).
  */
-export function sammelZiel(config) {
-  const labels = [labelAus(config, "harness")];
+export function sammelZiel(config, label = labelAus(config, "harness")) {
+  const labels = [label];
   const repo = zielRepoFuer(labels, config);
   return { rolle: boardRolleFuer(labels, config), repo, owner: zerlegeRepo(repo).owner };
+}
+
+/**
+ * Pur (factory#195): Label und Ziel des Sammeltickets der Art `art`. `harness` und `codequalitaet` wie bisher (`sammelLabel`, `sammelZiel`; ohne Label für `codequalitaet` `{ label: null, ziel: null }`);
+ * `langfuse` folgt `langfuseZiel` (im Bezieher das eigene Repo, `label` darf dort `null` sein: kein Label beim Anlegen). Wirft wie `langfuseZiel`. Liefert `{ label, ziel }`.
+ */
+export function zielFuerArt(config, art, { bezieher = false } = {}) {
+  if (art === "langfuse") {
+    const lz = langfuseZiel(config, { bezieher });
+    return { label: lz.label, ziel: { rolle: lz.rolle, repo: lz.repo, owner: zerlegeRepo(lz.repo).owner } };
+  }
+  const label = sammelLabel(config, art);
+  return { label, ziel: label === null ? null : sammelZiel(config, label) };
+}
+
+/** `zielFuerArt`, aber ein Konfigurationsfehler endet mit `✖`-Zeile und Exit 2 statt mit einem Stacktrace. */
+function zielOderAbbruch(config, art, bezieher) {
+  try {
+    return zielFuerArt(config, art, { bezieher });
+  } catch (e) {
+    console.error(`✖ ${e.message}`);
+    return process.exit(2);
+  }
 }
 
 /** Die gh-Optionen für Aufrufe gegen das Ziel-Repo `repo` (#97): ein fremdes Repo liest und schreibt der `PROJECT_TOKEN`, das eigene den Standard (`tokenFuerZiel`). */
 export const zielOpts = (repo, env = process.env) => ({ token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) });
 
-/** Legt das Sammelticket im Ziel-Repo an; fehlende Schreibrechte oder verworfene Labels sind ein klarer Fehler, nie ein Rückfall ins eigene Repo. */
+/** Legt das Sammelticket im Ziel-Repo an (`harness` = Label oder `null`: ohne Label, factory#195); fehlende Schreibrechte oder verworfene Labels sind ein klarer Fehler, nie ein Rückfall ins eigene Repo. */
 export function legeAn({ repo, titel, body, harness }, api = ghJson, env = process.env) {
   let neu;
   try {
-    neu = api(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`], zielOpts(repo, env));
+    neu = api(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...(harness === null ? [] : ["-f", `labels[]=${harness}`])], zielOpts(repo, env));
   } catch (e) {
     throw new Error(`Anlegen in ${repo} fehlgeschlagen: ${schreibrechtText(e, repo) ?? fehlerText(e)}`, { cause: e });
   }
-  if (fehlendeLabels(neu, [harness]).length > 0) {
+  if (harness !== null && fehlendeLabels(neu, [harness]).length > 0) {
     throw new Error(`#${neu.number} in ${repo} angelegt, aber ohne Label ${harness} (kein Schreibrecht für Labels dort?)\nFix: Schreibrecht im Ziel-Repo klären, Label und Board-Position dort von Hand setzen`);
   }
   return neu;
@@ -278,67 +336,98 @@ export async function setzeUndPruefe({ nr, position, dry = false, board, repo },
   return neuGesetzt === 0 ? "unbekannt" : "falsch";
 }
 
-async function main(argv = process.argv.slice(2)) {
-  const args = parseArgs(argv);
-  if (!args) {
-    console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run]");
+/** Erste Position eines Nicht-Harness-Tickets `nr` (Item `itemId` im Board `board`): `langfuse --top` an die Spitze (wörtlich, ohne Klemmung), `codequalitaet` hinter den Kopf; `langfuse` ohne `--top` bleibt am Ende. */
+function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
+  if (!top && art !== "codequalitaet") return;
+  const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+  const plan = art === "codequalitaet" ? codequalitaetPlan(items, nr) : planFuerArgs(items, { anchor: null, numbers: [nr] });
+  for (const { item, afterId } of plan.steps) d.setPosition(board, item.id, afterId);
+}
+
+/** Bezieher (factory#195): Sync-Stand in der Wurzel vorhanden; `bezieher` und `wurzel` in `d` sind Test-Nähte. */
+const istBezieher = (d) => d.bezieher ?? istBezieherWurzel(d.wurzel ?? WURZEL);
+
+/** Neu anlegen (Zweig von `main`): liefert die Nummer, oder `null`, wenn nichts weiter zu tun ist (Dublette). */
+async function legeNeuAn({ args, d, config, ziel, label, board, repo, titel, position }) {
+  const { vorgaenger } = args;
+  const vZustand = vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo);
+  const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vZustand, blocker: spracheAus(config).spezifikation.blocker });
+  let neu;
+  try {
+    neu = d.legeAn({ repo, titel, body, harness: label });
+  } catch (e) {
+    console.error(`✖ ${e.message}`);
     process.exit(2);
   }
-  mitKontingent("sammelticket-anlegen");
-  const config = ladeProjektConfig();
-  const harness = labelAus(config, "harness");
-  // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
-  const ziel = sammelZiel(config);
-  const FACTORY_BOARD = boardFuerRolle(ziel.rolle);
-  const { repo } = ziel;
-  const titel = TITEL[args.art];
-  const position = args.art === "harness" ? positionLautAgentsMd() : null;
-  const { vorgaenger } = args;
-  const vorhanden = findeVorhandenes({ repo, titel, vorgaenger, owner: ziel.owner });
-  let nr;
-  if (vorhanden) {
-    nr = vorhanden.number;
-    console.log(`Ungeclaimtes „${titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
-  } else if (args.dry) {
-    console.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
-    return;
-  } else {
-    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
-    let neu;
-    try {
-      neu = legeAn({ repo, titel, body, harness });
-    } catch (e) {
-      console.error(`✖ ${e.message}`);
-      process.exit(2);
-    }
-    nr = neu.number;
-    console.log(`Angelegt: #${nr}`);
-    await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
-    if (schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
-    const itemId = addToBoardTodo(FACTORY_BOARD, neu.node_id, { repo });
-    if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
-      const k = korrekturFuer({ items, nr, position });
-      if (k) setPosition(FACTORY_BOARD, k.id, k.afterId);
-    } else if (args.top) {
-      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
-      // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
-      // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
-      const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
-      if (korrektur) setPosition(FACTORY_BOARD, korrektur.id, korrektur.afterId);
-      for (const { item, afterId } of plan.steps) setPosition(FACTORY_BOARD, item.id, afterId);
-    }
+  const nr = neu.number;
+  d.log(`Angelegt: #${nr}`);
+  await d.sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
+  if (d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return null;
+  if (vZustand !== "zu") { // die Blocker-Zeile steht im Body; zusätzlich die native Kante (Blocked-Icon im Board), Scheitern nur Warnung (factory#202 L1)
+    const warnung = verknuepfeBlocker(neu, [{ repo, nummer: vorgaenger }], repo, { verknuepfeBlocker: d.verknuepfeBlocker });
+    if (warnung) d.log(warnung.trimEnd());
   }
-  if (args.art !== "harness") return;
-  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: FACTORY_BOARD, repo });
-  if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
-  if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
-  else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
-  else if (args.dry) console.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
+  const itemId = d.addToBoardTodo(board, neu.node_id, { repo });
+  if (args.art === "harness") {
+    const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+    const k = korrekturFuer({ items, nr, position });
+    if (k) d.setPosition(board, k.id, k.afterId);
+  } else setzeErstePosition({ art: args.art, top: args.top, board, repo, itemId, nr, titel }, d);
+  return nr;
+}
+
+/** Ergebnis der Positionsprüfung melden (Zweig von `main`); eine verfehlte Position beendet mit Exit 1. */
+function meldeStand({ stand, nr, position, dry }, d) {
+  if (stand === "ok") d.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
+  else if (stand === "unbekannt") d.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
+  else if (dry) d.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
   else {
     console.error(`✖ #${nr} steht nach dem Setzen nicht auf Position ${position}. Erneut fahren oder per board-place.mjs --position ${position} ${nr} setzen.`);
     process.exit(1);
   }
+}
+
+/** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
+export async function main(argv = process.argv.slice(2), deps = {}) {
+  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, verknuepfeBlocker: echteVerknuepfung({ eigenes: REPO }), ...deps };
+  d.bezieher = istBezieher(d);
+  const args = parseArgs(argv);
+  if (!args) {
+    console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
+    process.exit(2);
+  }
+  if (args.art === "harness" && d.bezieher) {
+    console.error("✖ Im Bezieher gibt es kein Harness-Sammelticket (ADR 0031: nur im Factory-Repo).\nFix: Kern-Befunde per `node scripts/melden.mjs` an die Meldestelle melden (AGENTS.md › Harness-Befunde).");
+    return process.exit(2);
+  }
+  const config = d.ladeConfig();
+  // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.
+  // Langfuse im Bezieher (factory#195): das eigene Repo, ohne Harness-Label auf dem Produkt-Board (`zielFuerArt`).
+  const { label, ziel } = zielOderAbbruch(config, args.art, d.bezieher);
+  if (ziel === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
+  d.kontingent();
+  const board = boardFuerRolle(ziel.rolle);
+  const { repo } = ziel;
+  const titel = TITEL[args.art];
+  const position = args.art === "harness" ? positionLautAgentsMd() : null;
+  const { vorgaenger } = args;
+  const vorhanden = d.findeVorhandenes({ repo, titel, vorgaenger, owner: ziel.owner });
+  let nr;
+  if (vorhanden) {
+    nr = vorhanden.number;
+    d.log(`Ungeclaimtes „${titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
+  } else if (args.dry) {
+    d.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
+    return;
+  } else {
+    const angelegt = await legeNeuAn({ args, d, config, ziel, label, board, repo, titel, position });
+    if (angelegt === null) return;
+    nr = angelegt;
+  }
+  if (args.art !== "harness") return;
+  const stand = await d.setzeUndPruefe({ nr, position, dry: args.dry, board, repo });
+  if (!vorhanden && d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
+  meldeStand({ stand, nr, position, dry: args.dry }, d);
 }
 
 if (istDirektaufruf(import.meta.url)) await main();

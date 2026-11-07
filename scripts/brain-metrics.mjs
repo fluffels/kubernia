@@ -2,14 +2,14 @@
 /**
  * Projekt-Brain-Kennzahlen pro Ticket-Lauf (#1205, ADR 0015): welche Brain-Seiten (`docs/**.md`) ein Lauf
  * liest, wie viel er sucht, wie früh er den ersten Edit setzt und ob er das Brain pflegt.
- * Definition der Kennzahlen: docs/model-routing.md §5 „Projekt-Brain-Kennzahlen“.
+ * Definition der Kennzahlen: docs/model-routing.md (Fabrik) › Projekt-Brain-Kennzahlen.
  *
  * Pur und ohne IO; zwei Quellen liefern dieselbe Eventform `{ ts, tool, input, resultChars }`
  * (Claude-Code-Transkript, Langfuse-TOOL-Observations). Importiert nichts aus token-baseline.mjs (kein Zyklus).
  */
 
 import { einfacheKommandos, parseBash } from "./bash-parser.mjs";
-import { transkriptZeilen } from "./transkript.mjs";
+import { toolPaare, transkriptZeilen } from "./transkript.mjs";
 import { GIT_GLOBAL_MIT_WERT } from "./worktree-guard-tabellen.mjs";
 export { transkriptZeilen }; // bleibt hier erreichbar (Aufrufer und Tests), die Quelle ist transkript.mjs
 
@@ -102,27 +102,15 @@ function textStart(content) {
 
 /** Transkript → Tool-Events; `tool_use` und `tool_result` werden über die ID verknüpft. Nimmt den JSONL-Text oder die Zeilen aus `transkriptZeilen`. */
 export function toolEventsFromTranscript(textOderZeilen, agent = null) {
-  const events = [];
-  const byId = new Map();
   const zeilen = Array.isArray(textOderZeilen) ? textOderZeilen : transkriptZeilen(textOderZeilen);
-  for (const row of zeilen) {
-    const content = row?.message?.content;
-    if (!Array.isArray(content)) continue;
-    for (const c of content) {
-      if (row.type === "assistant" && c?.type === "tool_use") {
-        const ev = { ts: row.timestamp, msgId: row.message?.id ?? null, tool: c.name, input: c.input ?? {}, resultChars: 0, agent, fehler: null };
-        events.push(ev);
-        if (c.id) byId.set(c.id, ev);
-      } else if (row.type === "user" && c?.type === "tool_result") {
-        const ev = byId.get(c.tool_use_id);
-        if (ev) {
-          ev.resultChars = textLength(c.content);
-          if (c.is_error) ev.fehler = textStart(c.content) || "(ohne Text)";
-        }
-      }
+  return toolPaare(zeilen).map(({ use: { row, block }, ergebnis }) => {
+    const ev = { ts: row.timestamp, msgId: row.message?.id ?? null, tool: block.name, input: block.input ?? {}, resultChars: 0, agent, fehler: null };
+    if (ergebnis) {
+      ev.resultChars = textLength(ergebnis.block.content);
+      if (ergebnis.block.is_error) ev.fehler = textStart(ergebnis.block.content) || "(ohne Text)";
     }
-  }
-  return events;
+    return ev;
+  });
 }
 
 /** Tools, deren Eingabe (Pfad, Befehl) die Kennzahlen lesen. Nur für sie holt `--langfuse` die `io`-Feldgruppe; Grep/Glob zählen ohne Eingabe. */
