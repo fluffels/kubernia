@@ -11,8 +11,13 @@
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
 import { bestaetigeAnlegen as bestaetigeAnlegenLib } from "./inbox-start-lib.mjs";
-import { factorySeite } from "./factory-seite.mjs";
+import { factorySeite, factorySeiteIn } from "./factory-seite.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
+import { fileURLToPath } from "node:url";
+
+/** Repo-Wurzel des Checkouts: Standard für `statusBody` (dort liegt ein Sync-Stand, falls dies ein Bezieher ist). */
+export const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
@@ -96,11 +101,34 @@ export function wochenFenster(jetzt) {
   return { letzte: woche(mo - 7 * TAG_MS), davor: woche(mo - 14 * TAG_MS) };
 }
 
+function verdichtungsSchritt(wurzel) {
+  // Die Verdichtungstabelle liegt nur im Factory-Repo (Seite model-routing.md): dort per PR mit `Closes`, im Bezieher (Sync-Stand vorhanden) nur im Bericht-Kommentar.
+  return istBezieher(wurzel)
+    ? "Verdichtungszeile nur im Bericht-Kommentar (die Tabelle liegt nur im Factory-Repo), danach das Ticket schließen"
+    : "PR mit Verdichtungszeile und `Closes`";
+}
+
+/** Pur: die Abschluss-Zeile des Status-Tickets; Upstream wie bisher, im Bezieher `bezieherAbschluss`. */
+function abschlussZeile({ upstream, verweis, verdichtung }) {
+  return upstream
+    ? `Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), ${verdichtung}.`
+    : bezieherAbschluss(verweis, verdichtung);
+}
+
+/**
+ * Pur (factory#195, ADR 0031 Punkt 4): die Abschluss-Zeile im Bezieher. Projekt-Befunde bleiben hier (groß als Issue, klein als Zeile ins eigene Sammelticket); Harness-Befunde gehen
+ * erst durch die Anonymitätsprüfung (`check-internalrefs --text`) und dann über den Bezieher-Weg an die Fabrik. `verweis` baut den Link auf die Factory-Seite.
+ */
+function bezieherAbschluss(verweis, verdichtung) {
+  const weg = verweis("Langfuse-Befunde (gesammelt)", "docs/ticket-reihenfolge.md", "langfuse-befunde-gesammelt");
+  return `Bericht-Kommentar geschrieben. Projekt-Befunde groß als Issue in diesem Repo, klein als Zeile ins Sammelticket „${SAMMEL_TITEL}“ dieses Repos (\`node scripts/sammelticket-anlegen.mjs langfuse --top\`). Harness-Befunde: erst \`node scripts/check-internalrefs.mjs --text\` (Treffer: nichts senden, umformulieren), dann über den Bezieher-Weg an die Fabrik (${weg}); ${verdichtung}.`;
+}
+
 /**
  * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
  * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
  */
-export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null }) {
+export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurzel = WURZEL }) {
   const w = wochenFenster(jetzt);
   const zeitraum = vorgaenger
     ? `seit dem Abschluss von #${vorgaenger.number} (${vorgaenger.closedAt}) bis zum Claim`
@@ -114,17 +142,50 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null }) {
     : schonGemessen
     ? `- **Wochenbudget:** entfällt, Woche ${w.letzte.von} bis ${w.letzte.bis} hat #${vorgaenger.number} schon gemessen (Checkliste Punkt 7 überspringen).`
     : `- **Wochenbudget:** letzte volle Woche ${w.letzte.von} bis ${w.letzte.bis} (Mo–So UTC) gegen die Woche davor ${w.davor.von} bis ${w.davor.bis}.`;
-  const docs = (pfad, anker) => factorySeite({ pfad, anker, repo, tag: "main" });
+  // Bezieher (Sync-Stand): `factorySeiteIn` verlinkt die Factory-Seite auf dem gesyncten Tag, ohne auflösbares Factory-Repo bleibt es die Textform (ein Link auf `main` des Beziehers wäre tot). Ohne Sync-Stand (Upstream) der Link auf `main` des Repos.
+  const upstream = !istBezieher(wurzel);
+  const verweis = (text, pfad, anker) => {
+    const ziel = factorySeiteIn(wurzel, pfad, anker);
+    const url = /^https?:/.test(ziel) || !upstream ? ziel : factorySeite({ pfad, anker, repo, tag: "main" });
+    return /^https?:/.test(url) ? `[${text}](${url})` : `${text} (Factory-Repo: \`${url}\`)`;
+  };
+  const verdichtung = verdichtungsSchritt(wurzel);
+  const abschluss = abschlussZeile({ upstream, verweis, verdichtung });
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
     `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
-    `- **Checkliste:** [docs/model-routing.md › Langfuse-Status überprüfen](${docs("docs/model-routing.md", "langfuse-status-überprüfen-1293")}).`,
-    `- **Mechanik:** [docs/ticket-reihenfolge.md](${docs("docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}).`,
-    `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), PR mit Verdichtungszeile und \`Closes\`.`,
+    `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
+    `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
+    `- **Abschluss:** ${abschluss}`,
   ].join("\n");
+}
+
+/** Pur (factory#195): die gh-Argumente der Titelsuche nach früheren Status-Tickets in `repo` (GraphQL `search`, unabhängig vom Label; die Suche kennt auch geschlossene Issues). */
+export const statusSucheAnfrage = (repo) => [
+  "api", "graphql",
+  "-f", "query=query($q:String!){ search(query:$q,type:ISSUE,first:20){ nodes{ ... on Issue { number title state createdAt closedAt } } } }",
+  "-f", `q=repo:${repo} is:issue in:title "${STATUS_TITEL}" sort:created-desc`,
+];
+
+/**
+ * Pur (factory#195): aus der Antwort der Titelsuche (`statusSucheAnfrage`) und den offenen Issues des Repos (`offene`, aus normalizeOffene) der Vorgänger des Status-Tickets
+ * (jüngster geschlossener Treffer mit exaktem Titel, der nicht in `offene` steht) und die Nummern, bei denen Suche und Liste sich widersprechen (`unklar`: die Suche meldet OPEN,
+ * die offene Liste kennt die Nummer nicht; der Suchindex oder die Liste hinkt). Wirft bei unerwarteter Antwortform. Liefert `{ vorgaenger: { number, closedAt, createdAt } | null, unklar: number[] }`.
+ */
+export function vorgaengerAusSuche({ antwort, offene }) {
+  const nodes = antwort?.data?.search?.nodes;
+  if (!Array.isArray(nodes)) throw new Error("Unerwartete Antwortform der Statusticket-Suche (kein data.search.nodes).");
+  const offeneNr = new Set(offene.map((i) => i.number));
+  const treffer = nodes.filter((n) => n?.title === STATUS_TITEL && Number.isInteger(n.number));
+  const zustand = (n) => String(n.state).toUpperCase();
+  const unklar = treffer.filter((n) => zustand(n) === "OPEN" && !offeneNr.has(n.number)).map((n) => n.number);
+  const [j] = treffer
+    .filter((n) => zustand(n) === "CLOSED" && typeof n.closedAt === "string" && !offeneNr.has(n.number))
+    .sort((a, b) => Date.parse(b.closedAt) - Date.parse(a.closedAt));
+  return { vorgaenger: j ? { number: j.number, closedAt: j.closedAt, createdAt: j.createdAt } : null, unklar };
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
@@ -133,10 +194,11 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null }) {
  * Liefert `{ ok, nr, itemId }`: `ok` bei Erfolg (oder fehlendem Token, das nur warnt), `itemId` nur, wenn das Item an die Spitze gesetzt
  * wurde (der Aufrufer zieht seine Liste damit im Speicher nach); `nr` ist die Nummer des Tickets. `start` = Datum des ersten Commits auf main (siehe `statusBody`).
  */
-export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {}, config, start = null }) {
+export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {}, config, start = null, ziel = null }) {
   // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
-  const harness = labelAus(config, "harness");
-  const board = boardFuerRolle(boardRolleFuer([harness], config));
+  // Im Bezieher (factory#195) gibt `ziel` (`langfuseZiel`: Rolle, Label oder null) Board und Label vor; ohne `ziel` gilt der Wert von oben unverändert.
+  const harness = ziel ? ziel.label : labelAus(config, "harness");
+  const board = boardFuerRolle(ziel ? ziel.rolle : boardRolleFuer([harness], config));
   const { gh: ghRoh = ghJson, imBoardAnlegen = (nodeId, opts) => addToBoardTodo(board, nodeId, opts), setze = (id, afterId, opts) => setPosition(board, id, afterId, opts) } = io; // im Test injizierbar
   // Ein Fehler wegen fehlender Rechte im Ziel-Repo (#78 L14) ist eine klare Meldung statt eines Stacktraces; `art` sagt, ob gelesen oder geschrieben wurde.
   const gh = (args, art) => {
@@ -151,7 +213,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [],
   if (e.aktion === "anlegen") {
     const neu = gh([
       "api", "-X", "POST", `repos/${repo}/issues`,
-      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo, start })}`, "-f", `labels[]=${harness}`,
+      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo, start })}`, ...(harness === null ? [] : ["-f", `labels[]=${harness}`]),
     ], "schreiben");
     console.log(`Angelegt: #${neu.number}`);
     node = neu.node_id;

@@ -7,7 +7,7 @@
  *  - `npm run verify:changed` (Stufe „Iterieren“): wie kompakt, aber `lint` und `test` nur für die geänderten Dateien
  *    (Slice gegen die Merge-Base, dieselbe Basis wie `check:diffsize`). Kein Gate, ersetzt nie den vollen Lauf.
  *
- * Die Kette wird aus `package.json` aufgelöst (`kettenSchritte`, dieselbe Auflösung wie docgen/docdrift), nicht hier gepflegt:
+ * Die Kette wird aus `package.json` aufgelöst (`ketteAusPackage`, dieselbe Auflösung wie docgen/docdrift), nicht hier gepflegt:
  * ein neues Gate läuft automatisch in beiden Modi mit. Die CI fährt weiter das rohe `npm run verify`.
  * Fail-closed: kann der Slice nicht sicher bestimmt werden, laufen Lint und Test voll.
  */
@@ -18,7 +18,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { resolveBase } from "./check-basis.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
+import { ketteAusPackage } from "./docs-gen/npm-ketten.mjs";
+import { ohneFarbcodes } from "./regex-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -30,19 +31,7 @@ export const KOPF = 80;
 export const ENDE = 20;
 /** Eine geänderte Datei daraus macht die Einengung unsicher (sie wirkt auf alle Läufe). */
 export const KONFIG_DATEIEN = /^(?:package\.json|package-lock\.json|eslint\.config\.[cm]?js|eslint-suppressions\.json|vite\.config\.ts|tsconfig[^/]*\.json)$/;
-const SCHRITT_RE = /^[\w:.-]+$/;
 const LINTBAR = /\.(?:ts|mts|cts|js|mjs|cjs)$/;
-
-/** Schritte der `verify`-Kette; wirft ohne `verify`-Skript oder bei einem Namen mit Shell-Zeichen. */
-export function ketteAusPackage(pkg) {
-  const scripts = pkg?.scripts ?? {};
-  if (typeof scripts.verify !== "string") throw new Error('package.json hat kein Skript "verify"');
-  const schritte = kettenSchritte(scripts, ["verify"], "verify");
-  for (const s of schritte) {
-    if (!SCHRITT_RE.test(s)) throw new Error(`Schritt "${s}" der verify-Kette ist kein einfaches npm-Skript (Shell-Zeichen?)`);
-  }
-  return schritte;
-}
 
 const norm = (p) => String(p).replace(/\\/g, "/");
 
@@ -72,11 +61,9 @@ export function kuerze(text, schritt) {
   return [...zeilen.slice(0, KOPF), `… ${weg} Zeilen gekürzt, volle Ausgabe: npm run ${schritt}`, ...zeilen.slice(-ENDE)].join("\n");
 }
 
-const FARBCODE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-
 /** Testdateien aus den `FAIL`-Zeilen der vitest-Ausgabe (auch Ladefehler einer Datei), je Datei einmal, in Reihenfolge. Pur. */
 export function fehlgeschlageneTests(ausgabe) {
-  const ohneFarbe = String(ausgabe ?? "").replace(FARBCODE, "");
+  const ohneFarbe = ohneFarbcodes(ausgabe);
   const dateien = [];
   for (const zeile of ohneFarbe.split(/\r?\n/)) {
     const m = /^\s*FAIL\s+(\S+\.test\.ts)\b/.exec(zeile);
@@ -137,7 +124,9 @@ export function laufe({ schritte, engung = null, run, jetzt = () => Date.now() }
 const git = (args) => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 const liste = (text) => text.split("\0").filter(Boolean);
 
-function sammleTests(dir = join(WURZEL, "test")) {
+export function sammleTests(dir = join(WURZEL, "test")) {
+  // Ein Projekt ohne Vitest-Tests (Java-Profil, Maven/Angular) ist gültig: kein test/-Ordner heißt keine Tests, kein ENOENT-Fehler.
+  if (!existsSync(dir)) return [];
   const out = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
@@ -207,7 +196,7 @@ Aufruf: node scripts/verify-lauf.mjs [--changed]`);
   }
   const { pkg = JSON.parse(readFileSync(join(WURZEL, "package.json"), "utf8")), ladeEngung: lade = ladeEngung, run = echterLauf, log = console.log } = deps;
   const changed = werte.changed === true;
-  const schritte = ketteAusPackage(pkg);
+  const schritte = ketteAusPackage(pkg, ["verify"], "verify");
   const engung = changed ? lade() : null;
   const hinweis = engung?.voll ? `Lint und Test voll (${engung.grund})` : "";
   const ergebnisse = laufe({ schritte, engung, run });

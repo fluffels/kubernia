@@ -7,27 +7,28 @@
  * Kommandozeile (über den Einstieg projekt-config.mjs): `node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>` gibt einen Skalarwert aus
  * (Exit 0), 1 bei fehlender/ungültiger Config oder unbekanntem Schlüssel, 2 bei einem Aufruf-Fehler (ohne Schlüssel, unbekanntes Flag, fehlender Wert).
  *
- * Nur Node-Builtins, `flag-lib.mjs` und `spezifikation-lib.mjs` (importfrei; läuft auch in Workflows ohne `npm ci`).
+ * Nur Node-Builtins und Blatt-Module ohne Rückimport: `arbeitsplatz-lib`, `flag-lib`, `internalrefs-lib`, `skill-pfade`, `repo-form`, `modul-wahl-lib`, `design-lib`, `gate-befehl-lib`, `sync-stand-lib` (Rollen-Schalter `istBezieher`) und `projekt-config-bloecke`
+ * (deren Hülle: `relativ-pfad`, `pfad-glob`, `quellwurzeln-lib`, `spezifikation-lib` mit `markdown`); läuft auch in Workflows ohne `npm ci`.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { arbeitsplatzMaengel } from "./arbeitsplatz-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { internalrefsMaengel } from "./internalrefs-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
-import { istRelativPosix } from "./relativ-pfad.mjs";
-import { globMaengel } from "./pfad-glob.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
-import { spracheMaengel } from "./spezifikation-lib.mjs";
+import { DATEN_STANDARD_ENDUNGEN, istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
+import { pruefeDesign } from "./design-lib.mjs";
+import { pruefeBefehle } from "./gate-befehl-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
-const istText = (v) => typeof v === "string" && v.trim() !== "";
 const istPositiv = (v) => Number.isInteger(v) && v > 0;
-const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 
 export const BOARD_ROLLEN = ["produkt", "factory"];
 
@@ -112,8 +113,8 @@ const WORKTREE_MUSTER = /^[A-Za-z0-9_-]+$/;
 /** Agentenname: kein Leerraum, kein `:` (Agent-Typ-Trenner), nicht mit `-` am Anfang. */
 export const AGENT_MUSTER = /^[^\s:-][^\s:]*$/;
 
-/** Pflicht-Label-Schlüssel (weitere erlaubt, gleiche Prüfung) und Pflicht-Agenten. */
-export const PFLICHT_LABELS = ["harness", "festgefahren", "forum", "dependabotInbox"];
+/** Optionale Label-Schlüssel: Skripte lesen sie mit Rückfall (fehlt der Schlüssel, entfällt das Feature); sie gehören nicht zu den Pflichtschlüsseln (`PFLICHT_LABELS` in `projekt-config-bloecke.mjs`). */
+export const OPTIONALE_LABELS = ["codequalitaet", "entscheidung"];
 /** Name des Kern-Ticket-Skills (Quelle `.agents/skills/<name>/`, Zeiger `.claude/skills/<name>/`): gilt immer, unabhängig von `agenten.ticketSkill` der Projekt-Config. */
 export const KERN_TICKET_SKILL = "factory";
 
@@ -186,36 +187,14 @@ export function spracheAus(config) {
  */
 export function strukturAus(config) {
   const wert = config?.struktur;
-  if (!istObjekt(wert) || !istText(wert.quelle) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
-    throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku (oder moduldoku: null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
+  if (!istObjekt(wert) || !(istText(wert.quelle) || Array.isArray(wert.quelle)) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
+    throw new Error(`struktur fehlt oder hat kein gültiges quelle (String oder Liste) und moduldoku (String oder null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen (Schrittfolge: Erstbezug-Leitfaden der Factory, docs/erstbezug.md#schrittfolge)`);
   }
   const form = pruefeStruktur(wert);
   if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
   return { quelle: wert.quelle, moduldoku: wert.moduldoku };
 }
 
-/** Pur: prüft `struktur` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `strukturAus` verlangt ihn beim Gebrauch). */
-function pruefeStruktur(s) {
-  if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
-  const pfade = ["quelle", "moduldoku"].flatMap((k) => {
-    if (k === "moduldoku" && s[k] === null) return [];
-    if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
-    return istRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
-  });
-  return [...pfade, ...pruefeEscapeKopien(s.escapeKopien)];
-}
-
-/** Pur: prüft den optionalen Schlüssel `struktur.escapeKopien` (Liste repo-relativer POSIX-Pfade ohne Doppelte); fehlt er, ist nichts zu prüfen. */
-function pruefeEscapeKopien(liste) {
-  if (liste === undefined) return [];
-  if (!Array.isArray(liste)) return ["struktur.escapeKopien muss eine Liste repo-relativer Pfade sein"];
-  const fehler = liste.flatMap((p, i) => {
-    if (!istText(p)) return [`struktur.escapeKopien[${i}] muss ein nicht-leerer String (repo-relativer Pfad) sein`];
-    return istRelativPosix(p) ? [] : [`struktur.escapeKopien[${i}] muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(p)}`];
-  });
-  const doppelt = liste.filter((p, i) => istText(p) && liste.indexOf(p) !== i);
-  return [...fehler, ...[...new Set(doppelt)].map((p) => `struktur.escapeKopien enthält ${p} doppelt`)];
-}
 
 /**
  * Pur: die Dateien, die den Escape-Zeichensatz des Ticket-Namen-Kerns bewusst als Kopie tragen (`struktur.escapeKopien`, repo-relative POSIX-Pfade); ohne Schlüssel leer.
@@ -239,47 +218,6 @@ export function umschriftAus(config) {
 }
 
 /**
- * Pur: prüft `sprache` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `spracheAus` verlangt ihn beim Gebrauch).
- * Die Schlüssel von `sprache.spezifikation` prüft die Spezifikations-Lib (`spracheMaengel`, SSOT; ihr `wortschatz` wirft bei denselben Mängeln).
- */
-function pruefeSprache(s) {
-  if (!istObjekt(s)) return ["sprache muss ein Objekt mit umschrift und spezifikation sein"];
-  const fehler = [];
-  if (!Array.isArray(s.umschrift) || s.umschrift.length === 0 || !s.umschrift.every((w) => typeof w === "string" && /^[a-z]+$/.test(w))) {
-    fehler.push("sprache.umschrift muss eine nicht-leere Liste kleingeschriebener ASCII-Wörter (Muster ^[a-z]+$) sein");
-  }
-  return [...fehler, ...spracheMaengel(s.spezifikation)];
-}
-
-const AUSNAHME_LISTEN_NAMEN = ["groesse", "kontext"];
-
-/** Pur: prüft den Block `ausnahmen` (Form): je Liste `{ datei, grund }`, die Datei repo-relativ POSIX und je Liste nur einmal, der Grund nennt ein Ticket `#<nr>`. */
-function pruefeAusnahmen(a) {
-  if (!istObjekt(a)) return ["ausnahmen muss ein Objekt mit den Listen groesse und kontext sein"];
-  const fehler = Object.keys(a).filter((k) => !AUSNAHME_LISTEN_NAMEN.includes(k)).map((k) => `ausnahmen.${k} ist kein bekannter Schlüssel (erlaubt: ${AUSNAHME_LISTEN_NAMEN.join(", ")})`);
-  for (const name of AUSNAHME_LISTEN_NAMEN) {
-    const liste = a[name];
-    if (liste === undefined) continue;
-    if (!Array.isArray(liste)) {
-      fehler.push(`ausnahmen.${name} muss eine Liste von { datei, grund } sein`);
-      continue;
-    }
-    const gesehen = new Set();
-    liste.forEach((e, i) => {
-      const wo = `ausnahmen.${name}[${i}]`;
-      if (!istObjekt(e)) return fehler.push(`${wo} muss ein Objekt { datei, grund } sein`);
-      if (!istText(e.datei)) fehler.push(`${wo}.datei muss ein nicht-leerer String (repo-relativer Pfad) sein`);
-      else if (!istRelativPosix(e.datei)) fehler.push(`${wo}.datei muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(e.datei)}`);
-      else if (gesehen.has(e.datei)) fehler.push(`${wo}.datei „${e.datei}“ steht doppelt`);
-      else gesehen.add(e.datei);
-      if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);
-      else if (!/#\d+/.test(e.grund)) fehler.push(`${wo}.grund muss ein Ticket #<nr> nennen (eine Ausnahme ohne offenes Ticket gibt es nicht)`);
-    });
-  }
-  return fehler;
-}
-
-/**
  * Pur: die Ausnahmelisten der Größen-Gates (`ausnahmen.groesse` für check:size, `ausnahmen.kontext` für check:contextsize), je Eintrag `{ datei, grund }`;
  * ohne Block beide leer. Wirft mit Fix-Zeile bei kaputter Form (die Gates dürfen keine Ausnahme still verlieren).
  */
@@ -291,24 +229,17 @@ export function ausnahmenAus(config) {
   return { groesse: wert.groesse ?? [], kontext: wert.kontext ?? [] };
 }
 
-const GATE_FORM = /^[\w:.-]+$/;
-
-/** Pur: prüft den Block `gates` (Form): nur `nichtInVerify`, eine Liste `{ gate, grund }`; das Gate ein Skriptname, je Liste nur einmal, der Grund nicht leer. */
-function pruefeGates(g) {
-  if (!istObjekt(g)) return ["gates muss ein Objekt mit der Liste nichtInVerify sein"];
-  const fehler = Object.keys(g).filter((k) => k !== "nichtInVerify").map((k) => `gates.${k} ist kein bekannter Schlüssel (erlaubt: nichtInVerify)`);
-  if (g.nichtInVerify === undefined) return fehler;
-  if (!Array.isArray(g.nichtInVerify)) return [...fehler, "gates.nichtInVerify muss eine Liste von { gate, grund } sein"];
-  const gesehen = new Set();
-  g.nichtInVerify.forEach((e, i) => {
-    const wo = `gates.nichtInVerify[${i}]`;
-    if (!istObjekt(e)) return fehler.push(`${wo} muss ein Objekt { gate, grund } sein`);
-    if (!istText(e.gate) || !GATE_FORM.test(e.gate)) fehler.push(`${wo}.gate muss ein Skriptname (Buchstaben, Ziffern, : . _ -) sein`);
-    else if (gesehen.has(e.gate)) fehler.push(`${wo}.gate „${e.gate}“ steht doppelt`);
-    else gesehen.add(e.gate);
-    if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);
-  });
-  return fehler;
+/**
+ * Pur: das Datenbudget von check:size (`datengroesse`, factory#7): ohne Block `null` (das Datenbudget ist aus), sonst `{ pfade, budget, endungen, hinweis, deckel }` mit
+ * Standard-Endung .json, ohne Hinweis `null`, ohne Deckel leer. Wirft mit Fix-Zeile bei kaputter Form (ein Deckel darf nicht still verloren gehen).
+ */
+export function datengroesseAus(config) {
+  const wert = config?.datengroesse;
+  if (wert === undefined) return null;
+  const fehler = pruefeDatengroesse(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}
+Fix: den Block datengroesse (pfade, budget; optional endungen, hinweis, deckel: Liste von { datei, max, grund mit #<nr> }) in ${PROJEKT_CONFIG} korrigieren`);
+  return { pfade: wert.pfade, budget: wert.budget, endungen: wert.endungen ?? DATEN_STANDARD_ENDUNGEN, hinweis: wert.hinweis ?? null, deckel: wert.deckel ?? [] };
 }
 
 /**
@@ -321,13 +252,6 @@ export function gatesAus(config) {
   const fehler = pruefeGates(wert);
   if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block gates (nichtInVerify: Liste von { gate, grund }) in ${PROJEKT_CONFIG} korrigieren`);
   return { nichtInVerify: wert.nichtInVerify ?? [] };
-}
-
-/** Pur: prüft den Block `factoryLinks` (Form): nur `ausnahmen`, eine Liste von Pfad-Globs (`scripts/pfad-glob.mjs`). */
-function pruefeFactoryLinks(f) {
-  if (!istObjekt(f)) return ["factoryLinks muss ein Objekt mit der Liste ausnahmen sein"];
-  const fehler = Object.keys(f).filter((k) => k !== "ausnahmen").map((k) => `factoryLinks.${k} ist kein bekannter Schlüssel (erlaubt: ausnahmen)`);
-  return f.ausnahmen === undefined ? fehler : [...fehler, ...globMaengel(f.ausnahmen, "factoryLinks.ausnahmen")];
 }
 
 /** Pur: die Dateien, die der Factory-Link-Wächter nicht prüft (`factoryLinks.ausnahmen`, Pfad-Globs); ohne Schlüssel leer. Wirft mit Fix-Zeile bei kaputter Form. */
@@ -345,22 +269,8 @@ export const repoName = (config) => zerlegeRepo(config?.repo).name;
 /** Pur: der Besitzerteil von `repo` der Config (`owner/name` → `owner`); wirft wie `zerlegeRepo`. */
 export const repoOwner = (config) => zerlegeRepo(config?.repo).owner;
 
-/** Pur: prüft `labels`: die Pflichtschlüssel und alle weiteren Werte sind nicht-leere Strings. */
-function pruefeLabels(l) {
-  if (!istObjekt(l)) return [`labels muss ein Objekt (Name → String) mit den Pflichtschlüsseln ${PFLICHT_LABELS.join(", ")} sein`];
-  const fehler = [];
-  for (const k of PFLICHT_LABELS) {
-    if (!Object.hasOwn(l, k)) fehler.push(`labels.${k} fehlt (Pflichtschlüssel)`);
-  }
-  for (const [k, v] of Object.entries(l)) {
-    if (!istText(v)) fehler.push(`labels.${k} muss ein nicht-leerer String sein`);
-  }
-  return fehler;
-}
-
 /**
- * Pur: das Dependabot-Label muss in das eigene Repo führen (#90 L23). Das Inbox-Issue legt der Lauf im Repo an, in dem Dependabot arbeitet;
- * führt `labels.dependabotInbox` auf ein Board eines fremden Repos, entstünde es dort (ein Bezieher setzt ein anderes Label als `labels.harness`).
+ * Pur: das Dependabot-Label muss in das eigene Repo führen (#90 L23): das Inbox-Issue entstünde sonst im fremden Repo des Boards.
  * Nur bei sonst gültigen Labels und Boards geprüft, damit Folgefehler die Ursache nicht verdecken.
  */
 function pruefeInboxZiel(wert) {
@@ -370,22 +280,13 @@ function pruefeInboxZiel(wert) {
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
 }
 
-/** Der Skill-Schlüssel, dessen Wert `null` sein darf (kein Abschluss-Skill, factory#139). */
-export const NULLBARER_SKILL = "abschluss";
-
-/**
- * Pur: prüft `skills` (Name → nicht-leerer String); `abschluss` ist Pflichtschlüssel (der Skill, den ein Ticketlauf am Ende fährt),
- * sein Wert darf `null` sein (kein Abschluss-Skill, factory#139); der Schlüssel selbst fehlt nie.
- */
-function pruefeSkills(s) {
-  if (!istObjekt(s)) return ["skills muss ein Objekt (Name → String) mit dem Pflichtschlüssel abschluss sein"];
-  const fehler = [];
-  if (!Object.hasOwn(s, NULLBARER_SKILL)) fehler.push("skills.abschluss fehlt (Pflichtschlüssel)");
-  for (const [k, v] of Object.entries(s)) {
-    if (k === NULLBARER_SKILL && v === null) continue;
-    if (!istText(v)) fehler.push(`skills.${k} muss ein nicht-leerer String${k === NULLBARER_SKILL ? " oder null (kein Abschluss-Skill)" : ""} sein`);
-  }
-  return fehler;
+/** Pur (factory#156): optionales `labels.codequalitaet` (Opt-in Sammelticket „Codequalität (gesammelt)“) muss, wenn gesetzt, auf ein Produkt-Board führen (eigenes Repo, nicht Factory). */
+function pruefeCodequalitaetZiel(wert) {
+  const label = wert.labels?.codequalitaet;
+  const rolle = label === undefined ? "produkt" : boardRolleFuer([label], wert);
+  if (rolle === "produkt") return [];
+  return [`labels.codequalitaet "${label}" führt nicht auf ein Produkt-Board (Rolle ${rolle})
+Fix: ein Label setzen, das auf das Produkt-Board des eigenen Repos führt (nicht labels.harness gleichsetzen), oder den Schlüssel entfernen`];
 }
 
 /** Pur: prüft `agenten`: je Pflichtschlüssel ein Name nach AGENT_MUSTER. */
@@ -394,36 +295,6 @@ function pruefeAgenten(a) {
   const fehler = [];
   for (const k of PFLICHT_AGENTEN) {
     if (typeof a[k] !== "string" || !AGENT_MUSTER.test(a[k])) fehler.push(`agenten.${k} muss ein Name ohne Leerraum und ohne ":" sein, nicht mit "-" am Anfang`);
-  }
-  return fehler;
-}
-
-const BERECHTIGUNG_LISTEN = ["allow", "ask", "deny"];
-const BERECHTIGUNG_PRAEFIX = "mcp__";
-
-/**
- * Pur: prüft den Block `berechtigungen` (Form, #1874): nur die Listen allow, ask und deny, je Eintrag ein nicht-leerer String ohne Leerraum
- * mit dem Präfix `mcp__` (nur Modul- und Server-Regeln), je Liste ohne Duplikat. Ob ein allow ein deny oder ask aufhebt, prüft die Besitz-Lib
- * (`ergaenzungsBefunde`), sie kennt den Kern-Anteil.
- */
-function pruefeBerechtigungen(b) {
-  if (!istObjekt(b)) return ["berechtigungen muss ein Objekt mit den Listen allow, ask und deny sein"];
-  const fehler = Object.keys(b).filter((k) => !BERECHTIGUNG_LISTEN.includes(k)).map((k) => `berechtigungen.${k} ist kein bekannter Schlüssel (erlaubt: ${BERECHTIGUNG_LISTEN.join(", ")})`);
-  for (const name of BERECHTIGUNG_LISTEN) {
-    const liste = b[name];
-    if (liste === undefined) continue;
-    if (!Array.isArray(liste)) {
-      fehler.push(`berechtigungen.${name} muss eine Liste von Strings sein`);
-      continue;
-    }
-    const gesehen = new Set();
-    liste.forEach((e, i) => {
-      const wo = `berechtigungen.${name}[${i}]`;
-      if (!istText(e) || /\s/.test(e)) return fehler.push(`${wo} muss ein nicht-leerer String ohne Leerraum sein`);
-      if (!e.startsWith(BERECHTIGUNG_PRAEFIX)) fehler.push(`${wo} muss mit „${BERECHTIGUNG_PRAEFIX}“ beginnen (nur Modul- und Server-Regeln gehören in die Ergänzung): ${JSON.stringify(e)}`);
-      if (gesehen.has(e)) fehler.push(`${wo} „${e}“ steht doppelt`);
-      gesehen.add(e);
-    });
   }
   return fehler;
 }
@@ -438,35 +309,6 @@ export function berechtigungenAus(config) {
   const fehler = pruefeBerechtigungen(wert);
   if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block berechtigungen (allow, ask, deny: Listen von mcp__-Einträgen) in ${PROJEKT_CONFIG} korrigieren`);
   return { allow: wert.allow ?? [], ask: wert.ask ?? [], deny: wert.deny ?? [] };
-}
-
-const SANDBOX_KEYS = ["allowedDomains", "envVars"];
-
-/**
- * Pur: prüft den Block `sandbox` (Form, #1888): nur die Listen allowedDomains (Strings ohne Leerraum) und envVars (Objekte `{ name, mode }` mit `mode: "deny"`), je Liste ohne Duplikat (Name).
- * Ob die Ergänzung zum Wert in `.claude/settings.json` passt und nichts öffnet, prüft die Besitz-Lib (`sandboxErgaenzungsBefunde`).
- */
-function pruefeSandbox(b) {
-  if (!istObjekt(b)) return ["sandbox muss ein Objekt mit den Listen allowedDomains und envVars sein"];
-  const fehler = Object.keys(b).filter((k) => !SANDBOX_KEYS.includes(k)).map((k) => `sandbox.${k} ist kein bekannter Schlüssel (erlaubt: ${SANDBOX_KEYS.join(", ")})`);
-  for (const k of SANDBOX_KEYS) {
-    const liste = b[k];
-    if (liste === undefined) continue;
-    if (!Array.isArray(liste)) {
-      fehler.push(`sandbox.${k} muss eine Liste sein`);
-      continue;
-    }
-    const gesehen = new Set();
-    liste.forEach((e, i) => {
-      const wo = `sandbox.${k}[${i}]`;
-      const name = k === "envVars" ? e?.name : e;
-      if (!istText(name) || /\s/.test(name)) return fehler.push(`${wo} braucht einen nicht-leeren Namen ohne Leerraum`);
-      if (k === "envVars" && (!istObjekt(e) || e.mode !== "deny" || Object.keys(e).some((x) => x !== "name" && x !== "mode"))) fehler.push(`${wo} muss die Form { "name": …, "mode": "deny" } haben (eine Ergänzung sperrt nur)`);
-      if (gesehen.has(name)) fehler.push(`${wo} „${name}“ steht doppelt`);
-      gesehen.add(name);
-    });
-  }
-  return fehler;
 }
 
 /** Pur: die Sandbox-Ergänzung des Projekts (`sandbox`, #1888) als `{ allowedDomains, envVars }`; ohne Block beide leer. Wirft mit Fix-Zeile bei kaputter Form. */
@@ -495,11 +337,17 @@ export function ergaenzungAusText(text) {
   return ergaenzungAus(config);
 }
 
-/** Pur: prüft ein optionales Literal-Objekt (`projektliterale`, `seitenliterale`: Name → nicht-leerer String); fehlt es, gibt es keinen Fehler. */
-function pruefeLiterale(wert, schluessel) {
-  if (wert[schluessel] === undefined) return [];
-  if (!istObjekt(wert[schluessel])) return [`${schluessel} muss ein Objekt (Name → String) sein`];
-  return Object.entries(wert[schluessel]).filter(([, lit]) => !istText(lit)).map(([name]) => `${schluessel}.${name} muss ein nicht-leerer String sein`);
+/** Pur: Fehler zum optionalen Schlüssel `meldestelle` (Form `owner/name`); fehlt er, ist nichts zu prüfen. */
+const pruefeMeldestelle = (wert) => (wert === undefined || istRepoForm(wert) ? [] : ["meldestelle muss die Form owner/name haben (Repo, an das Harness-Befunde gemeldet werden)\nFix: meldestelle weglassen (Standard: Repo des Boards mit Rolle factory) oder owner/name eintragen"]);
+
+/** Pur: Fehler zum optionalen Schlüssel `bezieher` (factory#188): Liste von `owner/name`, ohne Dublette (Schreibung egal) und ohne das eigene `repo`; fehlt er, ist nichts zu prüfen. */
+function pruefeBezieher(wert, eigenes) {
+  if (wert === undefined) return [];
+  const fix = "\nFix: bezieher als Liste von owner/name eintragen (je Bezieher einmal, nicht das eigene Repo) oder den Schlüssel weglassen";
+  if (!Array.isArray(wert) || !wert.every(istRepoForm)) return [`bezieher muss eine Liste von Repos der Form owner/name sein (Bezieher, die die Vor-Tag-Probe prüft)${fix}`];
+  const klein = wert.map((r) => r.toLowerCase());
+  if (new Set(klein).size !== klein.length) return [`bezieher enthält ein Repo doppelt${fix}`];
+  return klein.includes(String(eigenes).toLowerCase()) ? [`bezieher darf das eigene Repo nicht enthalten${fix}`] : [];
 }
 
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
@@ -512,9 +360,10 @@ export function pruefeProjektConfig(wert) {
   const boardFehler = fehler.length;
   const labelFehler = pruefeLabels(wert.labels);
   fehler.push(...pruefePraefixe(wert.praefixe), ...labelFehler, ...pruefeAgenten(wert.agenten), ...pruefeSkills(wert.skills));
-  if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert));
+  if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert), ...pruefeCodequalitaetZiel(wert));
   fehler.push(...pruefeLiterale(wert, "projektliterale"), ...pruefeLiterale(wert, "seitenliterale"));
   if (wert.rulesetSpiegel !== undefined && !istText(wert.rulesetSpiegel)) fehler.push("rulesetSpiegel muss ein nicht-leerer String (Pfad zum Ruleset-Spiegel) sein");
+  fehler.push(...pruefeMeldestelle(wert.meldestelle), ...pruefeBezieher(wert.bezieher, wert.repo));
   if (wert.spezifikation !== undefined) {
     if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
   }
@@ -522,10 +371,14 @@ export function pruefeProjektConfig(wert) {
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
   if (wert.bereiche !== undefined) fehler.push(...pruefeBereiche(wert.bereiche));
   if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
+  fehler.push(...pruefeDatengroesse(wert.datengroesse));
   if (wert.gates !== undefined) fehler.push(...pruefeGates(wert.gates));
   if (wert.factoryLinks !== undefined) fehler.push(...pruefeFactoryLinks(wert.factoryLinks));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
+  fehler.push(...pruefeDesign(wert.design));
+  fehler.push(...pruefeBefehle(wert.befehle));
+  fehler.push(...internalrefsMaengel(wert.internalrefs));
   fehler.push(...modulFormFehler(wert));
   if (wert.arbeitsplatz !== undefined) fehler.push(...arbeitsplatzMaengel(wert.arbeitsplatz, { worktreePraefix: wert.praefixe?.worktree }));
   return fehler;
@@ -561,6 +414,27 @@ export const repoDerRolle = (rolle, config) => boardRepo(boardDerRolle(rolle, co
  * ihn führt, ein Produkt-Befund bleibt im eigenen Repo.
  */
 export const zielRepoFuer = (labels, config) => boardRepo(boardDerRolle(boardRolleFuer(labels, config), config), config);
+
+/** Pur: die Meldestelle (`owner/name`, factory#153): das Repo, dessen Harness-Sammelticket die Befunde dieses Projekts aufnimmt; `config.meldestelle`, sonst das Repo des Boards mit Rolle `factory`. */
+export const meldestelleAus = (config) => (istRepoForm(config?.meldestelle) ? config.meldestelle : repoDerRolle("factory", config));
+
+/** Pur (factory#188): die Bezieher (`owner/name`), die die Vor-Tag-Probe prüft; ohne Schlüssel leer. */
+export const bezieherAus = (config) => (Array.isArray(config?.bezieher) ? config.bezieher.filter(istRepoForm) : []);
+
+/**
+ * Pur (factory#195, ADR 0031 Punkt 4): wohin Status-Ticket und Sammelticket „Langfuse-Befunde“ gehören. Upstream (`bezieher` falsch): Harness-Label, Board und Repo laut Trennregel
+ * (heutiger Wert). Im Bezieher (Sync-Stand vorhanden) immer das eigene Repo: führt das Factory-Board das eigene Repo, gilt `factory` mit Harness-Label, sonst das Produkt-Board ohne Label
+ * (`label: null`). Führt kein Board das eigene Repo, wirft sie. Liefert `{ rolle, repo, label }`.
+ */
+export function langfuseZiel(config, { bezieher = false } = {}) {
+  const h = labelAus(config, "harness");
+  if (!bezieher) return { rolle: boardRolleFuer([h], config), repo: zielRepoFuer([h], config), label: h };
+  for (const [rolle, label] of [["factory", h], ["produkt", null]]) {
+    const board = boardDerRolle(rolle, config);
+    if (board && gleichesRepo(boardRepo(board, config), config?.repo)) return { rolle, repo: config.repo, label };
+  }
+  throw new Error(`Kein Board der Config führt das eigene Repo ${String(config?.repo)}\nFix: ein Board in boards[] muss das eigene Repo führen (boards[].repo weglassen oder gleich config.repo)`);
+}
 
 /**
  * Pur: Fehlertext, wenn das Board der Rolle `rolle` die Issues eines anderen Repos als `repo` führt (sonst `null`). Ein Schreibweg bricht damit
@@ -745,14 +619,39 @@ function zielRepoAusgeben(label, positionale, pfad, { rootDir, out, err }) {
   }
 }
 
+/** `--langfuse-repo`: gibt das Repo aus, in dem Status- und Sammelticket „Langfuse“ liegen (`langfuseZiel`, Bezieher laut Sync-Stand); Exit 0, 2 bei Aufruffehler, 1 bei Ladefehler. */
+function langfuseRepoAusgeben(positionale, pfad, { rootDir, out, err }) {
+  if (positionale.length > 0) {
+    err(`✖ --langfuse-repo nimmt kein weiteres Argument
+
+${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  try {
+    out(langfuseZiel(ladeProjektConfig({ rootDir, pfad }), { bezieher: istBezieher(rootDir) }).repo); // Rollen-Schalter (factory#154): Bezieher ist, wer einen Sync-Stand hat
+    return 0;
+  } catch (e) {
+    err(`✖ ${e instanceof Error ? e.message : e}`);
+    return 1;
+  }
+}
+
+/** Die Flags `--langfuse-repo` und `--ziel-repo`: der Exit-Code ihrer Ausgabe oder `undefined`, wenn keines gesetzt ist. */
+function repoAusgabe(werte, positionale, ctx) {
+  if (werte["langfuse-repo"] === true) return langfuseRepoAusgeben(positionale, werte.config, ctx);
+  if (werte["ziel-repo"] !== undefined) return zielRepoAusgeben(werte["ziel-repo"], positionale, werte.config, ctx);
+  return undefined;
+}
+
 /** Kommandozeile; gibt den Exit-Code zurück. */
 export function cli(argv, { rootDir = ROOT, env = process.env, out = console.log, err = console.error } = {}) {
-  const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" }, "ziel-repo": { type: "string" } }, { positionale: true });
+  const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" }, "ziel-repo": { type: "string" }, "langfuse-repo": { type: "boolean" } }, { positionale: true });
   if (fehler) {
     err(`✖ ${fehler.text}\n\n${CLI_AUFRUF}`);
     return AUFRUF_EXIT;
   }
-  if (werte["ziel-repo"] !== undefined) return zielRepoAusgeben(werte["ziel-repo"], positionale, werte.config, { rootDir, out, err });
+  const ausgabe = repoAusgabe(werte, positionale, { rootDir, out, err });
+  if (ausgabe !== undefined) return ausgabe;
   const [schluessel, ueberzaehlig] = positionale;
   if (!schluessel) {
     err(`✖ Schlüssel fehlt\n\n${CLI_AUFRUF}`);

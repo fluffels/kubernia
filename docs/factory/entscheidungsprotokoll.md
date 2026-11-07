@@ -16,7 +16,7 @@ Der Hauptchat entscheidet Ermessensfragen **fundiert selbst** und schreibt im PR
    - **A/B**, nur wenn beide Zweige billig und reversibel sind.
    - **Kritischer Gegen-Review durch einen frischen Agenten** bei teuren oder riskanten Weichen.
 4. **Token-Deckel: eine Runde je Methode.** Kein Nachschleifen. Danach wird entschieden und, was offen blieb, als „Bekannte Grenze“ im PR dokumentiert.
-5. **Ratchet in beide Richtungen.** Regeln werden strenger, wo Fehler durchrutschen, und lockerer, wo Prüfungen nachweislich nichts finden (Messung über `lauf-ergebnis`; Lockern ohne Rot nach [ADR 0027](../adr/0027-regeln-lockern.md), nicht nach diesem Protokoll). Ein neues, stärkeres Modell ist ein Anlass, die Überwachungsdichte neu zu messen; die Methoden-Liste wird quartalsweise aktualisiert.
+5. **Ratchet in beide Richtungen.** Regeln werden strenger, wo Fehler durchrutschen, und lockerer, wo Prüfungen nachweislich nichts finden (Messung über `lauf-ergebnis`; Lockern ohne Rot nach ADR 0027, nicht nach diesem Protokoll). Ein neues, stärkeres Modell ist ein Anlass, die Überwachungsdichte neu zu messen; die Methoden-Liste wird quartalsweise aktualisiert.
 
 ## Methoden laufen in Subagenten
 
@@ -30,7 +30,7 @@ Hand-off-Entscheidungen im Rahmen dieses Protokolls (zum Beispiel ein Delta-Pass
 
 ### Werkzeug-Abbruch der Abnahme
 
-Bricht die Abnahme wegen eines fehlenden oder ausgefallenen Werkzeugs ab (`FESTGEFAHREN: abnahme`), entscheidet der Hauptchat nach diesem Protokoll: das Kriterium per Hand belegen (zum Beispiel Langfuse-Abfrage über den MCP-Server) und im PR „Entscheidung: X, weil Y“ samt Beleg schreiben, dann die Override-Zeile der Abnahme (Commit-Zeile `Abnahme-Override:` mit dem Commit-Präfix der Projekt-Config) setzen; vorgelegt wird nur bei Irreversiblem oder Außenwirkung. Bei einem Spezifikationsmangel („nicht prüfbar“) präzisiert weiter die Maintainerin das Kriterium im Ticket-Body. Das ist keine Lockerung nach ADR 0027: die Abnahme bleibt Pflicht, der Override bleibt ein Druckventil mit Pflicht-Begründung, nur der Entscheider ist an AGENTS.md › Human-in-the-Loop-Checkpoints angeglichen.
+Bricht die Abnahme wegen eines fehlenden oder ausgefallenen Werkzeugs ab (`FESTGEFAHREN: abnahme`), entscheidet der Hauptchat nach diesem Protokoll: das Kriterium per Hand belegen (zum Beispiel Langfuse-Abfrage über den MCP-Server) und im PR „Entscheidung: X, weil Y“ samt Beleg schreiben, dann die Override-Zeile der Abnahme (Commit-Zeile `Abnahme-Override:` mit dem Commit-Präfix der Projekt-Config) setzen; vorgelegt wird nur bei Irreversiblem oder Außenwirkung. Bei einem Spezifikationsmangel („nicht prüfbar“) präzisiert weiter die Maintainerin das Kriterium im Ticket-Body. Das ist keine Lockerung nach ADR 0027: die Abnahme bleibt Pflicht, der Override bleibt ein Druckventil mit Pflicht-Begründung, nur der Entscheider ist angeglichen an AGENTS.md › Human-in-the-Loop-Checkpoints.
 
 ## Grenzen
 

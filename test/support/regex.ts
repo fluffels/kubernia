@@ -1,7 +1,7 @@
 /* Regex-Hilfen der Kern-Tests (#1906): ein gemeinsamer Escape und der Ganzes-Wort-Matcher, damit die Wächter-Tests
  * keine eigenen Kopien führen. */
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../../scripts/ticket-namen.mjs";
+import { escapeRegex } from "../../scripts/regex-lib.mjs";
 
 /** Maskiert jedes Regex-Metazeichen, damit `text` in einem Muster nur als Text wirkt. */
 export const escapeRe = (text: string): string => (escapeRegex as (t: string) => string)(text);

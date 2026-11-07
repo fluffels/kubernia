@@ -22,7 +22,7 @@ import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fenceMaske, leseConfigObjekt } from "./docs-gen/markdown.mjs";
 import { ladeProjektConfig, PROJEKT_CONFIG, strukturAus } from "./projekt-config-lib.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 import { ladeModell, schichtVon, sollKanten } from "./docs-gen/schichten.mjs";
 import { HARNESS_BINDER, harnessQuellen, ortFuer, pruefeHarness } from "./check-c4-harness.mjs";
 

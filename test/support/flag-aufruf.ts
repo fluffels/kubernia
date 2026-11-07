@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../../scripts/ticket-namen.mjs";
+import { escapeRegex } from "../../scripts/regex-lib.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const maskiere = escapeRegex as (s: string) => string;

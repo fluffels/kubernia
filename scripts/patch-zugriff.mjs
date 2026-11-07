@@ -12,6 +12,7 @@
  */
 
 import { vereinigungsLaenge } from "./mess-lib.mjs";
+import { toolPaare } from "./transkript.mjs";
 import { ladeTicketNamen } from "./ticket-namen.mjs";
 
 let standard = null;
@@ -81,28 +82,21 @@ export function patchAus(prompt, zeilen, namen = standardNamen()) {
     if (p.voll && b === p.voll) return voll;
     return null;
   };
-  const aufrufe = new Map();
-  for (const r of zeilen) {
-    if (!Array.isArray(r?.message?.content)) continue;
-    for (const c of r.message.content) {
-      if (r.type === "assistant" && c?.type === "tool_use" && c.id) aufrufe.set(c.id, c);
-      else if (r.type === "user" && c?.type === "tool_result" && !c.is_error && aufrufe.has(c.tool_use_id)) {
-        const a = aufrufe.get(c.tool_use_id);
-        const e = a.input ?? {};
-        if (a.name === "Read") {
-          const z = ziel(e.file_path);
-          if (z) readAuf(z, e, r.toolUseResult);
-        } else if (a.name === "Grep") {
-          const z = ziel(e.path);
-          if (z) lesen(z, null, null);
-        } else if (a.name === "Bash" || a.name === "PowerShell") {
-          const cmd = String(e.command ?? "");
-          for (const [name, z] of [[p.delta, delta], [p.voll, voll]]) {
-            if (!name || !norm(cmd).includes(name)) continue;
-            lesen(z, null, null);
-            if (VOLLLESER.test(cmd) && !GEZIELT.test(cmd)) z.catKomplett = true;
-          }
-        }
+  for (const { use: { block: a }, ergebnis } of toolPaare(zeilen)) {
+    if (!ergebnis || ergebnis.block.is_error) continue; // nur erfolgreiche Aufrufe zählen
+    const e = a.input ?? {};
+    if (a.name === "Read") {
+      const z = ziel(e.file_path);
+      if (z) readAuf(z, e, ergebnis.row.toolUseResult);
+    } else if (a.name === "Grep") {
+      const z = ziel(e.path);
+      if (z) lesen(z, null, null);
+    } else if (a.name === "Bash" || a.name === "PowerShell") {
+      const cmd = String(e.command ?? "");
+      for (const [name, z] of [[p.delta, delta], [p.voll, voll]]) {
+        if (!name || !norm(cmd).includes(name)) continue;
+        lesen(z, null, null);
+        if (VOLLLESER.test(cmd) && !GEZIELT.test(cmd)) z.catKomplett = true;
       }
     }
   }

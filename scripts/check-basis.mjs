@@ -3,11 +3,15 @@
 /**
  * Gemeinsame Grundlagen der Gates: die Vergleichs-Basis des Slices (`resolveBase`, für check:diffsize, check:diffcoverage, check:lockfile,
  * den Review-Nachweis und verify-lauf), die Liste der prüfbaren Repo-Dateien (`listTrackedFiles`, `isCheckable`, für check:internalrefs und
- * check:steuerbytes) und das Markdown-Sammeln des Repos (`collectMarkdown`, für check:docdrift und check:contextsize).
+ * check:steuerbytes), das Markdown-Sammeln des Repos (`collectMarkdown`, für check:docdrift und check:contextsize) und die Prüfung der
+ * Struktur-Ordner (`strukturOrdnerBefunde`, für check:size, check:docmap und check:anysuppress).
  */
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { ladeProjektConfig, strukturAus, umgebungsWert } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG, umgebungsWert } from "./projekt-config-lib.mjs";
+import { globRegex } from "./pfad-glob.mjs";
+import { normalizePath } from "./relativ-pfad.mjs";
+import { istGlob, ordnerZuMuster, quellenAus, quellenObjekt, wurzelPraefixe } from "./quellwurzeln-lib.mjs";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
 
@@ -40,12 +44,7 @@ export function resolveBase(runGit, env = process.env) {
 
 // ── Diff-Zeilen und Messbereich (aus check-diffcoverage, #112) ───────────────────
 
-/** Vereinheitlicht Pfad-Trenner auf POSIX. Nötig, weil der v8-lcov-Reporter unter
- *  Windows `SF:src\sim\pods.ts` schreibt, `git diff` aber `src/sim/pods.ts` — ohne
- *  Normalisierung fände der Schnitt NIE einen Treffer und das Gate wäre still blind. */
-export function normalizePath(p) {
-  return String(p).replace(/\\/g, "/").replace(/^\.\//, "");
-}
+// `normalizePath` wohnt in relativ-pfad.mjs (Blatt, factory#185); Aufrufer importieren es von dort.
 
 /** Parst `git diff -U0` und liefert je Datei die Zeilennummern der NEUEN Seite.
  *
@@ -87,15 +86,15 @@ export function parseDiffLines(text) {
   return byFile;
 }
 
-/** Ist die Datei überhaupt Gegenstand der Coverage-Messung? Deckungsgleich mit dem
- *  `include` der Coverage-Config für die Quellwurzel (`struktur.quelle` der Projekt-Config) — Content-JSON, Assets und Skripte
- *  außerhalb der Quellwurzel sind kein ausführbarer Quellcode und fallen raus.
- *
- *  Endungen `.ts`, `.mts`, `.mjs`, `.cjs`, `.js` (das Factory-Repo hat seine Quellwurzel unter `scripts` mit `.mjs`; in einem Repo mit `src/` als Quellwurzel liegt dort nur `.ts`).
- *  `.d.ts` (auch `.d.mts`, `.d.cts`) ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile, und ein
- *  Vitest-Bump, der sie aus dem Report nimmt, machte jeden PR darauf falsch rot. */
-export function isMeasured(path, quelle = strukturAus(ladeProjektConfig()).quelle) {
-  return path.startsWith(`${quelle}/`) && /\.(?:ts|mts|mjs|cjs|js)$/.test(path) && !/\.d\.[cm]?ts$/.test(path);
+/** Ist die Datei überhaupt Gegenstand der Coverage-Messung? Deckungsgleich mit dem `include` der Coverage-Config für die Quellwurzeln: Content-JSON, Assets und
+ *  Dateien außerhalb der Wurzeln sind kein ausführbarer Quellcode und fallen raus. `quellen` ist `{ wurzeln, endungen, ohne }` (`quellenAus`, Wurzeln auch als Glob) oder ein
+ *  String (eine wörtliche Wurzel mit der Standard-Endungsliste). Gemessen = unter einer Wurzel UND eine Endung der Liste UND kein `ohne`-Glob trifft.
+ *  `.d.ts` (auch `.d.mts`, `.d.cts`) ist nie gemessen: reine Typdeklarationen haben keine ausführbare Zeile, und ein Vitest-Bump, der sie aus dem Report nimmt, machte jeden PR darauf falsch rot. */
+export function isMeasured(path, quellen = quellenAus(ladeProjektConfig())) {
+  const q = quellenObjekt(quellen);
+  if (wurzelPraefixe(path, q.wurzeln).length === 0) return false;
+  if (!q.endungen.some((e) => path.endsWith(e)) || /\.d\.[cm]?ts$/.test(path)) return false;
+  return !q.ohne.some((g) => globRegex(g).test(path));
 }
 
 // ── Prüfbare Dateien ───────────────────────────────────────────────────────────
@@ -174,4 +173,30 @@ export function collectMarkdown(rootDir = ROOT) {
   return collectMd(rootDir, ["."], {
     ueberspringe: (ent, relDir) => walkerUeberspringt(ent.name, ent.isDirectory(), relDir),
   });
+}
+
+// ── Struktur-Ordner (factory#168) ─────────────────────────────────────────────
+
+/** Prüft, ob die Ordner aus `struktur` (`quelle`, `moduldoku`) existieren, damit Gates, die sie durchsuchen, einen klaren Befund
+ *  melden statt mit ENOENT-Stacktrace zu enden. Ein vorhandener, leerer Ordner ist kein Befund; `null` (Opt-out von `moduldoku`)
+ *  wird übersprungen, ebenso ein Schlüssel, der in `struktur` fehlt (erwartet eine von `strukturAus` geprüfte Struktur). Rückgabe: Meldungstexte ohne Präfix (leer = alles da).
+ *  `block` ist der Name des Config-Blocks in den Meldungen (Standard `struktur`; `datengroesse` für das Datenbudget, factory#7). */
+export function strukturOrdnerBefunde(rootDir, struktur, schluessel = ["quelle"], block = "struktur") {
+  const befunde = [];
+  for (const k of schluessel) {
+    const pfad = struktur[k];
+    if (pfad === null || pfad === undefined) continue;
+    const optOut = k === "moduldoku" ? " oder auf null setzen (keine Tiefendocs, check:docmap entfällt)" : "";
+    const eintraege = Array.isArray(pfad) ? pfad.map((p, i) => [p, `${k}[${i}]`]) : [[pfad, k]];
+    for (const [p, wo] of eintraege) {
+      if (ordnerZuMuster(rootDir, p).length > 0) continue;
+      befunde.push(
+        istGlob(p)
+          ? `${block}.${wo} in ${PROJEKT_CONFIG} nennt den Glob „${p}“, der keinen Ordner trifft\n  Fix: den Glob auf vorhandene Ordner anpassen oder den Eintrag aus ${block}.${k} in ${PROJEKT_CONFIG} streichen`
+          : `${block}.${wo} in ${PROJEKT_CONFIG} nennt „${p}/“, den Ordner gibt es nicht\n` +
+            `  Fix: ${p}/ anlegen (leer genügt; git versioniert ihn erst mit einer Datei wie .gitkeep) oder ${block}.${k} in ${PROJEKT_CONFIG} auf den vorhandenen Ordner setzen${optOut}`,
+      );
+    }
+  }
+  return befunde;
 }

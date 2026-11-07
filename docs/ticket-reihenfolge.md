@@ -1,16 +1,16 @@
 # Ticket-Auswahl
 
-> **Projektanteil.** Die Auswahl-Mechanik (Reihenfolge im Board, Auswahl-Skript, Sammeltickets, Wiedervorlage, Board-Pflege-Werkzeuge) steht im Factory-Repo: [Ticket-Auswahl](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md). Hier bleiben die Projektwerte (Produkt-Board, Spielquote, Board-Literale) und die Board-Pflege dieses Projekts; die Überschriften tragen Anker-Stubs für ADRs, Besitz-Einheiten und Doku, die auf sie zeigen.
+> **Projektanteil.** Die Auswahl-Mechanik (Reihenfolge im Board, Auswahl-Skript, Sammeltickets, Wiedervorlage, Board-Pflege-Werkzeuge) steht im Factory-Repo: [Ticket-Auswahl](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md). Hier bleiben die Projektwerte (Produkt-Board, Spielquote, Board-Literale) und die Board-Pflege dieses Projekts; die Überschriften tragen Anker-Stubs für ADRs, Besitz-Einheiten und Doku, die auf sie zeigen.
 >
 > Welche Seite Projekt und welche Kern ist: [Inventar](referenz/anlaufstellen.md#factory-seiten-projektanteil-und-kern). Begriffe: [Harness-Glossar](harness-glossar.md).
 
 ## Was „nächstes Ticket" heißt
 
-Kern: [Was „nächstes Ticket" heißt](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#was-nächstes-ticket-heißt)
+Kern: [Was „nächstes Ticket" heißt](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#was-nächstes-ticket-heißt)
 
 ### Spielquote über zwei Boards (#1729)
 
-Kern: [Spielquote über zwei Boards (#1729)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#produktquote-über-zwei-boards-1729)
+Kern: [Spielquote über zwei Boards (#1729)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#produktquote-über-zwei-boards-1729)
 
 <!-- factory-projekt:start -->
 
@@ -20,43 +20,43 @@ Kern: [Spielquote über zwei Boards (#1729)](https://github.com/fluffels/self-im
 
 ### Spezifikations-Gate (#1615)
 
-Kern: [Spezifikations-Gate (#1615)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#spezifikations-gate-1615)
+Kern: [Spezifikations-Gate (#1615)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#spezifikations-gate-1615)
 
 #### Reparaturweg
 
-Kern: [Reparaturweg](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#reparaturweg)
+Kern: [Reparaturweg](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#reparaturweg)
 
 ## Wiederaufnahme verwaister Claims
 
-Kern: [Wiederaufnahme verwaister Claims](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#wiederaufnahme-verwaister-claims)
+Kern: [Wiederaufnahme verwaister Claims](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#wiederaufnahme-verwaister-claims)
 
 ## Sammelticket-Mechanik
 
-Kern: [Sammelticket-Mechanik](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#sammelticket-mechanik)
+Kern: [Sammelticket-Mechanik](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#sammelticket-mechanik)
 
 ## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
 
-Kern: [Sammelticket „Harness-Härtung (gesammelt)" (#1199)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#sammelticket-harness-härtung-gesammelt-1199)
+Kern: [Sammelticket „Harness-Härtung (gesammelt)" (#1199)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#sammelticket-harness-härtung-gesammelt-1199)
 
 ## Wiederkehrendes Ticket „Langfuse-Status überprüfen" (#1293)
 
-Kern: [Wiederkehrendes Ticket „Langfuse-Status überprüfen" (#1293)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293)
+Kern: [Wiederkehrendes Ticket „Langfuse-Status überprüfen" (#1293)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293)
 
 ### Langfuse-Befunde (gesammelt)
 
-Kern: [Langfuse-Befunde (gesammelt)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#langfuse-befunde-gesammelt)
+Kern: [Langfuse-Befunde (gesammelt)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#langfuse-befunde-gesammelt)
 
 ## Wiedervorlage (#1628)
 
-Kern: [Wiedervorlage (#1628)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#wiedervorlage-1628)
+Kern: [Wiedervorlage (#1628)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#wiedervorlage-1628)
 
 ## Audit-Einordnung (#1628)
 
-Kern: [Audit-Einordnung (#1628)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#audit-einordnung-1628)
+Kern: [Audit-Einordnung (#1628)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#audit-einordnung-1628)
 
 ## Code-Scanning-Inbox (#1436)
 
-Kern: [Code-Scanning-Inbox (#1436)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#code-scanning-inbox-1436)
+Kern: [Code-Scanning-Inbox (#1436)](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#code-scanning-inbox-1436)
 
 <!-- factory-projekt:start -->
 ## Board-Pflege durch den Agenten (nur kubernia)
@@ -72,7 +72,7 @@ Die Kurzfassung steht in [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 
-Kern: [Reihenfolge pflegen — im Board, nicht in einer Datei](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#reihenfolge-pflegen--im-board-nicht-in-einer-datei)
+Kern: [Reihenfolge pflegen — im Board, nicht in einer Datei](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#reihenfolge-pflegen--im-board-nicht-in-einer-datei)
 
 <!-- factory-projekt:start -->
 
@@ -82,4 +82,4 @@ Kern: [Reihenfolge pflegen — im Board, nicht in einer Datei](https://github.co
 
 ## Am Ticket-Ende
 
-Kern: [Am Ticket-Ende](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.8.0/docs/ticket-reihenfolge.md#am-ticket-ende)
+Kern: [Am Ticket-Ende](https://github.com/fluffels/self-improving-agent-harness-and-factory/blob/v0.9.0/docs/ticket-reihenfolge.md#am-ticket-ende)

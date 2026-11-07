@@ -1,8 +1,8 @@
-// Factory-Link-Bausteine (ADR 0022 F10, factory#130/factory#131; Kern): pure Teile des Link-Wächters, geteilt von `check-factory-links.mjs` und `factory-sync.mjs`
+// Factory-Link-Bausteine (ADR 0022 F10, factory#130/factory#131/factory#167; Kern): pure Teile des Link-Wächters, geteilt von `check-factory-links.mjs` und `factory-sync.mjs`
 // (ein Einstiegsskript importiert kein anderes, `einstieg-importe`). Nichts hier liest oder schreibt Dateien: Texte kommen über einen Leser, Ergebnisse als Plan.
 import { besitzSpannen, einheitAusId, eolVon, normalisiereEol } from "./besitz-lib.mjs";
-import { codeMaskiert, collectHeadingSlugs, externeLinkStellen, schnappschussBloecke } from "./docs-gen/markdown.mjs";
-import { factoryUrlTeile } from "./factory-seite.mjs";
+import { codeMaskiert, collectHeadingSlugs, entferneMarkup, externeLinkStellen, linkStellen, linkZiel, schnappschussBloecke, slugify, ueberschriftenStellen } from "./docs-gen/markdown.mjs";
+import { factorySeite, factoryUrlTeile } from "./factory-seite.mjs";
 import { globRegex } from "./pfad-glob.mjs";
 
 export const INDEX_PFAD = ".factory/factory-links.json";
@@ -106,6 +106,170 @@ export function planeFactoryLinks({ dateien, lies, repo, einheiten, ausnahmen, t
   if (alt === null || alt === undefined || normalisiereEol(alt) !== soll) {
     const eol = alt === null || alt === undefined ? "\n" : eolVon(alt);
     ergebnis.dateien.set(INDEX_PFAD, eol === "\n" ? soll : soll.replace(/\n/g, eol));
+  }
+  return ergebnis;
+}
+
+// ── Anker-Stubs (factory#132): Kern-Links auf Seiten außerhalb des Besitzes sind im Bezieher gedeckt ──
+
+/** Eine Stub-Meldung: der Kern-Link (`quelle:zeile`) und die Soll-URL aus `factorySeite`. */
+const stubText = (k, was, soll) => `${was} (Kern-Link ${k.quelle}:${k.zeile} → ${k.ziel}${k.anker ? `#${k.anker}` : ""}); Soll: \`Kern: [..](${soll})\``;
+
+/** Pur: die zu deckenden Kern-Links der Markdown-Einheiten (`besitz`: Einheiten, `lies`): `{ quelle, zeile, ziel, anker }`, je (Quelle, Ziel, Anker) einmal an der ersten Stelle. Nur `.md`-Ziele ohne Einheit. */
+export function kernLinkZiele({ besitz, lies }) {
+  const kernPfade = new Set(besitz.map((e) => e.pfad));
+  const quellen = [...kernPfade].filter((p) => p.endsWith(".md") && besitz.some((e) => e.pfad === p && e.schluessel === undefined));
+  const gesehen = new Set();
+  const ziele = [];
+  for (const quelle of quellen) {
+    const text = lies(quelle);
+    if (text === null || text === undefined) continue;
+    const spannen = besitzSpannen(besitz, quelle, text);
+    for (const s of linkStellen(text)) {
+      const pfad = s.path.replace(/\?.*$/, "");
+      if (!pfad.endsWith(".md") || !spannen.some(([von, bis]) => s.start >= von && s.start <= bis)) continue;
+      const ziel = linkZiel(quelle, pfad);
+      const schluessel = `${quelle}\0${ziel}\0${s.anchor}`;
+      if (kernPfade.has(ziel) || gesehen.has(schluessel)) continue;
+      gesehen.add(schluessel);
+      ziele.push({ quelle, zeile: zeileVon(text, s.start), ziel, anker: s.anchor });
+    }
+  }
+  return ziele;
+}
+
+/** Zeilenbereich `{ von, bis }` (0-basiert, `bis` ausgeschlossen) des Abschnitts mit dem Anker: ab der Überschrift bis zur nächsten gleicher oder höherer Ebene; `null` ohne Überschrift. */
+function abschnitt(text, anker) {
+  const hs = ueberschriftenStellen(text);
+  const i = hs.findIndex((h) => h.slug === anker);
+  if (i < 0) return null;
+  const naechste = hs.slice(i + 1).find((h) => h.ebene <= hs[i].ebene);
+  return { von: hs[i].zeile, bis: naechste ? naechste.zeile : Infinity };
+}
+
+/** Der Befund eines Kern-Links `k` oder `null`: `stub-ziel`, `stub-anker` oder `stub-link` (Factory-Link auf genau `pfad#anker` am Tag, im Abschnitt der Überschrift bzw. ohne Anker irgendwo in der Datei). */
+function stubBefund(k, { lies, repo, tag }) {
+  const text = lies(k.ziel);
+  const soll = factorySeite({ pfad: k.ziel, anker: k.anker, repo, tag });
+  if (text === null || text === undefined) return befund("stub-ziel", stubText(k, `${k.ziel} fehlt`, soll), { datei: k.quelle, zeile: k.zeile });
+  const bereich = k.anker === "" ? { von: 0, bis: Infinity } : abschnitt(text, k.anker);
+  if (!bereich) return befund("stub-anker", stubText(k, `keine Überschrift mit dem Anker #${k.anker} in ${k.ziel}`, soll), { datei: k.quelle, zeile: k.zeile });
+  const gedeckt = sammleLinksAus({ dateien: [k.ziel], lies }, { repo }).some(
+    (l) => l.form === "blob" && l.zeile - 1 >= bereich.von && l.zeile - 1 < bereich.bis && factorySeite({ pfad: l.pfad, anker: k.anker === "" ? "" : l.anker, repo, tag: l.ref }) === soll,
+  );
+  const ort = k.anker === "" ? "in der Datei" : `unter der Überschrift #${k.anker}`;
+  return gedeckt ? null : befund("stub-link", stubText(k, `${k.ziel} trägt ${ort} keinen Factory-Link auf ${soll}`, soll), { datei: k.ziel, zeile: k.anker === "" ? 1 : bereich.von + 1 });
+}
+
+/**
+ * Pur: Anker-Stubs der Markdown-Einheiten (`einheiten`: Ids des Sync-Stands). Jeder relative `.md`-Link einer Einheit (ganze Datei oder Block) auf ein Ziel ohne Einheit
+ * muss auf eine vorhandene Datei zeigen; mit Anker trägt sie eine Überschrift mit gleichem Anker (roh verglichen) und darunter (bis zur nächsten Überschrift gleicher oder
+ * höherer Ebene) einen Factory-Link auf genau `pfad#anker` am Tag `tag`, ohne Anker irgendwo in der Datei einen Factory-Link auf die Seite. Factory-Links in
+ * Schnappschuss-Blöcken zählen nicht. Ergebnis `{ befunde, geprueft }` (`geprueft` = Zahl der Kern-Links nach Dedupe).
+ */
+export function stubBefunde({ lies, einheiten, repo, tag }) {
+  const ziele = kernLinkZiele({ besitz: einheiten.map(einheitAusId), lies });
+  return { befunde: ziele.map((k) => stubBefund(k, { lies, repo, tag })).filter(Boolean), geprueft: ziele.length };
+}
+
+// ── Anker-Stub-Seiten anlegen (factory#167): fehlende Kern-Link-Ziele bekommen beim Sync eine Seite aus Überschriften und Factory-Links ──
+
+/** Slug-neutral: `[t](u)` wird `t`, Backticks und Inline-Markup-Zeichen entfallen (`slugify` streicht beides ohnehin, der Anker bleibt gleich). */
+const schlichterText = (t) => entferneMarkup(t).trim();
+
+/** Die aufzunehmenden Überschriften einer Tag-Seite: die erste Ebene-1-Überschrift, jede mit einem Kern-Anker als Slug und vor ihr alle früheren mit gleichem Basis-Slug (die `-1`-Suffixe bleiben so gleich). */
+function stubUeberschriften(text, ankerSet) {
+  const zeilen = text.split(/\r?\n/);
+  const hs = ueberschriftenStellen(text).map((h) => ({ ...h, text: schlichterText(zeilen[h.zeile].replace(/^#{1,6}\s+/, "")) }));
+  const basis = (h) => slugify(h.text);
+  const nimm = new Set();
+  const h1 = hs.findIndex((h) => h.ebene === 1);
+  if (h1 >= 0) nimm.add(h1);
+  hs.forEach((h, i) => {
+    if (!ankerSet.has(h.slug)) return;
+    hs.forEach((frueher, j) => {
+      if (j <= i && basis(frueher) === basis(h)) nimm.add(j);
+    });
+  });
+  return { ausgewaehlt: hs.filter((_, i) => nimm.has(i)), h1: h1 >= 0 ? hs[h1] : null, alle: hs };
+}
+
+/** Der feste Anfang des Hinweises, den jede Stub-Seite trägt (Erkennungszeichen, Quelle der Form: `stubSeite`). */
+const STUB_HINWEIS = "Anker-Stub: Der Text dieser Seite steht im Factory-Repo;";
+
+/** Ist `text` eine von `planeAnkerStubs` angelegte Stub-Seite (Hinweis am Zeilenanfang)? */
+export function istAnkerStub(text) {
+  return text.split("\n").some((z) => z.startsWith(STUB_HINWEIS)); // CRLF stört nicht: nur der Zeilenanfang zählt
+}
+
+/**
+ * Ist `text` ein reiner Stub (factory#166): ausschließlich Sync-Ausgabe von `planeAnkerStubs`, also genau eine Hinweiszeile, sonst nur Überschriften (`#` bis `######`) und Kern-Zeilen
+ * (`Kern: [..](https://..)`), und auf jede Überschrift außer der ersten Ebene-1-Überschrift folgt als nächste nicht leere Zeile eine Kern-Zeile. CRLF-neutral.
+ * Grenze: jede andere Zeile (Projektzeile, Absatz, weitere Hinweiszeile) macht die Seite zur Bezieher-Seite, die der Sync nie anfasst.
+ */
+export function istReinerStub(text) {
+  const zeilen = normalisiereEol(text).split("\n").filter((z) => z.trim() !== "");
+  const kernZeile = (z) => /^Kern: \[[^\]\n]*\]\(https:\/\/[^)\s]+\)$/.test(z);
+  if (zeilen.filter((z) => z.startsWith(STUB_HINWEIS)).length !== 1) return false;
+  let ersteH1 = true;
+  for (const [i, z] of zeilen.entries()) {
+    if (z.startsWith(STUB_HINWEIS) || kernZeile(z)) continue;
+    if (!/^#{1,6} /.test(z)) return false;
+    if (ersteH1 && z.startsWith("# ")) {
+      ersteH1 = false;
+      continue;
+    }
+    if (!kernZeile(zeilen[i + 1] ?? "")) return false;
+  }
+  return true;
+}
+
+/** Der Text einer Stub-Seite (Zeilenende \n): Überschriften der Tag-Seite, jede mit einem Factory-Link auf ziel#slug am Tag (bei Kern-Ankern `anker`), vorn der Hinweis samt Seitenlink. Ergebnis { text, links }. */
+function stubSeite(ziel, { ausgewaehlt, h1 }, anker, { repo, tag }) {
+  const url = (a) => factorySeite({ pfad: ziel, anker: a, repo, tag });
+  const einleitung = `${STUB_HINWEIS} hier stehen nur die Überschriften, auf die der Kern verlinkt. Kern: [${ziel}](${url("")})`;
+  const ankerLink = (h) => `Kern: [${ziel}#${h.slug}](${url(h.slug)})`;
+  const bloecke = h1 ? [] : [einleitung];
+  let links = 1;
+  for (const h of ausgewaehlt) {
+    const eigene = h === h1 ? [einleitung] : [];
+    if (h !== h1 || anker.has(h.slug)) {
+      eigene.push(ankerLink(h));
+      links++;
+    }
+    bloecke.push(`${"#".repeat(h.ebene)} ${h.text}`, ...eigene);
+  }
+  return { text: `${bloecke.join("\n\n")}\n`, links };
+}
+
+/**
+ * Pur: legt zu jedem Kern-Link-Ziel, das es nicht gibt (`lies(ziel)` ist `null`, Ziel ohne Einheit), eine Stub-Seite an (factory#167): die erste Ebene-1-Überschrift und jede Überschrift,
+ * auf die der Kern verlinkt (samt früherer gleichnamiger), je mit Factory-Link auf `ziel#anker` am Tag `tag`; der Text kommt vom Leser des Tags. Eine vorhandene Seite wird nie angefasst, außer sie ist ein reiner Stub (`reineStubs`, factory#166): die erneuert der Sync aus dem Tag (gleiche Form wie angelegt, ohne Kern-Link nur Titel und Hinweis).
+ * `vorhanden(pfad)` (Vorgabe: `lies` liefert Text) ist die Frage, ob das Ziel die Seite schon hat; der Sync fragt auch nach Symlinks, die `lies` als `null` meldet, damit nie über einen Symlink geschrieben wird.
+ * Ergebnis `{ dateien: Map<pfad, text>, erneuert: Set<pfad>, hinweise, ueberschriften, links }` (`erneuert` = die Pfade aus `reineStubs`, der Rest ist angelegt; `ueberschriften` und `links` zählen nur die angelegten); ein Ziel oder Anker, den es am Tag nicht gibt, ist ein Hinweis (`check:factorylinks` meldet es als `stub-ziel`/`stub-anker`).
+ */
+export function planeAnkerStubs({ lies, einheiten, repo, tag, leser, ausnahmen = [], reineStubs = [], vorhanden = (pfad) => lies(pfad) != null }) {
+  const ausgenommen = ausnahmen.map(globRegex);
+  const frei = (ziel) => !ausgenommen.some((re) => re.test(ziel));
+  const offen = kernLinkZiele({ besitz: einheiten.map(einheitAusId), lies }).filter((k) => (!vorhanden(k.ziel) || reineStubs.includes(k.ziel)) && frei(k.ziel));
+  const jeZiel = new Map(reineStubs.filter(frei).map((p) => [p, new Set()]));
+  for (const k of offen) jeZiel.set(k.ziel, new Set([...(jeZiel.get(k.ziel) ?? []), k.anker]));
+  leser.vorladen([...jeZiel.keys()].filter((p) => leser.pfade.includes(p)));
+  const ergebnis = { dateien: new Map(), erneuert: new Set(), hinweise: [], ueberschriften: 0, links: 0 };
+  for (const [ziel, anker] of [...jeZiel].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const text = leser.pfade.includes(ziel) ? leser.lies(ziel) : null;
+    if (text === null || text === undefined) {
+      ergebnis.hinweise.push(`Anker-Stub: ${ziel} gibt es am Tag ${tag} nicht, keine Stub-Seite (check:factorylinks meldet stub-ziel)`);
+      continue;
+    }
+    const { ausgewaehlt, h1, alle } = stubUeberschriften(text, anker);
+    for (const a of anker) if (a !== "" && !alle.some((h) => h.slug === a)) ergebnis.hinweise.push(`Anker-Stub: ${ziel} hat am Tag ${tag} keine Überschrift #${a} (check:factorylinks meldet stub-anker)`);
+    const s = stubSeite(ziel, { ausgewaehlt, h1 }, anker, { repo, tag });
+    ergebnis.dateien.set(ziel, s.text);
+    if (reineStubs.includes(ziel)) ergebnis.erneuert.add(ziel);
+    if (reineStubs.includes(ziel)) continue; // erneuert: zählt nicht zu den angelegten Seiten (Zahlen im Sync-Hinweis)
+    ergebnis.ueberschriften += ausgewaehlt.length;
+    ergebnis.links += s.links;
   }
   return ergebnis;
 }

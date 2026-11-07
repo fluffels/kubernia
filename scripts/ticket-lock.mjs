@@ -7,7 +7,8 @@
  *   node scripts/ticket-lock.mjs claim <nr> [--wiederaufnahme]    # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`
  *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # rein lesend: vor Spawn und vor Übernahme eines Worktrees
  *   node scripts/ticket-lock.mjs uebernehmen <nr> --nonce <x> --nachfolger   # nur Nachfolger/Fortsetzung (#1593): wie `pruefe`, verbraucht zusätzlich Übergabe bzw. Stopp-Vermerk; ohne `--nachfolger` Exit 2 (der Hauptchat prüft nur mit `pruefe`)
- *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup
+ *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup und MERGED (factory#193): Exit 4 bei offenem PR zum Ticket-Branch (gh scheitert: fail-closed); legt den Freigabe-Vermerk `<nr>.json.freigegeben` an statt zu löschen
+ *   node scripts/ticket-lock.mjs wiederherstellen <nr> --nonce <x>   # holt einen zu früh freigegebenen Lock binnen `ALTLAST_MS` zurück (nur ohne `<nr>.json`, Hash muss passen); der neue Lock trägt einen offenen `gestoppt`-Vermerk, `uebernehmen --nachfolger` greift
  *   node scripts/ticket-lock.mjs uebergeben <nr> --nonce <x>     # Phasen-Schnitt (#1592): letzte Aktion des Vorgängers vor `ERGEBNIS: uebergabe`
  *   node scripts/ticket-lock.mjs gestoppt <nr> --nonce <x>       # nach `TaskStop` oder Absturz des eigenen Umsetzers (#1693): das nächste `pruefe --nonce` meldet `uebernehmbar`
  *   node scripts/ticket-lock.mjs lebenszeichen <nr> --nonce <x> [--schritt <text>]   # Plan-Schritt (#1699): frischt `zuletzt` im eigenen Lock auf
@@ -23,7 +24,7 @@
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
  * bei fremdem oder fehlendem Lock), ohne `--nonce` meldet ein Lock, dessen `erstellt` jünger als 2 h ist, `fremd` (bewusste Grenze: hier zählt `zuletzt` nicht); existieren Worktree oder Branch, gilt die letzte Aktivität (Max aus Commit-Zeit der Branch-
  * Köpfe, jüngstem Reflog-Eintrag, mtime der geänderten Dateien laut `git status` und mtime von `node_modules`): jünger als
- * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` löscht nur den eigenen Lock. `uebergeben` vermerkt im eigenen Lock `uebergabe: { gesetzt, verbraucht: null }` (eine je Lock, sonst Exit 4); `pruefe --nonce` des Nachfolgers meldet dann `uebernehmbar` statt `aktiv` (Worktree oder Branch müssen existieren); `pruefe` ändert nie etwas (#1593), erst `uebernehmen` (gleiche Prüfung, gleiche Exit-Codes) verbraucht die Übergabe bzw. den Stopp-Vermerk (`verbraucht` = Zeitpunkt, ein zweites `uebernehmen` oder `pruefe` meldet wieder `aktiv`). `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h nach mtime: jedes Lebenszeichen schreibt die Datei neu, ein lebender Lauf behält seinen Lock). `lebenszeichen` setzt nur `zuletzt`/`schritt` am frisch gelesenen eigenen Lock (Lost-Update-Grenze: ein gleichzeitiges `uebergeben`/`gestoppt` kann überschrieben werden; der Hook ändert nie Besitzfelder). Ein `zuletzt` der letzten 30 min zählt bei `pruefe` als Aktivität (`aktiv`). `claim <nr> --wiederaufnahme` (#1699) übernimmt auch eine belegte Nummer (Worktree/Branch), wenn die Prüfung ohne Nonce `frei` oder `uebernehmbar` ergäbe (Lock ≥ 2 h ohne Lebenszeichen, Aktivität ≥ 30 min alt); der alte Lock wird wie bei einem verwaisten beiseite gelegt.
+ * `INAKTIV_MS` (30 min) ist `aktiv` (Exit 4), sonst `uebernehmbar`. `freigeben` entfernt nur den eigenen Lock (er wird zum Freigabe-Vermerk, den `claim` nach `ALTLAST_MS` abräumt). `uebergeben` vermerkt im eigenen Lock `uebergabe: { gesetzt, verbraucht: null }` (eine je Lock, sonst Exit 4); `pruefe --nonce` des Nachfolgers meldet dann `uebernehmbar` statt `aktiv` (Worktree oder Branch müssen existieren); `pruefe` ändert nie etwas (#1593), erst `uebernehmen` (gleiche Prüfung, gleiche Exit-Codes) verbraucht die Übergabe bzw. den Stopp-Vermerk (`verbraucht` = Zeitpunkt, ein zweites `uebernehmen` oder `pruefe` meldet wieder `aktiv`). `claim` räumt dabei ab: jede `*.verwaist-*`-Datei und jede `<nr>.json` älter als `ALTLAST_MS` (24 h nach mtime: jedes Lebenszeichen schreibt die Datei neu, ein lebender Lauf behält seinen Lock). `lebenszeichen` setzt nur `zuletzt`/`schritt` am frisch gelesenen eigenen Lock (Lost-Update-Grenze: ein gleichzeitiges `uebergeben`/`gestoppt` kann überschrieben werden; der Hook ändert nie Besitzfelder). Ein `zuletzt` der letzten 30 min zählt bei `pruefe` als Aktivität (`aktiv`). `claim <nr> --wiederaufnahme` (#1699) übernimmt auch eine belegte Nummer (Worktree/Branch), wenn die Prüfung ohne Nonce `frei` oder `uebernehmbar` ergäbe (Lock ≥ 2 h ohne Lebenszeichen, Aktivität ≥ 30 min alt); der alte Lock wird wie bei einem verwaisten beiseite gelegt.
  *
  * Bewusste Grenzen: `claim --wiederaufnahme` prüft kein Festgefahren-Label (das tut `claims-pruefen.mjs`; ein ausdrückliches „mach weiter“ der Maintainerin ist eine menschliche Entscheidung); nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
  * Sperre);
@@ -41,6 +42,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { ghJson } from "./gh-cli.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnisFuer, parseLock } from "./ticket-lock-lib.mjs";
 import { ticketNamen, ladeTicketNamen } from "./ticket-namen.mjs";
@@ -51,11 +53,11 @@ export { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS };
 
 /**
  * Welche Dateien im Lock-Verzeichnis `claim` abräumt (#1572): jede `*.verwaist-*` (Rest eines Übernahme-Wettlaufs) und jede
- * `<nr>.json` und jede `<nr>.json.tmp-*` (Rest eines abgebrochenen atomaren Schreibens), deren mtime älter als `ALTLAST_MS` ist (eine nicht lesbare mtime zählt als jung, nie löschen ohne Beleg). Pur.
+ * `<nr>.json`, jede `<nr>.json.freigegeben` (Freigabe-Vermerk) und jede `<nr>.json.tmp-*` (Rest eines abgebrochenen atomaren Schreibens), deren mtime älter als `ALTLAST_MS` ist (eine nicht lesbare mtime zählt als jung, nie löschen ohne Beleg). Pur.
  */
 export function aufzuraeumen({ eintraege, jetzt }) {
   return eintraege
-    .filter((e) => /\.json\.verwaist-/.test(e.name) || (/^\d+\.json(\.tmp-.+)?$/.test(e.name) && Number.isFinite(e.mtime) && jetzt - e.mtime > ALTLAST_MS))
+    .filter((e) => /\.json\.verwaist-/.test(e.name) || (/^\d+\.json(\.tmp-.+|\.freigegeben)?$/.test(e.name) && Number.isFinite(e.mtime) && jetzt - e.mtime > ALTLAST_MS))
     .map((e) => e.name);
 }
 
@@ -300,12 +302,63 @@ function schreibeLock(deps, nr, lock) {
   deps.ersetze(lockPfad(deps, nr), `${JSON.stringify(lock)}\n`);
 }
 
+const vermerkPfad = (deps, nr) => `${lockPfad(deps, nr)}.freigegeben`;
+
+/**
+ * Offener PR zu einem Branch des Tickets (factory#193): ein vorangestelltes `origin/` entfällt, jeder Branch wird einmal je Ort gefragt.
+ * Liefert `null` (keiner offen), `{ offen: branch }` oder `{ fehler: text }` (gh scheitert: fail-closed).
+ */
+function offenerPrZu(deps, refs) {
+  const gesehen = new Set();
+  for (const r of refs) {
+    const branch = r.ref.replace(/^origin\//, "");
+    const schluessel = `${r.ort?.cwd ?? ""}|${branch}`;
+    if (gesehen.has(schluessel)) continue;
+    gesehen.add(schluessel);
+    try {
+      if (deps.offenePrs(branch, r.ort?.cwd) > 0) return { offen: branch };
+    } catch (e) {
+      return { fehler: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  return null;
+}
+
+/**
+ * Gibt den eigenen Lock frei, aber nie bei offenem PR zum Ticket-Branch (Exit 4) und nie durch Löschen: der Lock wird zum
+ * Freigabe-Vermerk `<nr>.json.freigegeben` (`nonceHash`, `zeit`), den `wiederherstellen` binnen `ALTLAST_MS` zurückholt.
+ */
 function freigeben(deps, nr, nonce) {
   const lock = liesLock(deps, nr);
   if (!lock) return ergebnis(0, "kein Lock");
   if (!gehoertZu(lock, nonce)) return ergebnis(4, "", `✖ ticket-lock: der Lock zu #${nr} gehört einer anderen Session, nicht gelöscht. ${NICHT_VON_HAND}`);
+  const pr = offenerPrZu(deps, ermittleBelegung(deps, nr).refs);
+  if (pr?.offen) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} ist der PR zu ${pr.offen} noch offen: nicht freigeben, erst nach MERGED (pr-warten Exit 0). ${NICHT_VON_HAND}`);
+  if (pr?.fehler) return ergebnis(4, "", `✖ ticket-lock: offene PRs zu #${nr} nicht prüfbar (${pr.fehler}), nicht freigegeben. Fix: gh anmelden bzw. Netz prüfen, dann freigeben erneut. ${NICHT_VON_HAND}`);
+  deps.ersetze(vermerkPfad(deps, nr), `${JSON.stringify({ nr, nonceHash: typeof lock.nonceHash === "string" ? lock.nonceHash : hashVon(lock.nonce), zeit: new Date(deps.jetzt()).toISOString() })}\n`);
   deps.loesche(lockPfad(deps, nr));
   return ergebnis(0, "freigegeben");
+}
+
+/** Holt einen zu früh freigegebenen Lock zurück: nur ohne `<nr>.json`, mit passendem Hash und einem Vermerk jünger als `ALTLAST_MS`; der neue Lock trägt einen offenen `gestoppt`-Vermerk (Nachfolger-Weg). */
+function wiederherstellen(deps, nr, nonce) {
+  let vermerk = null;
+  try {
+    vermerk = JSON.parse(deps.liesDatei(vermerkPfad(deps, nr)));
+  } catch {
+    /* kein oder kaputter Vermerk */
+  }
+  const alter = deps.jetzt() - Date.parse(vermerk?.zeit);
+  if (!vermerk || !gehoertZu({ nonceHash: vermerk.nonceHash }, nonce) || !(alter < ALTLAST_MS)) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es keinen passenden Freigabe-Vermerk (fehlend, fremde Nonce oder älter als 24 h): nichts wiederhergestellt. ${NICHT_VON_HAND}`);
+  const jetzt = new Date(deps.jetzt()).toISOString();
+  try {
+    deps.schreibeNeu(lockPfad(deps, nr), `${JSON.stringify({ nr, nonceHash: vermerk.nonceHash, erstellt: jetzt, sandbox: deps.sandbox ?? null, gestoppt: { gesetzt: jetzt, verbraucht: null } })}\n`);
+  } catch (e) {
+    if (e && e.code === "EEXIST") return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es schon einen Lock: nichts wiederhergestellt. ${NICHT_VON_HAND}`);
+    throw e;
+  }
+  deps.loesche(vermerkPfad(deps, nr));
+  return ergebnis(0, "wiederhergestellt");
 }
 
 /** Die Befehle und ihre Flag-Menge (Format von `flagsLesen`) samt Pflicht-Flags: die einzige Befehlsliste, Prüfung per `Object.hasOwn`. */
@@ -313,13 +366,14 @@ const FLAG_MENGEN = {
   claim: { optionen: { wiederaufnahme: { type: "boolean" } }, pflicht: [] },
   pruefe: { optionen: { nonce: { type: "string" } }, pflicht: [] },
   freigeben: { optionen: { nonce: { type: "string" } }, pflicht: ["nonce"] },
+  wiederherstellen: { optionen: { nonce: { type: "string" } }, pflicht: ["nonce"] },
   uebergeben: { optionen: { nonce: { type: "string" } }, pflicht: ["nonce"] },
   gestoppt: { optionen: { nonce: { type: "string" } }, pflicht: ["nonce"] },
   uebernehmen: { optionen: { nonce: { type: "string" }, nachfolger: { type: "boolean" } }, pflicht: ["nonce"] },
   lebenszeichen: { optionen: { nonce: { type: "string" }, schritt: { type: "string" } }, pflicht: ["nonce"] },
 };
 
-const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit";
+const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | wiederherstellen <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit";
 
 /**
  * Liest den Aufruf vor jedem I/O: `{ commit: true }` für `lebenszeichen --commit` (genau diese zwei Argumente, post-commit-Hook), sonst
@@ -342,7 +396,7 @@ export function aufrufLesen(argv) {
 /** Der Aufruf-Fehler als Ergebnis: Rahmen, Grund, Aufrufzeile. */
 const aufrufFehler = (grund) => ergebnis(AUFRUF_EXIT, "", `✖ ticket-lock: ${grund}\n${USAGE}`);
 
-/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, jetzt, nonce, sandbox, lockDir, liesDatei, schreibeNeu, ersetze, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
+/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. `deps`: git, offenePrs, jetzt, nonce, sandbox, lockDir, liesDatei, schreibeNeu, ersetze, benenneUm, loesche, legeVerzeichnisAn, liste, mtime. */
 export function fuehreAus(argv, deps) {
   const aufruf = aufrufLesen(argv);
   if (aufruf.fehler) return aufrufFehler(aufruf.fehler);
@@ -355,6 +409,7 @@ export function fuehreAus(argv, deps) {
     if (befehl === "uebernehmen") return pruefe(deps, nr, nonce, true);
     if (befehl === "uebergeben") return uebergeben(deps, nr, nonce);
     if (befehl === "gestoppt") return gestoppt(deps, nr, nonce);
+    if (befehl === "wiederherstellen") return wiederherstellen(deps, nr, nonce);
     return freigeben(deps, nr, nonce);
   } catch (e) {
     return ergebnis(2, "", `✖ ticket-lock: ${e instanceof Error ? e.message : String(e)}`);
@@ -402,6 +457,8 @@ export function echteDeps({ config: vorgabe, basis } = {}) {
         throw e;
       }
     },
+    // Offene PRs zu einem Branch (factory#193): wirft bei gh-Fehlern, `freigeben` ist dann fail-closed.
+    offenePrs: (branch, cwd) => ghJson(["pr", "list", "--head", branch, "--state", "open", "--limit", "1", "--json", "number"], { exec: (cmd, args, o) => execFileSync(cmd, args, { ...o, cwd }) }).length,
     benenneUm: renameSync,
     loesche: unlinkSync,
     legeVerzeichnisAn: (d) => mkdirSync(d, { recursive: true }),

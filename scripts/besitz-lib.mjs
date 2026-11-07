@@ -1,15 +1,12 @@
 // Besitz-Manifest-Leser und Bearbeitungs-Primitive (ADR 0022 F9): Einheiten des Besitz-Manifests `.factory/besitz.json`
 // (ganze Datei, Markdown-Block zwischen Markern, JSON-Schlüssel der obersten Ebene) lesen, prüfen, hashen und setzen.
-// Dazu die Projektwert-Stellen (ADR 0022 F3f): Block und Frontmatter-Zeile, die aus der Config gerendert werden; Hash und Wächter
-// rechnen auf dem Text mit geleerten Werten. Node-Builtins sowie skill-pfade; Extraktionsliste und Test-Hülle stehen in `besitz-extraktion.mjs`. Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
+// Hash und Wächter rechnen auf dem Text mit geleerten Projektwerten (`leereProjektwerte` aus `projektwert-lib.mjs`, ADR 0022 F3f). Importe: `node:crypto`, `projekt-config-lib`, `projektwert-lib`, `modul-wahl-lib`, `sync-abgleich-lib` und `ticket-namen`; Extraktionsliste und Test-Hülle stehen in `besitz-extraktion.mjs`. Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { altEnvPraefix, NULLBARER_SKILL, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { altEnvPraefix } from "./projekt-config-lib.mjs";
+import { leereProjektwerte } from "./projektwert-lib.mjs";
 import { modulFehler } from "./modul-wahl-lib.mjs";
 import { artFehler } from "./sync-abgleich-lib.mjs";
-import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 
 /** Ring-Importregel (ADR 0029): Ring des Importeurs -> Ringe, deren Besitz er lokal importieren darf. Ein weiterer Ring ist eine Zeile. */
 export const RING_IMPORTE = {
@@ -32,6 +29,8 @@ export const istGanzeDatei = (e) => e.block === undefined && e.schluessel === un
 
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;
+/** Fehlertext-Zusatz: die erwarteten Marker-Zeilen eines Blocks. */
+export const markerHinweis = (id) => `Erwartet je eine Zeile ${markerStart(id)} und ${markerEnde(id)}`;
 
 /** Pfad des Besitz-Manifests (eine Quelle; kein Skript außerhalb dieser Lib schreibt das Literal). */
 export const MANIFEST_PFAD = ".factory/besitz.json";
@@ -131,10 +130,16 @@ export function pflichtChecksFehler(e) {
   return [];
 }
 
+/** Manifest-Versionen, die dieses Werkzeug kennt (eine Quelle für Prüfung und Sync-Hinweis). */
+export const MANIFEST_VERSIONEN = [1, 2, 3];
+/** Ist `meldung` der Fehlertext von `pruefeManifest` zu einer unbekannten Version? */
+export const versionUnbekannt = (meldung) => meldung.startsWith("version ") && meldung.includes(" unbekannt");
+
 /** Manifest-Fehler (leer = gültig). `lies` liefert den Dateitext oder `null`. */
 export function pruefeManifest(m, lies) {
   const out = [];
-  if (![1, 2, 3].includes(m.version)) out.push(`version ${String(m.version)} unbekannt (erwartet 1, 2 oder 3)`);
+  // Die Prüfung von `modul` bleibt roh (`!== undefined`): sie validiert, ob der Wert ein Name ist (`modulFehler`), Wahl und Aufteilung nutzen `istModulEinheit`.
+  if (!MANIFEST_VERSIONEN.includes(m.version)) out.push(`version ${String(m.version)} unbekannt (erwartet 1, 2 oder 3)`);
   else {
     if (m.version === 1 && m.eintraege.some((e) => e.art !== undefined)) out.push("art braucht version 2 (ein altes Sync-Werkzeug kennt art nicht und bräche sonst nicht ab)");
     if (m.version < 3 && m.eintraege.some((e) => e.modul !== undefined)) out.push("modul braucht version 3 (ein altes Sync-Werkzeug kennt modul nicht und verteilte sonst jedes Modul)");
@@ -489,257 +494,12 @@ export function setzeJsonSchluessel(text, schluessel, wertText) {
 export function setzeBlock(text, block, blockText) {
   const na = zaehleVorkommen(text, markerStart(block));
   const nb = zaehleVorkommen(text, markerEnde(block));
-  if (na !== 1 || nb !== 1) throw new Error(`Block '${block}': Marker müssen im Ziel je genau einmal stehen (start ${na}, ende ${nb})`);
+  if (na !== 1 || nb !== 1) throw new Error(`Block '${block}': Marker müssen im Ziel je genau einmal stehen (start ${na}, ende ${nb}). ${markerHinweis(block)}`);
   const a = text.indexOf(markerStart(block));
   const b = text.indexOf(markerEnde(block));
   if (b < a) throw new Error(`Block '${block}': Ende-Marker steht vor dem Start-Marker`);
   return text.slice(0, a) + blockText + text.slice(b + markerEnde(block).length);
 }
-
-// ── Projektwert-Stellen (ADR 0022 F3f) ────────────────────────────────────────
-
-export const PROJEKTWERT_START = "<!-- factory:projektwerte:start -->";
-export const PROJEKTWERT_ENDE = "<!-- factory:projektwerte:end -->";
-const PROJEKTWERT_KENNUNG = "factory:projektwert";
-const PROJEKTWERT_ZEILE = /^# factory:projektwert (\S+)$/;
-const PROJEKTWERT_FOLGE = /^(\s*)([A-Za-z_][\w-]*):/;
-/** Gruppen der Block-Tabelle und der Platzhalter (Werte sind Texte). */
-export const TABELLEN_GRUPPEN = ["praefixe", "agenten", "labels", "skills"];
-/** Gruppen, die ein Zeilen-Marker nutzen darf: die Tabellen-Gruppen und `codeql` (Liste der Sprachen, factory#119). */
-export const PROJEKTWERT_GRUPPEN = [...TABELLEN_GRUPPEN, "codeql"];
-/** Muster für `<gruppe.schluessel>`-Platzhalter der Projektwert-Gruppen; frische Instanz (Flag `g`, eigener `lastIndex`) je Aufruf. */
-export function platzhalterMuster() {
-  return new RegExp(`<(${TABELLEN_GRUPPEN.join("|")})\\.(\\w+)>`, "g");
-}
-const YAML_BLANK = /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/;
-const CONFIG_PFAD = PROJEKT_CONFIG;
-
-/** Stellen eines LF-Textes: `{ bloecke: [{ start, ende }], zeilen: [{ marker, folge, schluessel, einrueckung, name }] }` (Zeilenindizes ab 0).
- *  Ein Markdown-Marker zählt nur allein auf seiner Zeile, ein Zeilen-Marker nur im führenden Frontmatter direkt vor einer `key:`-Zeile.
- *  Wirft mit allen Funden (`pfad:zeile: ...`) bei Start ohne Ende, Ende ohne Start, verschachteltem Start und kaputtem Zeilen-Marker. */
-export function projektwertStellen(text, pfad = "<text>") {
-  const zeilen = text.split("\n");
-  const yaml = /\.ya?ml$/.test(pfad); // eine YAML-Datei ist als Ganzes Marker-Fläche, der Marker steht in Spalte 0
-  const fmEnde = yaml ? zeilen.length : zeilen[0].trimEnd() === "---" ? zeilen.findIndex((z, i) => i > 0 && z.trimEnd() === "---") : -1;
-  const fehler = [];
-  const bloecke = [];
-  const stellen = [];
-  let offen = -1;
-  const melde = (i, msg) => fehler.push(`${pfad}:${i + 1}: ${msg}`);
-  for (let i = 0; i < zeilen.length; i++) {
-    const t = zeilen[i].trim();
-    if (t === PROJEKTWERT_START) {
-      if (offen >= 0) melde(i, `Projektwert-Block beginnt, obwohl der Block ab Zeile ${offen + 1} noch offen ist`);
-      else offen = i;
-    } else if (t === PROJEKTWERT_ENDE) {
-      if (offen < 0) melde(i, "Projektwert-Block endet ohne Start");
-      else {
-        bloecke.push({ start: offen, ende: i });
-        offen = -1;
-      }
-    } else {
-      const m = PROJEKTWERT_ZEILE.exec(zeilen[i].trimEnd());
-      if (m === null) {
-        if (t.startsWith("# " + PROJEKTWERT_KENNUNG)) melde(i, "kaputter Projektwert-Zeilen-Marker (erwartet `# factory:projektwert <schlüssel>` allein auf der Zeile, ohne Einrückung)");
-        continue;
-      }
-      const folge = i + 1 < zeilen.length ? PROJEKTWERT_FOLGE.exec(zeilen[i + 1]) : null;
-      if (!PROJEKTWERT_GRUPPEN.includes(m[1].split(".")[0])) melde(i, `unbekannte Projektwert-Gruppe in '${m[1]}' (erlaubt: ${PROJEKTWERT_GRUPPEN.join(", ")})`);
-      else if (fmEnde < 0 || i >= fmEnde) melde(i, "Projektwert-Zeilen-Marker steht außerhalb des führenden Frontmatters");
-      else if (i + 1 >= fmEnde || folge === null) melde(i, "auf den Projektwert-Zeilen-Marker muss im Frontmatter eine Zeile `schlüssel:` folgen");
-      else stellen.push({ marker: i, folge: i + 1, schluessel: m[1], einrueckung: folge[1], name: folge[2] });
-    }
-  }
-  if (offen >= 0) melde(offen, "Projektwert-Block hat kein Ende");
-  if (fehler.length > 0) throw new Error(fehler.join("\n"));
-  return { bloecke, zeilen: stellen };
-}
-
-/** Text mit geleerten Projektwerten (Block-Rumpf entfernt, Wert der Frontmatter-Zeile entfernt). Wirft wie `projektwertStellen`. */
-export function leereProjektwerte(text, pfad = "<text>") {
-  if (!text.includes(PROJEKTWERT_KENNUNG)) return text;
-  const st = projektwertStellen(text, pfad);
-  const zeilen = text.split("\n");
-  for (const z of st.zeilen) zeilen[z.folge] = `${z.einrueckung}${z.name}:`;
-  for (const b of [...st.bloecke].reverse()) zeilen.splice(b.start + 1, b.ende - b.start - 1);
-  return zeilen.join("\n");
-}
-
-/** Der eine Projektwert, der `null` sein darf (kein Abschluss-Skill, factory#139); in der Tabelle steht `—`. */
-const NULLBARER_PROJEKTWERT = `skills.${NULLBARER_SKILL}`;
-
-/** Wert zum Schlüssel (`gruppe.name`) aus der Config; wirft bei fehlendem oder nicht-textlichem Wert und bei Zeichen, die den Block brechen. */
-export function projektwertWert(config, schluessel) {
-  const wert = schluessel.split(".").reduce((o, k) => (o !== null && typeof o === "object" ? o[k] : undefined), config);
-  if (wert === null && schluessel === NULLBARER_PROJEKTWERT) return null;
-  const liste = Array.isArray(wert) && wert.length > 0 && wert.every((w) => typeof w === "string" && w !== "");
-  if (!liste && (typeof wert !== "string" || wert === "")) {
-    throw new Error(`Projektwert '${schluessel}' fehlt oder ist kein nichtleerer Text (oder keine nicht leere Liste von Texten) in ${CONFIG_PFAD}\nFix: Schlüssel in ${CONFIG_PFAD} ergänzen oder den Marker korrigieren`);
-  }
-  if ((liste ? wert : [wert]).some((w) => /[`|\r\n]/.test(w))) {
-    throw new Error(`Projektwert '${schluessel}' enthält Backtick, '|' oder Zeilenumbruch und lässt sich nicht einsetzen\nFix: Wert in ${CONFIG_PFAD} ändern`);
-  }
-  return wert;
-}
-
-const tabellenWert = (w) => (w === null ? "—" : `\`${w}\``);
-
-function blockZeilen(config) {
-  const kopf = `Projektwerte aus \`${CONFIG_PFAD}\` (generiert von \`node scripts/projektwerte.mjs --write\`, nicht von Hand ändern).`;
-  const out = [PROJEKTWERT_START, kopf, "", "| Schlüssel | Wert |", "| --- | --- |"];
-  for (const g of TABELLEN_GRUPPEN) {
-    if (config?.[g] === null || typeof config?.[g] !== "object") {
-      throw new Error(`Projektwert-Gruppe '${g}' fehlt in ${CONFIG_PFAD}\nFix: Gruppe in ${CONFIG_PFAD} ergänzen`);
-    }
-    for (const k of Object.keys(config[g])) out.push(`| \`${g}.${k}\` | ${tabellenWert(projektwertWert(config, `${g}.${k}`))} |`);
-  }
-  out.push(PROJEKTWERT_ENDE);
-  return out;
-}
-
-const YAML_WORT = /^(true|false|null|yes|no|on|off|y|n|~|[0-9].*)$/i;
-const yamlSkalar = (w) => (YAML_BLANK.test(w) && !YAML_WORT.test(w) ? w : JSON.stringify(w));
-const yamlWert = (w) => (Array.isArray(w) ? `[${w.map(yamlSkalar).join(", ")}]` : yamlSkalar(w));
-const zeilenSoll = (z, config) => `${z.einrueckung}${z.name}: ${yamlWert(projektwertWert(config, z.schluessel))}`;
-const mitOrt = (pfad, zeile, fn) => {
-  try {
-    return fn();
-  } catch (err) {
-    throw new Error(`${pfad}:${zeile + 1}: ${err.message}`, { cause: err });
-  }
-};
-const holeConfig = (config) => (typeof config === "function" ? config() : config);
-
-/** Rendert alle Projektwert-Stellen aus der Config (Wert oder Funktion, die erst bei einer Stelle gerufen wird). Text ohne Stellen bleibt gleich. */
-export function rendereProjektwerte(text, config, pfad = "<text>") {
-  if (!text.includes(PROJEKTWERT_KENNUNG)) return text;
-  const st = projektwertStellen(text, pfad);
-  if (st.bloecke.length + st.zeilen.length === 0) return text;
-  const cfg = holeConfig(config);
-  const ersetze = [
-    ...st.zeilen.map((z) => ({ von: z.folge, bis: z.folge + 1, neu: [mitOrt(pfad, z.folge, () => zeilenSoll(z, cfg))] })),
-    ...st.bloecke.map((b) => ({ von: b.start, bis: b.ende + 1, neu: mitOrt(pfad, b.start, () => blockZeilen(cfg)) })),
-  ].sort((a, b) => b.von - a.von);
-  const zeilen = text.split("\n");
-  for (const r of ersetze) zeilen.splice(r.von, r.bis - r.von, ...r.neu);
-  return zeilen.join("\n");
-}
-
-/** Abweichungen der Projektwert-Stellen von der Config (`pfad:zeile: ...`, leer = in Ordnung). Wirft bei kaputtem Marker oder fehlendem Wert. */
-export function projektwertAbweichungen(pfad, text, config) {
-  if (!text.includes(PROJEKTWERT_KENNUNG)) return [];
-  const st = projektwertStellen(text, pfad);
-  if (st.bloecke.length + st.zeilen.length === 0) return [];
-  const cfg = holeConfig(config);
-  const zeilen = text.split("\n");
-  const out = [];
-  for (const z of st.zeilen) {
-    const soll = mitOrt(pfad, z.folge, () => zeilenSoll(z, cfg));
-    if (zeilen[z.folge].trimEnd() !== soll) out.push(`${pfad}:${z.folge + 1}: Projektwert '${z.schluessel}' weicht von ${CONFIG_PFAD} ab (erwartet \`${soll}\`)`);
-  }
-  for (const b of st.bloecke) {
-    const soll = mitOrt(pfad, b.start, () => blockZeilen(cfg));
-    const ist = zeilen.slice(b.start, b.ende + 1).map((l) => l.trimEnd());
-    if (ist.join("\n") !== soll.join("\n")) out.push(`${pfad}:${b.start + 1}: Projektwert-Block weicht von ${CONFIG_PFAD} ab`);
-  }
-  return out;
-}
-
-/**
- * Befunde der Platzhalter-Regel (leer = in Ordnung): ein Platzhalter `<gruppe.schlüssel>` in `text` braucht genau einen Projektwert-Block
- * in derselben Datei, und sein Schlüssel löst in `config` auf. Pur; die Muster steuert `platzhalterMuster`.
- */
-export function platzhalterBefunde(pfad, text, config) {
-  const treffer = [...text.matchAll(platzhalterMuster())];
-  if (treffer.length === 0) return [];
-  const out = [];
-  const bloecke = projektwertStellen(text, pfad).bloecke.length;
-  if (bloecke !== 1) out.push(`${pfad}: ${treffer.length} Platzhalter, aber ${bloecke} Projektwert-Blöcke (genau einer verlangt)`);
-  for (const schluessel of new Set(treffer.map((m) => `${m[1]}.${m[2]}`))) {
-    try {
-      projektwertWert(config, schluessel);
-    } catch {
-      out.push(`${pfad}: Platzhalter <${schluessel}> löst in der Config nicht auf`);
-    }
-  }
-  return out;
-}
-
-const PROJEKTWERT_FLAECHEN = [/^\.claude\/agents\/[^/]+\.md$/, /^\.claude\/skills\/[^/]+\/[^/]+\.md$/, /^\.agents\/skills\/[^/]+\/[^/]+\.md$/];
-
-/** Geschlossene Prüf-Fläche: `.md`-Pfade des Manifests plus Agenten- und Skill-Markdown aus `liste` (alle Projektpfade, Schrägstrich-Form). Sortiert, ohne Doppelte. */
-export function projektwertDateien(manifestPfade, liste) {
-  const aus = liste.filter((p) => PROJEKTWERT_FLAECHEN.some((r) => r.test(p)));
-  return [...new Set([...manifestPfade.filter((p) => pfadSicher(p) && /\.(md|ya?ml)$/.test(p)), ...aus])].sort();
-}
-
-/** Alle Agenten-, Skill-Zeiger- und Skill-Quell-Dateien (`.claude/agents`, `.claude/skills`, `.agents/skills`) unter `wurzel` (Schrägstrich-Form, unsortiert). */
-export function projektDateien(wurzel) {
-  const out = [];
-  const unter = (rel) => {
-    const voll = join(wurzel, ...rel.split("/"));
-    return existsSync(voll) ? readdirSync(voll, { withFileTypes: true }) : [];
-  };
-  for (const d of unter(".claude/agents")) if (d.isFile()) out.push(`.claude/agents/${d.name}`);
-  for (const wurzelOrdner of [ZEIGER_WURZEL, QUELL_VERZEICHNIS]) {
-    for (const s of unter(wurzelOrdner)) {
-      if (s.isDirectory()) for (const d of unter(`${wurzelOrdner}/${s.name}`)) if (d.isFile()) out.push(`${wurzelOrdner}/${s.name}/${d.name}`);
-    }
-  }
-  return out;
-}
-
-/**
- * Prüft (oder schreibt mit `schreiben`) alle Projektwert-Stellen unter `wurzel`. `ladeConfig` wird nur gerufen, wenn eine Datei Stellen hat.
- * Rückgabe: `{ dateien (Zahl der Dateien mit Stellen), fehler, geaendert, abweichungen }`; `abweichungen` sind nur die Funde "Wert weicht von der Config ab" (im Prüfmodus auch in `fehler`), die Aufrufer schlagen daran den `--write`-Fix vor. Geschrieben wird nur, wenn kein Fehler vorliegt.
- */
-export function projektwertLauf(wurzel, ladeConfig, { schreiben = false } = {}) {
-  const res = { dateien: 0, fehler: [], geaendert: [], abweichungen: [] };
-  const lies = (rel) => {
-    const voll = join(wurzel, ...rel.split("/"));
-    return existsSync(voll) ? readFileSync(voll, "utf8") : null;
-  };
-  // ein fehlendes oder kaputtes Manifest meldet das Drift-Gate selbst
-  const manifestPfade = manifestAusText(lies(MANIFEST_PFAD)).manifest?.eintraege.map((e) => e?.pfad) ?? [];
-  let config;
-  const configLaden = () => {
-    if (config === undefined) {
-      try {
-        config = ladeConfig();
-      } catch (err) {
-        config = null;
-        res.fehler.push(`Projekt-Config: ${err.message}`);
-      }
-    }
-    if (config === null) throw new Error(KEINE_CONFIG);
-    return config;
-  };
-  const neu = new Map();
-  for (const pfad of projektwertDateien(manifestPfade, projektDateien(wurzel))) {
-    const roh = lies(pfad);
-    if (roh === null || !roh.includes(PROJEKTWERT_KENNUNG)) continue;
-    const text = normalisiereEol(roh);
-    try {
-      const st = projektwertStellen(text, pfad);
-      if (st.bloecke.length + st.zeilen.length === 0) continue;
-      res.dateien++;
-      const abw = projektwertAbweichungen(pfad, text, configLaden);
-      res.abweichungen.push(...abw);
-      if (!schreiben) res.fehler.push(...abw);
-      if (abw.length > 0) neu.set(pfad, { roh, text: rendereProjektwerte(text, configLaden, pfad) });
-    } catch (err) {
-      if (err.message !== KEINE_CONFIG) res.fehler.push(err.message);
-    }
-  }
-  if (schreiben && res.fehler.length === 0) {
-    for (const [pfad, { roh, text }] of neu) {
-      writeFileSync(join(wurzel, ...pfad.split("/")), eolVon(roh) === "\n" ? text : text.replace(/\n/g, "\r\n"));
-      res.geaendert.push(pfad);
-    }
-  }
-  return res;
-}
-const KEINE_CONFIG = "Projekt-Config nicht lesbar";
 
 // ── Projektliterale aus der Config (ADR 0022 F1, F10) ───────────────────────
 // Eine Auslegung für den Kern-Wächter und das Export-Werkzeug: welche Begriffe ein Kern nicht tragen soll.
@@ -765,12 +525,14 @@ const boardIdRegex = (config) => {
  * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
  * wie `forum` zählt nie), Agentennamen, Skill-Namen (`skills`, ganze Wörter ohne Bindestrich-Anschluss) und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen; ein Wert, der auf `-` oder `_` endet, trifft darum nie: Präfixe decken `Praefix` und `Env` aus `praefixe.commitZeile` ab). Präfix, Branch, Worktree, Label und Agent zählen
  * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix).
- * @param {{ repo: string, boards: { besitzer: string, statusFeldId?: string | number }[], praefixe: { commitZeile: string, branch: string, worktree: string },
+ * Dazu `Bezieher` (factory#215): der Namensteil jedes Eintrags aus `bezieher` als ganzes Wort (Unicode-Grenzen, groß/klein egal), der Owner fließt in `Owner`; ein Name, der dem Repo-Namen oder einem `projektliterale`-Wert gleicht, ist schon gedeckt und erzeugt keinen zweiten Begriff (Baselines bleiben gleich). Grenze: ein Bezieher-Name, der ein Alltagswort ist, trifft breit.
+ * @param {{ repo: string, bezieher?: string[], boards: { besitzer: string, statusFeldId?: string | number }[], praefixe: { commitZeile: string, branch: string, worktree: string },
  *   labels: Record<string, string>, agenten: Record<string, string>, skills?: Record<string, string>, projektliterale?: Record<string, string> }} config
  * @returns {Record<string, RegExp>} */
 export function begriffeAus(config) {
   const [owner = "", name = ""] = config.repo.split("/");
-  const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer)])];
+  const bezieher = (config.bezieher ?? []).map((r) => r.split("/"));
+  const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer), ...bezieher.map(([o = ""]) => o).filter((o) => o !== "")])];
   const { commitZeile, branch, worktree } = config.praefixe;
   /** @type {Record<string, RegExp>} */
   const out = {
@@ -790,6 +552,11 @@ export function begriffeAus(config) {
   const skills = Object.values(config.skills ?? {}).filter((s) => typeof s === "string");
   if (skills.length > 0) out.Skill = new RegExp(`(?<![\\w-])(?:${alternative(skills)})(?![\\w-])`, "g");
   // Das `u`-Flag lehnt `\-` außerhalb einer Zeichenklasse ab, darum bleibt der Bindestrich unmaskiert.
-  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(literal).replaceAll(String.raw`\-`, "-")}(?![\\p{L}\\p{N}_])`, "giu");
+  const ganzesWort = (/** @type {string} */ muster) => new RegExp(`(?<![\\p{L}\\p{N}_])${muster}(?![\\p{L}\\p{N}_])`, "giu");
+  const wörtlich = (/** @type {string[]} */ werte) => alternative(werte).replaceAll(String.raw`\-`, "-");
+  for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = ganzesWort(wörtlich([literal]));
+  const gedeckt = new Set([name, ...Object.values(config.projektliterale ?? {})].map((w) => w.toLowerCase()));
+  const bezieherNamen = bezieher.map(([, n = ""]) => n).filter((n) => n !== "" && !gedeckt.has(n.toLowerCase()));
+  if (bezieherNamen.length > 0) out.Bezieher = ganzesWort(`(?:${wörtlich(bezieherNamen)})`);
   return out;
 }

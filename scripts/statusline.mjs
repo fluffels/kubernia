@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Statusline-Weiche (#1358): Claude Code startet dieses Skript als `statusLine` und übergibt den Zustand als JSON auf stdin.
- * 1) legt `rate_limits` als Snapshot im OS-Temp ab (kontoweit, für Budget-Pacing, docs/model-routing.md §6);
+ * 1) legt `rate_limits` als Snapshot im OS-Temp ab (kontoweit, für Budget-Pacing, docs/model-routing.md (Fabrik) §6);
  * 2) reicht die persönliche Statusline aus `~/.claude/settings.json` unverändert durch (die Projekt-Einstellung verdrängt sie sonst).
  * Wirft nie und endet immer mit Exit 0: eine kaputte Statusline darf keine Session stören.
  */

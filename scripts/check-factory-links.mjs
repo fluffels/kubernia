@@ -18,6 +18,11 @@
 //                   (`sync-stand.einheiten`: ganze `*.md`-Dateien und Blöcke `datei#id` zwischen den Besitz-Markern nach `besitzSpannen`, wie die Doku-Drift-
 //                   Prüfung: erstes Marker-Vorkommen, auch in Code; JSON-Schlüssel-Einheiten `#/…` tragen keine Doku-Links). Schnappschuss-Marker innerhalb
 //                   von Code (Fence, Inline-Code) öffnen keinen Block; ein Schnappschuss-Start ohne Ende maskiert nichts (fail-closed).
+//   Anker-Stubs (factory#132): jeder relative `.md`-Link einer Besitz-Einheit (ganze Datei oder Block) auf ein Ziel ohne Einheit muss auf eine vorhandene Datei zeigen
+//                   (`stub-ziel`); mit Anker trägt sie eine Überschrift mit gleichem Anker (`stub-anker`, roh verglichen) und darunter (bis zur nächsten Überschrift
+//                   gleicher oder höherer Ebene) einen Factory-Link auf genau `pfad#anker` am Sync-Tag, gebaut über `factorySeite`; ohne Anker irgendwo in der Datei einen
+//                   Factory-Link auf die Seite (`stub-link`). Links in Schnappschuss-Blöcken des Ziels zählen nicht; Ziele mit Einheit (auch Block-Dateien wie `AGENTS.md`),
+//                   Nicht-`.md`-Ziele, reine Anker und Links in Code bleiben ungeprüft. Nur der Wächter prüft das; der Sync schreibt keine Stubs (der Bezieher legt sie im Sync-PR an).
 //   rot (`form`):   jede andere URL auf dieses Repo (z.B. ein Commit-Link, oder eine Blob-URL ohne Pfad), damit kein Link ungeprüft bleibt.
 // Bekannte Grenzen: der Index unterscheidet blob und tree nicht; Anker nur bei `blob` auf `*.md` (GitHub-Slugs).
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -25,7 +30,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown } from "./check-basis.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { INDEX_PFAD, befund, befundZeile, factoryLinkStellen, planeFactoryLinks, sammleLinksAus } from "./factory-links-lib.mjs";
+import { INDEX_PFAD, befund, befundZeile, factoryLinkStellen, planeFactoryLinks, sammleLinksAus, stubBefunde } from "./factory-links-lib.mjs";
 import { factoryRepo } from "./factory-seite.mjs";
 import { leserVomCommit } from "./factory-sync-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
@@ -114,13 +119,19 @@ function vorbedingungen(w) {
   return { sync: stand, repo, ausnahmen };
 }
 
-/** Prüfmodus auf einem Projektbaum: `{ befunde, links }` oder `{ nichtsZuPruefen: true }` ohne Sync-Stand. */
+/** Textleser einer Wurzel für die Lib: Text oder `null` (Datei fehlt); `datei` ist ein repo-relativer POSIX-Pfad. */
+const leserVon = (rootDir) => (datei) => (existsSync(join(rootDir, ...datei.split("/"))) ? readFileSync(join(rootDir, ...datei.split("/")), "utf8") : null);
+
+/** Prüfmodus auf einem Projektbaum: `{ befunde, links, stubs }` oder `{ nichtsZuPruefen: true }` ohne Sync-Stand. */
 export function auditFactoryLinks(rootDir) {
   const v = vorbedingungen(rootDir);
   if (v.nichtsZuPruefen) return { nichtsZuPruefen: true, befunde: [], links: [] };
   if (v.befunde) return { befunde: v.befunde, links: [] };
-  const links = sammleLinks(rootDir, { repo: v.repo, einheiten: Object.keys(v.sync.einheiten ?? {}), ausnahmen: v.ausnahmen });
-  return { befunde: pruefeIndex({ links, index: liesJson(rootDir, INDEX_PFAD), sync: v.sync, repo: v.repo }), links };
+  const einheiten = Object.keys(v.sync.einheiten ?? {});
+  const links = sammleLinks(rootDir, { repo: v.repo, einheiten, ausnahmen: v.ausnahmen });
+  const index = pruefeIndex({ links, index: liesJson(rootDir, INDEX_PFAD), sync: v.sync, repo: v.repo });
+  const stubs = v.sync.quelle?.tag ? stubBefunde({ lies: leserVon(rootDir), einheiten, repo: v.repo, tag: v.sync.quelle.tag }) : { befunde: [], geprueft: 0 };
+  return { befunde: [...index, ...stubs.befunde], links, stubs: stubs.geprueft };
 }
 
 /**
@@ -137,8 +148,7 @@ export function schreibeFactoryLinks(rootDir, quelle) {
   const leser = leserVomCommit(quelle, tag);
   if (leser.fehler) return { befunde: [befund("quelle", `Tag ${tag} in ${quelle}: ${leser.fehler}`)], geschrieben: 0 };
   if (leser.commit !== commit) return { befunde: [befund("tag-commit", `Tag ${tag} zeigt auf ${leser.commit}, ${STAND_PFAD} nennt ${commit}`)], geschrieben: 0 };
-  const lies = (datei) => (existsSync(join(rootDir, ...datei.split("/"))) ? readFileSync(join(rootDir, ...datei.split("/")), "utf8") : null);
-  const plan = planeFactoryLinks({ dateien: collectMarkdown(rootDir), lies, repo, einheiten: Object.keys(sync.einheiten ?? {}), ausnahmen: v.ausnahmen, tag, commit, leser });
+  const plan = planeFactoryLinks({ dateien: collectMarkdown(rootDir), lies: leserVon(rootDir), repo, einheiten: Object.keys(sync.einheiten ?? {}), ausnahmen: v.ausnahmen, tag, commit, leser });
   if (plan.befunde.length > 0) return { befunde: plan.befunde, geschrieben: 0 };
   for (const [datei, text] of plan.dateien) writeFileSync(join(rootDir, ...datei.split("/")), text);
   return { befunde: [], geschrieben: plan.geschrieben, ziele: plan.ziele, tag };
@@ -176,7 +186,7 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   }
   const w = werte.wurzel ?? wurzel;
   if (werte.schreiben) return schreibModus(w, werte.quelle, { out, err });
-  const { befunde, links, nichtsZuPruefen } = auditFactoryLinks(w);
+  const { befunde, links, stubs, nichtsZuPruefen } = auditFactoryLinks(w);
   if (nichtsZuPruefen) {
     out(`check-factory-links: kein Sync-Stand (${STAND_PFAD}), nichts zu prüfen`);
     return 0;
@@ -185,7 +195,7 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
     meldeBefunde("check-factory-links", befunde, err);
     return 1;
   }
-  out(`check-factory-links: ${links.length} Factory-Links auf ${new Set(links.map((l) => l.pfad)).size} Ziele am Sync-Tag ohne Befund`);
+  out(`check-factory-links: ${links.length} Factory-Links auf ${new Set(links.map((l) => l.pfad)).size} Ziele am Sync-Tag und ${stubs} Anker-Stubs ohne Befund`);
   return 0;
 }
 

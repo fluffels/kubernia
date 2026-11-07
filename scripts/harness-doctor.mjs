@@ -5,16 +5,16 @@
  *   node scripts/harness-doctor.mjs --einrichten [--dry-run] [--config <pfad>]
  *
  * `--einrichten` (#1800) legt nur Umkehrbares an: fehlende Labels, die Wochenlauf-Datei (.github/workflows/harness-doctor.yml) und das Harness-Sammelticket
- * (über sammelticket-anlegen.mjs); Ruleset, Secrets, Variablen, Project-Felder, Actions, Admin-Recht und Token nie automatisch, nur als
+ * (über sammelticket-anlegen.mjs; im Bezieher nicht: dort nur ein `INFO Sammelticket`, ADR 0031, und bei fehlendem Token oder abweichender `--config` eine `ANLEITUNG Sammelticket`); Ruleset, Secrets, Variablen, Project-Felder, Actions, Admin-Recht und Token nie automatisch, nur als
  * `ANLEITUNG <Punkt>: <Befund> Fix: <Schritt> Link: <Seite>`. Langfuse prüft nur `--pruefen`; `--config` gilt nicht für das Sammelticket (sammelticket-anlegen.mjs liest die Standard-Config). `--dry-run` gibt nur den Plan aus (`PLAN …`). Ein zweiter Lauf ändert nichts.
- * Der Wochenlauf selbst (Lücke als Zeile ins Sammelticket) steht in harness-doctor-melden.mjs.
+ * Der Wochenlauf selbst (Lücke als Zeile ins Sammelticket) steht in harness-doctor-melden.mjs; der Punkt `Meldestelle` (nur bei einer fremden Meldestelle, factory#208: Token, Lesbarkeit, Issues aktiv) in harness-doctor-meldestelle.mjs, er läuft mit den Dateipunkten in `--pruefen` und im Wochenlauf.
  *
  * `--pruefen` meldet den Block `sprache.spezifikation` der Config als Lücke `Sprache`, wenn er fehlt oder unvollständig ist (das Spezifikations-Gate hat keinen Standardwert). Es meldet zusätzlich jede Kern-Umgebungsvariable, die in der Umgebung dieses Prozesses noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist: der Altname wird nicht mehr gelesen (Wert nie ausgegeben; Namen aus den `umgebungsWert`-Literalen in scripts/). Grenze: nur die Umgebung des Doctor-Prozesses, nicht die anderer Shells oder Settings-Dateien.
  *
  * Je Punkt eine Zeile mit drei möglichen Ausgängen: `OK <Punkt>`, `LÜCKE <Punkt>: <Befund> Fix: <Anweisung>` oder `NICHT PRÜFBAR <Punkt>: <Grund> Fix: <Anweisung>` (der
  * Zustand ist nicht belegbar: Endpunkt-Fehler oder fehlendes Feld, nie still grün). Exit 0 ohne Lücke und ohne nicht prüfbaren Punkt, 1 mit mindestens einem von beiden
  * (die Summenzeile zählt beide getrennt), 2 bei Aufruf-Fehler oder unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf).
- * Die Dateipunkte `Root-Kontextdatei` und `Zeilenenden` (factory#94, harness-doctor-dateien.mjs) prüfen die Projektdateien des Beziehers (keine CLAUDE.md im Root, eol-Regeln und LF im Index), brauchen kein Token und laufen auch im Wochenlauf, nicht in `--einrichten`.
+ * Die Dateipunkte `Root-Kontextdatei`, `Zeilenenden`, `Projektdateien`, `Langfuse-Takt`, `Gezielter Test` und `Required-Check-Quellen` (factory#94, factory#170, factory#208, factory#148, harness-doctor-dateien.mjs) prüfen die Projektdateien des Beziehers (keine CLAUDE.md im Root, eol-Regeln und LF im Index, die geschlossene Liste der vom Sync nicht gelieferten Dateien, Workflow `board-takt.yml` und Skript `langfuse-takt.mjs` angekommen, `befehle.testGezielt` bei Nicht-JS/TS-Endungen, jeder Required-Check-Kontext genau eine Quelle unter `.github/workflows/`, gelesen ohne `yaml`), brauchen kein Token und laufen auch im Wochenlauf, nicht in `--einrichten`.
  * Die acht Sicherheitspunkte (Secret Scanning, Push Protection, Non-Provider-Patterns, Validity Checks, PVR, Dependabot Security Updates, Code-Scanning,
  * SHA-Pinning; dazu der Punkt `Sicherheits-Module` (factory#119, `modulPunkt` in harness-doctor-lib.mjs: fehlender Schlüssel `module` ist eine Lücke, eine Teilauswahl OK mit HINWEIS, ein nicht lesbares Manifest NICHT PRÜFBAR); factory#116, harness-doctor-sicherheit.mjs) stehen immer da; `--einrichten` ändert sie nie, nur `ANLEITUNG … Link: …`. Reines Node-Skript ohne Modell-Tokens; `gh` und
  * der Langfuse-Aufruf sind injizierbar (Tests laufen ohne Netz). Alles Projektspezifische kommt zur Laufzeit aus `.factory/projekt.json`
@@ -33,10 +33,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { fehlerText, ghText } from "./gh-cli.mjs";
+import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { kernEnvNamen, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 import { pruefeDateien } from "./harness-doctor-dateien.mjs";
+import { mitMeldestelle } from "./harness-doctor-meldestelle.mjs";
 import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, ohneActionPins, pruefLauf } from "./harness-doctor-lib.mjs";
 
 // Die Prüf-API (Ableitung, Prüfpunkte, Vorlage) steht in der Lib; sie bleibt unter diesem Namen erreichbar.
@@ -85,9 +87,27 @@ function sammelticket({ trocken, spawn, out }) {
   return { geplant: trocken && (/^Würde /m.test(text) || /^Trockenlauf: .*würde es neu setzen/m.test(text)) ? 1 : 0, angelegt: !trocken && /^Angelegt:/m.test(text) ? 1 : 0, fehler: 0 };
 }
 
+/** Der Sammelticket-Schritt von `--einrichten`: ohne Token Anleitung, im Bezieher nur ein Hinweis (kein Harness-Sammelticket, ADR 0031), bei fremder `--config` Anleitung, sonst `sammelticket-anlegen`. */
+function sammelticketSchritt({ fatal, abweichend, rootDir, trocken, spawn, out }) {
+  const nichts = { geplant: 0, angelegt: 0, fehler: 0, anleitungen: 0 };
+  if (fatal) {
+    out("ANLEITUNG Sammelticket: ohne gültigen Token kein Zugriff auf GitHub Fix: erst den Token-Punkt beheben, dann --einrichten erneut fahren");
+    return nichts; // der Token-Punkt zählt der Aufrufer über `fatal`
+  }
+  if (istBezieher(rootDir)) {
+    out("INFO Sammelticket: im Bezieher gibt es kein Harness-Sammelticket (ADR 0031), Kern-Befunde meldet `node scripts/melden.mjs` an die Meldestelle");
+    return nichts;
+  }
+  if (abweichend) {
+    out("ANLEITUNG Sammelticket: sammelticket-anlegen.mjs liest nur die Standard-Config (" + PROJEKT_CONFIG + "), nicht --config Fix: node scripts/sammelticket-anlegen.mjs harness mit der Standard-Config fahren");
+    return { ...nichts, anleitungen: 1 };
+  }
+  return { ...nichts, ...sammelticket({ trocken, spawn, out }), anleitungen: 0 };
+}
+
 /**
  * `--einrichten [--dry-run]`: legt nur Umkehrbares an (fehlende Labels, die Wochenlauf-Datei, das Sammelticket); alles andere (Ruleset,
- * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token und die acht Sicherheitspunkte) nur als `ANLEITUNG` mit Link. Ein zweiter Lauf ändert nichts.
+ * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token und die acht Sicherheitspunkte) nur als `ANLEITUNG` mit Link. Das Sammelticket entfällt im Bezieher (Sync-Stand vorhanden, ADR 0031: `INFO Sammelticket`, Kern-Befunde meldet `melden.mjs` an die Meldestelle). Ein zweiter Lauf ändert nichts.
  * Exit: 0 nichts offen; 1 Anleitung offen, Plan nicht leer (Dry-Run) oder Fehler; 2 Aufruf-Fehler oder Config.
  */
 function einrichten({ werte, rootDir, gh, spawn, out, err }) {
@@ -96,7 +116,7 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   try {
     lauf = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse: null, mitWochenlauf: true });
   } catch (e) {
-    err(konfigFehlerText(e));
+    err(konfigFehlerText(e, rootDir));
     return AUFRUF_EXIT;
   }
   const { config, ergebnis } = lauf;
@@ -127,16 +147,11 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   const datei = wochenlaufDatei({ rootDir, trocken, out });
   geplant += datei.geplant;
   angelegt += datei.angelegt;
-  if (fatal) out("ANLEITUNG Sammelticket: ohne gültigen Token kein Zugriff auf GitHub Fix: erst den Token-Punkt beheben, dann --einrichten erneut fahren");
-  else if (abweichend) {
-    out("ANLEITUNG Sammelticket: sammelticket-anlegen.mjs liest nur die Standard-Config (" + PROJEKT_CONFIG + "), nicht --config Fix: node scripts/sammelticket-anlegen.mjs harness mit der Standard-Config fahren");
-    anleitungen++;
-  } else {
-    const s = sammelticket({ trocken, spawn, out });
-    geplant += s.geplant;
-    angelegt += s.angelegt;
-    fehler += s.fehler;
-  }
+  const s = sammelticketSchritt({ fatal, abweichend, rootDir, trocken, spawn, out });
+  geplant += s.geplant;
+  angelegt += s.angelegt;
+  fehler += s.fehler;
+  anleitungen += s.anleitungen;
   out(`Harness-Doctor --einrichten${trocken ? " --dry-run" : ""}: ${angelegt} angelegt, ${geplant} geplant, ${anleitungen + (fatal ? 1 : 0)} Anleitung(en), ${fehler} Fehler`);
   return anleitungen + (fatal ? 1 : 0) + fehler + geplant > 0 ? 1 : 0;
 }
@@ -147,6 +162,15 @@ function pruefWurzel(rootDir, config) {
   const pfad = resolve(rootDir, config);
   const wurzel = resolve(pfad, "..", "..");
   return resolve(wurzel, PROJEKT_CONFIG) === pfad ? { wurzel, abgeleitet: true, pfad } : { wurzel: rootDir, abgeleitet: false, pfad };
+}
+
+/** Bricht die Config-Ladung ab (Exit 2), zeigen die Dateipunkte trotzdem, was im Projekt fehlt (sie brauchen weder Config noch gh). Ein Fehler dort bleibt still, der Config-Fehler zählt. */
+function dateipunkteVorAbbruch({ dateien, rootDir, out }) {
+  try {
+    for (const p of dateien({ rootDir })) if (!p.ok) out(`${p.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${p.punkt}: ${einzeilig(p.befund)} Fix: ${p.fix}`);
+  } catch {
+    /* der Config-Fehler wird gleich gemeldet */
+  }
 }
 
 function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, kernEnv, dateien }) {
@@ -163,7 +187,8 @@ function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, ke
   try {
     ({ ergebnis } = pruefLauf({ rootDir, configPfad, gh, langfuse, umgebung: { env, namen }, dateien }));
   } catch (e) {
-    err(konfigFehlerText(e));
+    dateipunkteVorAbbruch({ dateien, rootDir, out });
+    err(konfigFehlerText(e, rootDir));
     return AUFRUF_EXIT;
   }
   return ausgabe(ergebnis, out);
@@ -190,7 +215,7 @@ function ausgabe(ergebnis, out) {
 
 export function main(
   argv = process.argv.slice(2),
-  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen, dateien = pruefeDateien } = {},
+  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen, dateien = mitMeldestelle(pruefeDateien, { env, lesen: (a, token) => ghJson(a, { token, timeout: 30000 }) }) } = {},
 ) {
   const { werte, fehler } = flagsLesen(argv, { pruefen: { type: "boolean" }, einrichten: { type: "boolean" }, "dry-run": { type: "boolean" }, config: { type: "string" } });
   const aufrufFehler = fehler?.text ?? (Number(werte.pruefen === true) + Number(werte.einrichten === true) !== 1 ? "Genau einen Modus angeben: --pruefen oder --einrichten" : null)

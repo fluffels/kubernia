@@ -5,7 +5,7 @@
  * Pur: `pacing`, `ausStatusline`, `ausProbe`. Env/Config: `zielquoteAusEnv`. I/O: `snapshotPfad`, `liesSnapshot`, `schreibeSnapshot`.
  * Fail-open: ein unbekannter oder unlesbarer Stand ergibt `ok` mit Warnung (Pacing ist kein Sicherheits-Gate).
  * Ein Snapshot hat die Form `{ stand, quelle, sevenDay?, fiveHour? }` mit `stand` in ms und je Fenster
- * `{ pct (0-100), resetsAt (Unix-Sekunden) }`. Regeln und Defaults: docs/model-routing.md §6.
+ * `{ pct (0-100), resetsAt (Unix-Sekunden) }`. Regeln und Defaults: docs/model-routing.md (Fabrik) §6.
  */
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

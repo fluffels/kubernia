@@ -9,12 +9,11 @@
 # wird server-seitig ohnehin abgelehnt; dieser Hook ist damit nur noch ein
 # harmloses Zusatznetz für den Fall, dass die Protection je gelockert wird.
 #
-# Dieser Hook fährt die schnellen Gates (`npm run verify`, Kette:
-# package.json › scripts.verify) LOKAL, falls doch mal auf `main` gepusht wird, und bricht bei Rot ab.
+# Dieser Hook fährt die schnellen Gates (Gate-Befehl `verify` der Projekt-Config, Standard `npm run verify`, Kette: package.json › scripts.verify) LOKAL, falls doch mal auf `main` gepusht wird, und bricht bei Rot ab.
 # Bei Pushes anderer Branches fährt er nur `node scripts/check-diffsize.mjs` (reines git, schnell):
 # ein zu breiter Slice scheitert sonst erst in der PR-CI. Bei Rot bricht der Push ab; bewusst breit
 # nur per Commit-Zeile `<praefixe.commitZeile>Diffsize-Override: #<nr> warum` (Präfix der Projekt-Config) (eigener leerer Commit), danach erneut pushen.
-# Für die schnelle Vorab-Rückmeldung VOR dem PR `npm run verify` einfach manuell fahren.
+# Für die schnelle Vorab-Rückmeldung VOR dem PR `node scripts/gate-befehl.mjs verify` einfach manuell fahren.
 #
 # Bewusste Grenzen:
 #  - Auf `main` das volle `verify`, auf anderen Branches nur der Diffsize-Check — Feature-Branch-Pushes bleiben schnell.
@@ -65,14 +64,15 @@ if [ "$push_to_main" -eq 0 ]; then
 	exit 0
 fi
 
-echo "⚓ pre-push (#528): Push auf main erkannt — schnelle Gates (npm run verify) laufen lokal …"
+echo "⚓ pre-push (#528): Push auf main erkannt — schnelle Gates (Gate-Befehl verify) laufen lokal …"
 
-if npm run verify; then
+if node scripts/gate-befehl.mjs verify; then
 	echo "✅ pre-push: alle Gates grün — Push auf main wird durchgelassen."
 	exit 0
 else
 	echo ""
-	echo "✖ pre-push: 'npm run verify' ist ROT — Push auf main abgebrochen."
+	echo "✖ pre-push: Gate-Befehl 'verify' ist ROT — Push auf main abgebrochen."
+	echo "  Befehl ansehen: node scripts/gate-befehl.mjs verify --zeigen"
 	echo "  Behebe die Ursache oben und pushe erneut."
 	echo "  Notfall-Umgehung (bewusst): git push --no-verify"
 	exit 1

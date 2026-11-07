@@ -25,7 +25,7 @@ export const gewaehlteModule = (config) => (istListe(config?.module) ? config.mo
 export const modulGewaehlt = (e, gewaehlt) => !istModulEinheit(e) || gewaehlt.includes(e.modul);
 
 /** Darf `von` die Einheit `nach` lokal importieren? Eine Einheit ohne `modul` importiert keine Moduleinheit, eine Moduleinheit nur ihr eigenes Modul oder Einheiten ohne `modul`. */
-export const modulImportErlaubt = (von, nach) => nach.modul === undefined || nach.modul === von.modul;
+export const modulImportErlaubt = (von, nach) => !istModulEinheit(nach) || nach.modul === von.modul;
 
 const namenListe = (l) => istListe(l) && l.every((n) => typeof n === "string" && NAME_MUSTER.test(n));
 const SPRACHEN_FIX = 'codeql.sprachen als nicht leere Liste eintragen, z. B. ["javascript-typescript"]';

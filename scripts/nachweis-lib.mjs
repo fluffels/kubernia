@@ -7,7 +7,7 @@
  * die Commit-Zeilen kommen als Parameter (`commitZeilen` in slice-override.mjs). Pfad steht in `.github/protected-paths.json`.
  */
 import { istVertraut } from "./fremdtext-lib.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 
 /** Hex-Hash eines Commits (7 bis 40 Zeichen, nur klein); Eingaben mit Großbuchstaben vorher mit `.toLowerCase()` angleichen. */
 export const HEX = "[0-9a-f]{7,40}";

@@ -7,17 +7,13 @@
  * Schlüssel und „Fix:“-Zeile; `namenOderGrund` wirft nie und liefert statt der Namen einen Grund, den ein Hook als
  * deny/block ausgibt. Geladen wird nie beim Import eines Hook-Moduls (ein Import-Fehler schaltete den Dispatcher ab).
  *
- * Nur Node-Builtins, `arbeitsplatz-lib.mjs` und `projekt-config-lib.mjs`.
+ * Nur Node-Builtins, `arbeitsplatz-lib.mjs`, `regex-lib.mjs` und `projekt-config-lib.mjs`.
  */
 import { repoSegment } from "./arbeitsplatz-lib.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 import { ladeProjektConfig, PFLICHT_AGENTEN, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const istText = (v) => typeof v === "string" && v.trim() !== "";
-
-/** Maskiert alle Regex-Metazeichen. Pur. */
-export function escapeRegex(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
-}
 
 /** Der eine fail-closed-Text für Hooks und Wächter, wenn die Projekt-Config nicht nutzbar ist. Pur; `fehler` darf ein Error oder beliebiger Wert sein. */
 export function failClosedGrund(werkzeug, fehler) {
@@ -41,9 +37,9 @@ export function worktreePraefix(config) {
 /** Alle Worktree-Muster aus dem rohen Präfix (einzige Stelle, die es maskiert und baut). Pur. */
 function worktreeTeil(worktree) {
   const w = escapeRegex(worktree);
-  const lensNameKern = String.raw`(${w}\d+)-lens-[rma]\d+`;
+  const lensNameKern = String.raw`(${w}\d+)-lens-[rmac]\d+`;
   return {
-    /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>`, `-lens-m<n>` oder `-lens-a<n>`); Gruppe 1 ist `<wt><nr>`. */
+    /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>`, `-lens-m<n>`, `-lens-a<n>` oder `-lens-c<n>`); Gruppe 1 ist `<wt><nr>`. */
     lensNameKern,
     /** Ganzer Lens-Worktree-Name (`^…$`). */
     lensWorktreeMuster: new RegExp(`^${lensNameKern}$`),
@@ -97,13 +93,13 @@ export function ticketNamen(config) {
  * Wie `namenOderGrund`, aber nur mit dem Worktree-Präfix: `{ namen: { praefixe: { worktree }, <Worktree-Muster> } }` oder `{ grund }`. Für Werkzeuge, die nur
  * Worktree-Ordner aufräumen (Stop des Hauptchats): ein fehlender Agentenname soll sie nicht blockieren, darum liest sie die Config ohne Schema-Prüfung
  * (`deps.pfad` ersetzt den Pfad, `deps.config` das Laden; Test) und prüft allein `praefixe.worktree`. Das Teilobjekt trägt nur `praefixe.worktree` und die Worktree-Muster (`lensNameKern`, `lensWorktreeMuster`, `lensPfadMuster`, `dateiMuster`):
- * Empfänger dürfen keine anderen Felder lesen. Wirft nie.
+ * Empfänger dürfen keine anderen Felder lesen. Zusätzlich `config` (ungeprüft geladen), damit der Stop-Hook den Block `arbeitsplatz` sieht (factory#89). Wirft nie.
  */
 export function worktreeNamenOderGrund(werkzeug, deps = {}) {
   try {
     const config = deps.config ?? ladeProjektConfig({ pruefen: false, ...(deps.pfad ? { pfad: deps.pfad } : {}) });
     const worktree = worktreePraefix(config);
-    return { namen: { praefixe: { worktree }, ...worktreeTeil(worktree) } };
+    return { namen: { praefixe: { worktree }, ...worktreeTeil(worktree) }, config };
   } catch (e) {
     return { grund: failClosedGrund(werkzeug, e) };
   }

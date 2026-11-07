@@ -16,7 +16,7 @@ import { projektBlock } from "../support/projekt-block";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex as escapeRe } from "../../scripts/ticket-namen.mjs";
+import { escapeRegex as escapeRe } from "../../scripts/regex-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(WURZEL + rel, "utf8");

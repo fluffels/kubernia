@@ -3,7 +3,7 @@
 /**
  * Token- und Loop-Baseline pro Ticket-Lauf (#1068): Tokens nach Phase × Modell
  * (Input / Cache-Write / Cache-Read / Output) plus Loop-Kennzahlen.
- * Aufruf, Phasen-Regeln und Baseline: docs/model-routing.md §5.
+ * Aufruf, Phasen-Regeln und Baseline: docs/model-routing.md › Messen.
  *
  *   node scripts/token-baseline.mjs --session <id> [--session <id>…] \
  *        [--issue <nr>] [--pr <nr>] [--from <ISO-Zeit>] [--langfuse] [--json] [--config <pfad>]
@@ -15,7 +15,7 @@
  *      Nur so vollständig wie die Hook-Aufzeichnung — ohne den lokalen
  *      Hook-Patch aus #1084 fehlt Folgearbeit nach Hintergrund-Subagenten
  *      (für #1064 der Großteil), mit Patch Calls und Tokens identisch. Die Baseline misst
- *      deshalb über das Transkript (docs/model-routing.md §5).
+ *      deshalb über das Transkript (docs/model-routing.md › Messen).
  *
  * Projekt-Brain-Kennzahlen (#1205): Tool-Events beider Quellen → `brain` (scripts/brain-metrics.mjs).
  *
@@ -42,6 +42,10 @@ import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } 
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
 import { fehlerArten, permissionGruende, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+import { fileURLToPath } from "node:url";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 // Ausgelagert (#1562, hook-taugliche Module ohne gh-/git-Kette); hier re-exportiert, damit Verbraucher und Tests unverändert bleiben.
 export { PRICES, PRICES_STAND, periodAt, priceParts, priceCall, callsFromTranscript, fetchSessionObservations };
@@ -577,7 +581,7 @@ function ohnePreisZeile(summary) {
 export function langfuseZugang(env) {
   return zugangAus(
     env,
-    "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe docs/model-routing.md › Checkliste Punkt 1.",
+    "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe " + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-status-überprüfen-1293") + ", Punkt 1.",
   );
 }
 

@@ -3,21 +3,24 @@
  * Guard-Liste (#112): je geänderter Funktion die Anker (Verzweigungs- und Guard-Stellen) der Diff-Zeilen, damit der Selbstcheck des
  * Umsetzers und Lens 3 von derselben, nicht selbst gewählten Liste ausgehen. Kein Gate, Exit 0 (außer Aufruf-Fehler und fehlende Basis).
  *
- * Köpfe: Deklaration, `const f = …=>`, Methode `name(…) {` (auch einzeilig) und Eigenschaft `name: (…) =>`/`name: function` (eine TS-Typzeile `name: (x) => T;` zählt ebenfalls als Kopf).
+ * Köpfe: Deklaration (auch `export default`, `async`, `function*`, generisch `f<T>(…)`), `const f = …=>` (auch `async`, generisch `<T>(…) =>`, mit Typannotation `const f: T = …`; ein Typ mit `=>` darin fehlt), Methode (auch `static`/`async`, mit Rückgabetyp) `name(…) {` (auch einzeilig) und Eigenschaft `name: (…) =>`/`name: function` (eine TS-Typzeile `name: (x) => T;` zählt ebenfalls als Kopf).
  * Bewusste Grenzen (Regex-Heuristik, kein AST): mehrzeilige Ausdrücke und Funktionsköpfe über mehrere Zeilen, verschachtelte oder zeilenübergreifende
- * Strings, Ausdrücke in `${…}` eines Template-Literals, Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
- * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`.
+ * Strings, verschachtelte Template-Literale und mehrzeilige `${…}` (die Ausdrücke einzeiliger `${…}` werten wir gegen `MUSTER` aus), Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
+ * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`; der Kopf `if (istDirektaufruf(` (Spalte 0) zählt als `(Modulebene)`.
  * Ungetrackte Dateien mit Nicht-ASCII-Namen (git quotet sie) fehlen.
- * Messumfang (`istGemessen`): Quelle der Projekt-Config `struktur.quelle` über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis (Hilfsdateien wie `test/support/x.ts`); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
+ * Messumfang (`istGemessen`): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`, auch die Listen- und Glob-Form) über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis mit einer Endung der Liste (Hilfsdateien wie `test/support/x.ts`); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
+ * Bewusste Grenze: Testklassen ohne `.test.`/`.spec.` im Namen (Java: `RechnerTest.java`) zählen über die Ordner-Klausel als Hilfsdatei. Kein Gate.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isMeasured, normalizePath, parseDiffLines, resolveBase } from "./check-basis.mjs";
+import { isMeasured, parseDiffLines, resolveBase } from "./check-basis.mjs";
+import { normalizePath } from "./relativ-pfad.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { quellenAus, quellenObjekt } from "./quellwurzeln-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const AUFRUF = "Aufruf: node scripts/anker-liste.mjs [--basis <ref>] [--json]";
@@ -53,13 +56,32 @@ export const MUSTER = [
 ];
 
 const STRINGS = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
+const TEMPLATE_AUSDRUCK = /\$\{/g;
+
+/** Pur: die Ausdrücke aller ${…} eines einzeiligen Template-Literals, klammerbalanciert (Strings darin geleert); ein nicht schließender Ausdruck endet am Literalende. */
+function templateAusdruecke(literal) {
+  const ausdruecke = [];
+  for (const m of literal.matchAll(TEMPLATE_AUSDRUCK)) {
+    const start = m.index + 2;
+    let tiefe = 1;
+    let ende = start;
+    for (; ende < literal.length && tiefe > 0; ende++) tiefe += literal[ende] === "{" ? 1 : literal[ende] === "}" ? -1 : 0;
+    ausdruecke.push(literal.slice(start, tiefe === 0 ? ende - 1 : ende).replace(STRINGS, '""'));
+  }
+  return ausdruecke;
+}
+
+/** Pur: ersetzt jeden String durch "", ein Template-Literal zusätzlich um seine ${…}-Ausdrücke (angehängt, damit `MUSTER` sie sieht). */
+const leereStrings = (zeile) => zeile.replace(STRINGS, (s) => (s.startsWith("`") ? ['""', ...templateAusdruecke(s)].join(" ") : '""'));
 const REGEX_LITERAL = /(^\s*|[=(,:;!&|?{}[]\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[^\]\\]|\\.)*\])+\/[dgimsuvy]*/g;
 const KOPF = [
-  /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([\w$]+)\s*\(/,
-  /^\s*(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*=\s*(?:async\s+)?(?:function\b|\(.*\)\s*(?::[^=]+)?=>|[\w$]+\s*=>)/,
+  /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([\w$]+)\s*(?:<[^(]*>\s*)?\(/,
+  /^\s*(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*(?::[^=]+)?=\s*(?:async\s+)?(?:function\b|(?:<[^(]*>\s*)?\(.*\)\s*(?::[^=]+)?=>|[\w$]+\s*=>)/,
   /^\s+(?:static\s+)?(?:async\s+)?(?!(?:if|for|while|switch|catch|return|function)\b)([\w$]+)\s*\([^)]*\)\s*(?::[^{]+)?\{/,
   /^\s+(?:async\s+)?([\w$]+)\s*:\s*(?:async\s+)?(?:function\b|\(.*\)\s*(?::[^=]+)?=>|[\w$]+\s*=>)/,
 ];
+/** Der Block `if (istDirektaufruf(…))` auf Modulebene: nicht der vorigen Funktion zuordnen. */
+const DIREKTAUFRUF_KOPF = /^if\s*\(\s*istDirektaufruf\(/;
 const DEFAULT_PARAMETER = /[^=!<>]=(?![=>])/;
 
 /** Der Name der Funktion, deren Kopf die Zeile ist, sonst `undefined`. */
@@ -80,7 +102,7 @@ function parameterListe(text) {
 
 /** Die Anker-Namen einer Zeile (ohne Kommentar- und String-Inhalte) in Tabellenreihenfolge; Kopfzeilen mit Default-Parameter zusätzlich. */
 function ankerNamen(zeile) {
-  const text = zeile.replace(STRINGS, '""').replace(/\/\/.*$/, "");
+  const text = leereStrings(zeile).replace(/\/\/.*$/, "");
   const ohneRegex = text.replace(REGEX_LITERAL, "$1 R");
   const namen = MUSTER.filter((m) => m.re.test(m.auf === "text" ? text : ohneRegex)).map((m) => m.name);
   const parameter = kopfName(text) === undefined ? "" : parameterListe(ohneRegex);
@@ -100,6 +122,7 @@ function dateiAnker(datei, inhalt, zeilen) {
     if (kommentar) return;
     const name = kopfName(roh.replace(STRINGS, '""'));
     if (name !== undefined) funktion = { name, zeile: n };
+    else if (DIREKTAUFRUF_KOPF.test(roh)) funktion = { name: MODULEBENE, zeile: null };
     if (zeilen !== null && !zeilen.has(n)) return;
     const namen = ankerNamen(roh);
     if (namen.length === 0) return;
@@ -154,14 +177,15 @@ export function lauf(argv, { git, lesen, istQuelle }) {
 
 const TESTDATEI = /\.(?:test|spec)\.[cm]?[jt]s$/;
 
-/** Pur: Quellwurzel (`isMeasured`) oder das Verzeichnis als eigene Wurzel (`test/support/x.ts`); Testdateien (`*.test.*`, `*.spec.*`, auch in der Quelle), Doku und Root-Dateien nie. */
+/** Pur: Quellwurzeln und Endungsliste (`isMeasured`) oder das Verzeichnis als eigene Wurzel (`test/support/x.ts`); Testdateien (`*.test.*`, `*.spec.*`, auch in der Quelle), Doku und Root-Dateien nie. */
 export function istGemessen(pfad, quelle) {
-  return !TESTDATEI.test(pfad) && (isMeasured(pfad, quelle) || isMeasured(pfad, posix.dirname(pfad)));
+  const q = quellenObjekt(quelle);
+  return !TESTDATEI.test(pfad) && (isMeasured(pfad, q) || isMeasured(pfad, { ...q, wurzeln: [posix.dirname(pfad)] }));
 }
 
 /** Die echte Umgebung: git im Repo-Root, Dateien relativ dazu (nicht lesbar: `undefined`), Quelle aus der Projekt-Config. */
 export function echteUmgebung() {
-  const quelle = strukturAus(ladeProjektConfig()).quelle;
+  const quelle = quellenAus(ladeProjektConfig());
   return {
     git: (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }),
     lesen: (pfad) => {

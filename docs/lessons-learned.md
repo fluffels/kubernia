@@ -49,7 +49,7 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 **Geändert:** Der Diff wird einmal materialisiert ([#1034](https://github.com/fluffels/kubernia/issues/1034)), die Zahl der Lenses richtet sich nach der Diff-Art ([#1265](https://github.com/fluffels/kubernia/issues/1265)).
 
-**Beleg:** [agent-harness.md › Skills und Setup](agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe), [Review-Staffel](model-routing.md#review-staffel-1265).
+**Beleg:** [agent-harness.md › 2.5 Skills + Setup als reproduzierbare Abläufe](agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe), [Review-Staffel](model-routing.md#review-staffel-1265).
 
 ### Kosten sitzen im wachsenden Kontext
 

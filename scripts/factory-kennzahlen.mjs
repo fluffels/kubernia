@@ -8,7 +8,7 @@
  * Verkettung über Unterprozesse mit `--json` (Einstiegsskripte importieren einander nicht): `lauf-ergebnis.mjs` für
  * Lauf-Ergebnis und Nacharbeit, `token-baseline.mjs` je Ticket für die Kosten (Standard: Transkript, `--langfuse`
  * ausdrücklich), `naechstes-ticket.mjs --maengel` für den Abschnitt „Spezifikation“. Ticket → Session über die Claim-Zeile im lokalen Transkript. Definitionen und Grenzen:
- * docs/model-routing.md › Factory-Kennzahlen.
+ * docs/model-routing.md (Fabrik) › Factory-Kennzahlen.
  *
  * Exit 0 ok (auch mit Kosten-Lücken), 1 Aufruffehler, 2 Lauf-Ergebnis fehlt oder verletzt den Vertrag (Block erscheint trotzdem).
  */
@@ -241,13 +241,14 @@ export const QUOTE_MIN_MERGES = 4;
 
 const nrListe = (zs) => zs.map((z) => `#${z.pr}`).join(", ");
 
-function auditQuote(commits, luecke, harnessIssues, harnessLuecke) {
+function auditQuote(commits, luecke, harnessIssues, harnessLuecke, produktQuelle) {
   const soll = `höchstens 1 Factory- auf ${PRODUKT_QUOTE} Produkt-Merges`;
   const grund = luecke ?? harnessLuecke;
   if (grund) return { mechanismus: "Produktquote", messung: grund, soll, status: "Lücke" };
   const ticket = commits.filter((c) => zaehleTicketMerges([c]) === 1);
   const harness = ticket.filter((c) => istHarnessCommit(c, harnessIssues)).length;
   const produkt = ticket.length - harness;
+  if (produktQuelle === false && produkt === 0) return { mechanismus: "Produktquote", messung: `${harness} Factory- auf 0 Produkt-Merges: kein Produkt-Board (Repo ohne Produkt-Tickets), die Quote ist hier nicht messbar`, soll, status: "Lücke" };
   const messung = `${harness} Factory- auf ${produkt} Produkt-Merges seit dem letzten Sammelticket-Abschluss (${harnessIssues ? "Zuordnung nach Label der referenzierten Issues" : "Rückfall: Zuordnung nach Commit-Scope"})`;
   if (ticket.length < QUOTE_MIN_MERGES) return { mechanismus: "Produktquote", messung: `${messung}, nur ${ticket.length} Merges: keine Aussage`, soll, status: "Lücke" };
   return { mechanismus: "Produktquote", messung, soll, status: harness * PRODUKT_QUOTE <= produkt ? "ok" : "ABWEICHUNG" };
@@ -288,13 +289,13 @@ function auditLens(zeilen) {
  * Selbst-Audit: je Mechanismus (Produktquote, Härtungs-Takt, Festgefahren-Protokoll, Lens-Zahl) eine Messung gegen das Ziel, als
  * `{ mechanismus, messung, soll, status: "ok" | "ABWEICHUNG" | "Lücke" }`. `commits` = Commits von main seit dem Abschluss des letzten Sammeltickets
  * (`null` plus `commitsLuecke` = Grund, wenn nicht ladbar), `sammelAbschluss` = dessen Abschlusszeit, `sammelIssues` = Nummern
- * aller Sammeltickets, `sammelInArbeit` = Nummer eines geclaimten offenen Sammeltickets oder null, `harnessIssues` = Nummern geschlossener Harness-Issues (Quote-Zuordnung, null: Rückfall auf den Scope), `harnessLuecke` = Grund, wenn nicht ladbar (nur die Quote wird Lücke), `zeilen` = Zeilen von `lauf-ergebnis --json`
+ * aller Sammeltickets, `sammelInArbeit` = Nummer eines geclaimten offenen Sammeltickets oder null, `harnessIssues` = Nummern geschlossener Harness-Issues (Quote-Zuordnung, null: Rückfall auf den Scope), `harnessLuecke` = Grund, wenn nicht ladbar (nur die Quote wird Lücke), `produktQuelle` = ob das Repo ein Produkt-Board hat (`false` und kein Produkt-Merge: Quote = Lücke „kein Produkt-Board“; Vorgabe `true`), `zeilen` = Zeilen von `lauf-ergebnis --json`
  * (`null` ohne). Fehlende Daten sind immer eine Lücke mit Grund, nie 0. Pur.
  */
-export function selbstAudit({ commits = null, commitsLuecke = null, sammelAbschluss = null, sammelIssues = new Set(), sammelInArbeit = null, harnessIssues = null, harnessLuecke = null, zeilen = null }) {
+export function selbstAudit({ commits = null, commitsLuecke = null, sammelAbschluss = null, sammelIssues = new Set(), sammelInArbeit = null, harnessIssues = null, harnessLuecke = null, produktQuelle = true, zeilen = null }) {
   const luecke = Array.isArray(commits) ? null : (commitsLuecke ?? "Commits von main nicht geladen");
   return [
-    auditQuote(commits, luecke, harnessIssues, harnessLuecke),
+    auditQuote(commits, luecke, harnessIssues, harnessLuecke, produktQuelle),
     auditTakt({ commits, luecke, sammelAbschluss, sammelIssues, sammelInArbeit }),
     auditFestgefahren(zeilen),
     auditLens(zeilen),
@@ -334,12 +335,14 @@ export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = nul
   const harnessSeit = new Date(Date.parse(since) - TAG_MS).toISOString();
   try {
     // Nach einem Umzug des Factory-Boards (#78) zählen die Commits beider Repos; ein fremdes Repo liest der Projekt-Token.
+    const quellen = quotenQuellen({ config, repo });
     const alle = holeQuotenCommits({
-      quellen: quotenQuellen({ config, repo }),
+      quellen,
       lies: quotenCommitLeser({ gh, repo, since, env }),
     });
     const commits = alle.filter((c) => !gueltig(c?.commit?.committer?.date) || Date.parse(c.commit.committer.date) <= Date.parse(bis));
-    return { commits, ...rest, ...ladeHarnessIssues({ gh, repo, config, configFehler, seit: harnessSeit }) };
+    const produktQuelle = quellen.some((q) => q.rolle === "produkt") || (config?.boards ?? []).some((b) => b.rolle === "produkt");
+    return { commits, ...rest, produktQuelle, ...ladeHarnessIssues({ gh, repo, config, configFehler, seit: harnessSeit }) };
   } catch (err) {
     return { commits: null, commitsLuecke: `Commits von main nicht ladbar: ${fehlerText(err, 200)}`, ...rest };
   }

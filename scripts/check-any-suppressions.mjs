@@ -22,7 +22,7 @@
  *     wurde aufgelöst → Baseline über `--write` nachziehen, damit der Ratchet klemmt).
  *   • Deckungsgleich → grün.
  *
- * Bewusst NUR die Quellwurzel `struktur.quelle` der Projekt-Config (Produktionscode) — Tests/Tooling dürfen `any` frei nutzen.
+ * Bewusst NUR die Quellwurzeln `struktur.quelle` der Projekt-Config (Produktionscode; nur `.ts`, ohne `struktur.ohne`) — Tests/Tooling dürfen `any` frei nutzen.
  * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-size.mjs: läuft
  * plattformübergreifend über `npm run check:anysuppress` und im CI (via `npm run verify`).
  * Die Mess-/Vergleichslogik wird zusätzlich von test/any-suppressions.test.ts importiert
@@ -34,10 +34,12 @@
 
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, sep } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
+import { strukturOrdnerBefunde } from "./check-basis.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { quellDateien, quellenAus } from "./quellwurzeln-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BASELINE_FILE = join(ROOT, "any-suppressions.json");
@@ -68,23 +70,17 @@ export function countAnySuppressions(text) {
   return count;
 }
 
-/** Sammelt alle `<quelle>/**\/*.ts` (repo-relativer POSIX-Pfad) mit >0 `any`-Suppressions,
- *  als `{ file: count }`. `rootDir` überschreibbar, damit der Test deterministisch
- *  dasselbe Repo misst — unabhängig vom Arbeitsverzeichnis. */
-export function collectSuppressions(rootDir = ROOT, quelle = strukturAus(ladeProjektConfig()).quelle) {
+/** Sammelt alle `.ts`-Dateien (repo-relativer POSIX-Pfad) der Quellwurzeln mit >0 `any`-Suppressions, als `{ file: count }`. `quellen` ist ein String (eine
+ *  wörtliche Wurzel) oder das Ergebnis von `quellenAus` (Globs, `struktur.ohne` gilt hier; ohne `.ts` in der Endungsliste gibt es nichts zu prüfen, factory#181).
+ *  `rootDir` überschreibbar, damit der Test deterministisch dasselbe Repo misst — unabhängig vom Arbeitsverzeichnis. */
+export function collectSuppressions(rootDir = ROOT, quellen = quellenAus(ladeProjektConfig())) {
+  const { wurzeln, endungen = [".ts"], ohne = [] } = typeof quellen === "string" ? { wurzeln: [quellen] } : quellen;
+  if (!endungen.includes(".ts")) return {};
   const out = {};
-  const walk = (dir) => {
-    for (const ent of readdirSync(dir, { withFileTypes: true })) {
-      const abs = join(dir, ent.name);
-      if (ent.isDirectory()) walk(abs);
-      else if (ent.isFile() && ent.name.endsWith(".ts")) {
-        const n = countAnySuppressions(readFileSync(abs, "utf8"));
-        if (n > 0) out[relative(rootDir, abs).split(sep).join("/")] = n;
-      }
-    }
-  };
-  const wurzel = join(rootDir, ...quelle.split("/"));
-  if (existsSync(wurzel)) walk(wurzel);
+  for (const file of quellDateien(rootDir, { wurzeln, endungen: [".ts"], ohne })) {
+    const n = countAnySuppressions(readFileSync(join(rootDir, ...file.split("/")), "utf8"));
+    if (n > 0) out[file] = n;
+  }
   return out;
 }
 
@@ -138,14 +134,17 @@ Aufruf: node scripts/check-any-suppressions.mjs [--write]`);
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
 
-  let quelle;
+  let quellen;
   try {
-    quelle = strukturAus(ladeProjektConfig()).quelle;
+    quellen = quellenAus(ladeProjektConfig());
   } catch (e) {
     console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
     process.exit(1);
   }
-  const current = collectSuppressions(ROOT, quelle);
+  const befunde = strukturOrdnerBefunde(ROOT, { quelle: quellen.quelle }, ["quelle"]);
+  befunde.forEach((b) => console.error(red(`✖ ${b}`)));
+  if (befunde.length > 0) process.exit(1);
+  const current = collectSuppressions(ROOT, quellen);
   const total = Object.values(current).reduce((a, b) => a + b, 0);
 
   if (werte.write) {

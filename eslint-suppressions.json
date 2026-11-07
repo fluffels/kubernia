@@ -16,10 +16,7 @@
   },
   "scripts/besitz-lib.mjs": {
     "complexity": {
-      "count": 5
-    },
-    "max-depth": {
-      "count": 1
+      "count": 3
     }
   },
   "scripts/board-lib.mjs": {
@@ -27,21 +24,13 @@
       "count": 1
     }
   },
-  "scripts/board-place.mjs": {
+  "scripts/board-takt.mjs": {
     "complexity": {
       "count": 1
     }
   },
-  "scripts/board-takt.mjs": {
-    "complexity": {
-      "count": 2
-    }
-  },
   "scripts/brain-metrics.mjs": {
     "complexity": {
-      "count": 2
-    },
-    "max-depth": {
       "count": 1
     }
   },
@@ -62,7 +51,7 @@
   },
   "scripts/check-diffcoverage.mjs": {
     "complexity": {
-      "count": 3
+      "count": 2
     }
   },
   "scripts/check-diffsize.mjs": {
@@ -205,7 +194,7 @@
   },
   "scripts/langfuse-nachliefern.mjs": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "scripts/langfuse-otlp.mjs": {
@@ -254,9 +243,6 @@
   "scripts/patch-zugriff.mjs": {
     "complexity": {
       "count": 1
-    },
-    "max-depth": {
-      "count": 5
     }
   },
   "scripts/pr-warten.mjs": {
@@ -279,22 +265,12 @@
       "count": 1
     }
   },
-  "scripts/sammelticket-anlegen.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/sandbox-doctor.mjs": {
     "complexity": {
       "count": 2
     }
   },
   "scripts/sbom.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "scripts/schichten-kern.cjs": {
     "complexity": {
       "count": 1
     }

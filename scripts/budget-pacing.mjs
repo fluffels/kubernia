@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Budget-Pacing-CLI (#1358): sagt, ob das nächste Ticket starten darf. Regeln und Defaults: docs/model-routing.md §6.
+ * Budget-Pacing-CLI (#1358): sagt, ob das nächste Ticket starten darf. Regeln und Defaults: docs/model-routing.md (Fabrik) §6.
  *
  *   node scripts/budget-pacing.mjs [--json] [--ohne-probe]
  *

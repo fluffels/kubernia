@@ -19,7 +19,7 @@
  *   verwaist         offen, lokale Spur, Lebenszeichen älter als N Stunden oder keins feststellbar: Zeile `WIEDERAUFNAHME`; die Übernahme
  *                    geschieht atomar mit `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme`. Ein fremd zugewiesenes Ticket wird behalten.
  *   ohne-lokale-spur offen und zugewiesen, aber ohne Lock, Worktree und lokalen Branch: nur Meldung (evtl. eine andere Maschine).
- *   (offen und festgefahren: `behalten`, keine Wiederaufnahme.)
+ *   (offen und festgefahren oder wartend auf eine Entscheidung (Label `labels.entscheidung`, optional, factory#152): `behalten`, keine Wiederaufnahme.)
  *   lock-unlesbar    nur Meldung, der Lock wird nie gelöscht.
  *   aufraeumbar      geschlossen: Lock löschen und, mit Worktree, den Worktree entfernen. Ein Worktree nur bei gemergtem PR, sauberem Stand,
  *                    HEAD gleich dem Kopf eines gemergten PR, nicht gesperrt und ohne Lebenszeichen der letzten 30 min (`git worktree remove`,
@@ -70,6 +70,15 @@ export function parseArgs(argv) {
   return { json: werte.json === true, stunden };
 }
 
+/** Pur: trägt das Issue oder einer seiner PRs das Label `label` (`null`/leer: nein)? */
+const hatLabel = (issue, label) => Boolean(label && issue && (issue.labels.includes(label) || issue.prs.some((p) => p.labels.includes(label))));
+
+/** Pur: der Grund, warum ein offener Claim bewusst angehalten ist (Label `festgefahren` oder `entscheidung`), sonst `null`. */
+const angehaltenGrund = (c) => {
+  if (c.festgefahren) return "festgefahren (Label), bewusst angehalten: keine Wiederaufnahme";
+  return c.wartet ? "wartet auf Entscheidung (Label): keine Wiederaufnahme" : null;
+};
+
 /** Das Urteil zu einem Claim (`{ urteil, grund, aktion }`); `aktion`: was aufzuräumen ist (`worktree`, `lock`). Pur, Eingabe siehe `sammle`. */
 export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTIV_MS }) {
   const ohneAktion = { worktree: false, lock: false };
@@ -81,7 +90,8 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   const spur = Boolean(c.lock || c.worktree || c.branchLokal);
   if (c.issue.zustand !== "CLOSED") {
     if (!spur) return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
-    if (c.festgefahren) return ergebnis("behalten", "festgefahren (Label), bewusst angehalten: keine Wiederaufnahme");
+    const angehalten = angehaltenGrund(c);
+    if (angehalten) return ergebnis("behalten", angehalten);
     if (alter < schwelleMs) return ergebnis("lebendig", "Lebenszeichen jünger als die Schwelle");
     const fremd = c.issue.assignees.some((a) => a !== c.viewer);
     if (fremd) return ergebnis("behalten", "fremd zugewiesen, keine Wiederaufnahme");
@@ -225,7 +235,8 @@ export function sammle(deps) {
       viewer,
       issue: issue && { zustand: issue.zustand, assignees: issue.assignees },
       prs: issue?.prs ?? [],
-      festgefahren: Boolean(deps.festgefahrenLabel && issue && (issue.labels.includes(deps.festgefahrenLabel) || issue.prs.some((p) => p.labels.includes(deps.festgefahrenLabel)))),
+      festgefahren: hatLabel(issue, deps.festgefahrenLabel),
+      wartet: hatLabel(issue, deps.entscheidungLabel),
       lock,
       worktree: w && mitOrt({ pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked }, w),
       branch: meine.length > 0,
@@ -253,6 +264,7 @@ export function jsonDokument({ jetzt, viewer, schwelleStunden, urteile }) {
       branch: c.branch,
       branchLokal: c.branchLokal,
       festgefahren: c.festgefahren,
+      wartet: c.wartet === true,
       prs: c.prs.map((p) => ({ nummer: p.nummer, zustand: p.zustand })),
       lebenszeichen: iso(c.lebenszeichenMs),
       urteil: urteil.urteil,
@@ -356,6 +368,7 @@ export function echteDeps({ config: vorgabe, basis, ghJson: ghJsonFn = ghJson } 
       return liste.map((i) => i.number);
     },
     festgefahrenLabel: labelAus(config, "festgefahren"),
+    entscheidungLabel: typeof config.labels?.entscheidung === "string" && config.labels.entscheidung !== "" ? config.labels.entscheidung : null,
     lockDir: lockVerzeichnisFuer({ aufloesung, praefixWorktree: worktreePraefix(config), gemeinsam: () => git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() }),
     liste: (d) => readdirSync(d),
     liesDatei: (p) => readFileSync(p, "utf8"),

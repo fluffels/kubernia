@@ -36,7 +36,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
 import { ghText } from "./gh-cli.mjs";
 import { dirname, join } from "node:path";
-import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { ausnahmenAus, datengroesseAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -68,13 +68,14 @@ export function parseOpenHarnessTickets(md) {
   return [...nums].sort((a, b) => a - b);
 }
 
-/** Die Ausnahme-Listen, die ein offenes Ticket nennen müssen (#1460 Z1). DECKEL in check-size sind Ratchet-Historie,
- *  kein Ticket-Versprechen, und gehören bewusst nicht dazu. */
+/** Die Ausnahme-Listen, die ein offenes Ticket nennen müssen (#1460 Z1), dazu die Deckel des Datenbudgets (`datengroesse.deckel`, factory#7: ein eingefrorener Monolith braucht sein
+ *  Split-Ticket). DECKEL in check-size (Workflows) sind Ratchet-Historie, kein Ticket-Versprechen, und gehören bewusst nicht dazu. */
 export function ausnahmeListen(config = ladeProjektConfig()) {
   const { groesse, kontext } = ausnahmenAus(config);
   return [
     { skript: `${PROJEKT_CONFIG} › ausnahmen.groesse`, eintraege: groesse },
     { skript: `${PROJEKT_CONFIG} › ausnahmen.kontext`, eintraege: kontext },
+    { skript: `${PROJEKT_CONFIG} › datengroesse.deckel`, eintraege: (datengroesseAus(config)?.deckel ?? []).map((d) => ({ datei: d.datei, grund: d.grund })) },
   ];
 }
 

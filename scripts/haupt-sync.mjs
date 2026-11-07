@@ -17,6 +17,7 @@
  * ist geteilt, ein späterer Aufruf (`--text`, auch aus einer anderen Session) sieht einen schon gehobenen `main` und darum
  * einen falschen Stand; `--text` nennt deshalb nur „Stand vor diesem Sync“ (HEAD des Checkouts beim Aufruf) und behauptet nichts über die Basis der Session, die nur der SessionStart-Kontext nennt. Hat der Pull `.claude/` oder `AGENTS.md` geändert, sagt er das
  * zusätzlich ausdrücklich. Fail-open: jeder Fehler (kein Netz, kein git) ergibt nur eine kurze Notiz, nie einen Abbruch.
+ * Hinweise ohne Wirkung auf den Exit-Code: Bilddateien und ungetrackte Dateien im Wurzelordner (`ungetrackteReste`, etwa ein liegengebliebenes Probe-Skript; factory#208).
  *
  * `--text --streng` ist der erste Schritt des Ticket-Skills (#1392): derselbe Sync (entspricht `git pull --ff-only`, aber mit Stopp
  * bei getrackten Resten), nur dass jede Abweichung vom sauberen `main` Exit 1 ergibt (`exitCodeFuer`): der Hauptchat startet dann kein
@@ -152,7 +153,7 @@ export function pruefeNodeModules(lockText, hiddenText) {
     return null;
   }
   if (!lock || typeof lock !== "object") return null;
-  if (hiddenText === null || hiddenText === undefined) return "node_modules hat keinen Install-Stand (.package-lock.json fehlt): vor npm-Skripten im Hauptcheckout einmal `npm ci`.";
+  if (hiddenText === null || hiddenText === undefined) return "node_modules hat keinen Install-Stand (.package-lock.json fehlt): vor dem Start von Werkzeugen im Hauptcheckout einmal `node scripts/gate-befehl.mjs install`.";
   let installiert;
   try {
     installiert = JSON.parse(String(hiddenText))?.packages;
@@ -165,7 +166,7 @@ export function pruefeNodeModules(lockText, hiddenText) {
     if (pfad === "" || !pfad.startsWith("node_modules/") || p?.optional || p?.link) continue;
     if (installiert[pfad]?.version !== p?.version) abweichend += 1;
   }
-  return abweichend === 0 ? null : `node_modules passt nicht zu package-lock.json (${abweichend} Pakete): vor npm-Skripten im Hauptcheckout einmal \`npm ci\`.`;
+  return abweichend === 0 ? null : `node_modules passt nicht zu package-lock.json (${abweichend} Pakete): vor dem Start von Werkzeugen im Hauptcheckout einmal \`node scripts/gate-befehl.mjs install\`.`;
 }
 
 /** Hinweis zu node_modules in `dir` (siehe `pruefeNodeModules`); ohne package-lock.json oder bei Lesefehlern `""` (fail-open). */
@@ -194,6 +195,34 @@ export function bildResteFuer(dir) {
   } catch {
     return [];
   }
+}
+
+/**
+ * Pur (factory#208 L16): die ungetrackten Dateien im Wurzelordner aus `git status --porcelain`-Text (`?? name`): keine Ordner (`name/`), keine Unterpfade,
+ * keine Bilder (die meldet die Bildzeile). Ein Scratch-Skript, das ein Probe-Lauf im Wurzelordner liegen ließ, fällt so auf.
+ */
+export function ungetrackteReste(statusText) {
+  const namen = statusText.split(/\r?\n/).filter((z) => z.startsWith("?? ")).map((z) => z.slice(3).trim());
+  const imWurzel = namen.filter((n) => !n.includes("/"));
+  const bilder = new Set(bildReste(imWurzel));
+  return imWurzel.filter((n) => !bilder.has(n));
+}
+
+/** Ungetrackte Dateien im Wurzelordner von `dir` (siehe `ungetrackteReste`); `git` ist injizierbar, ein Fehler ergibt `[]` (fail-open). */
+export function ungetrackteResteFuer(dir, gitFn = (d, a) => git(d, a)) {
+  try {
+    return ungetrackteReste(gitFn(dir, ["status", "--porcelain", "--untracked-files=normal"]));
+  } catch {
+    return [];
+  }
+}
+
+/** Die Hinweiszeilen zu Resten im Wurzelordner (Bilder, ungetrackte Dateien) für `baueText`. Pur. */
+function restZeilen(ergebnis) {
+  const zeilen = [];
+  if (ergebnis.bildReste?.length) zeilen.push(`Bilddateien im Hauptcheckout-Root: ${ergebnis.bildReste.join(", ")} (Screenshots gehören nach .playwright-mcp/, FAQ Browser); verschieben oder löschen.`);
+  if (ergebnis.ungetrackt?.length) zeilen.push(`Ungetrackte Dateien im Hauptcheckout-Root: ${ergebnis.ungetrackt.join(", ")} (Probe- und Scratch-Skripte gehören in einen Temp-Ordner, nicht in den Wurzelordner); verschieben oder löschen.`);
+  return zeilen;
 }
 
 /** Der Kontext-Text der Session. Pur. `ergebnis` = `{ aktion, grund, hinter, basis, gepullt, harness, nodeHinweis, nodeModulesHinweis, notiz }`. */
@@ -227,7 +256,7 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   // Im Klartext-Modus (--text, Skill-Schritt 0) steht die Node-Version schon im SessionStart-Kontext, node_modules nur nach einer Lock-Änderung dieses Syncs.
   if (ergebnis.nodeHinweis && sitzungsbasis) zeilen.push(`Node-Version: ${ergebnis.nodeHinweis}`);
   if (ergebnis.nodeModulesHinweis && (sitzungsbasis || ergebnis.harness?.lockGeaendert)) zeilen.push(`Abhängigkeiten: ${ergebnis.nodeModulesHinweis}`);
-  if (ergebnis.bildReste?.length) zeilen.push(`Bilddateien im Hauptcheckout-Root: ${ergebnis.bildReste.join(", ")} (Screenshots gehören nach .playwright-mcp/, FAQ Browser); verschieben oder löschen.`);
+  zeilen.push(...restZeilen(ergebnis));
   if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (Stand des geteilten Checkouts bei diesem Aufruf; die Basis dieser Session nennt nur der SessionStart-Kontext)`);
   return zeilen.join("\n");
 }
@@ -375,7 +404,7 @@ function main() {
     const ziel = syncZiel(dir);
     let ergebnisse;
     // Die Hinweise zum Arbeitsverzeichnis gelten auch im Arbeitsplatz (Node-Version, node_modules, Bilddateien im Root); eingebettet stehen sie im einen Ergebnis.
-    const hinweise = { nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) };
+    const hinweise = { nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir), ungetrackt: ungetrackteResteFuer(dir) };
     if (ziel.fehler) ergebnisse = [{ aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: ziel.fehler, branch: "", sauber: undefined }, hinweise];
     else if (ziel.aufloesung) ergebnisse = [...fuehreArbeitsplatzSyncAus(ziel.aufloesung), hinweise];
     else ergebnisse = [{ ...fuehreSyncAus(dir), ...hinweise }];

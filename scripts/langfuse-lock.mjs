@@ -13,6 +13,7 @@
 import { appendFileSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, join } from "node:path";
+import { SESSION_ID } from "./langfuse-auftrag-lib.mjs";
 
 /** Belegter Lock an SessionEnd: einmal nach dieser Zeit erneut versuchen (`/clear` löst SessionEnd und SessionStart fast gleichzeitig aus). */
 export const WARTE_LOCK = 60_000;
@@ -90,7 +91,6 @@ export function raeumePluginLocks(stateDir, now = Date.now()) {
 /** Startmarken (#1953): eine Datei je Session-Start, Inhalt = ISO-Zeit. Ein wartendes SessionEnd-Kind liest sie als Fortsetzung der Session. */
 export const START_ORDNER = "langfuse-start";
 export const START_MARKE_ALTER_MS = 24 * 3_600_000;
-const SESSION_ID = /^[0-9A-Za-z][\w-]*$/;
 
 /** Schreibt die Startmarke der Session (`zeit` in ms); wirft nie. Eine unzulässige Session-ID schreibt nichts. */
 export function markiereStart(stateDir, session, zeit) {
@@ -239,7 +239,7 @@ export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, pr
     dubletten: p.dubletten,
     wuerdeSenden: p.wuerdeSenden,
     uebrig: p.uebrig ?? 0,
-    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, ausstehend: r.ausstehend, endeVerworfen: Boolean(r.endeVerworfen), fortgesetzt: Boolean(r.fortgesetzt) })),
+    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, unzuordenbar: r.unzuordenbar ?? 0, ausstehend: r.ausstehend, endeVerworfen: Boolean(r.endeVerworfen), fortgesetzt: Boolean(r.fortgesetzt) })),
     fehler: [...p.fehler, ...fehler].map(kurz),
   };
 }

@@ -4,9 +4,13 @@
  * deshalb kommen sie erst nach dem Check und der Config: eine kaputte Config meldet sich als `::error::` mit Fix-Zeile und Exit 2 statt als
  * Stacktrace (das direkte Laden von `board-lib` endet bei einer kaputten Config ebenso mit Exit 2, `ladeProjektOderAbbruch`). Kein Guard, kein Import von `board-lib`/`inbox-lib` beim Laden dieser Datei.
  */
-import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
+import { fileURLToPath } from "node:url";
+import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 /** Die Board-Bausteine beider Libs in einem Objekt (`REPO`, `OWNER`, `ladeSammelKontext`, `postZeilen` …); erst beim Aufruf importiert. */
 export const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });
@@ -30,6 +34,55 @@ export async function inboxStart(argv, { skript, praefix, ladeConfig = () => lad
     log(fehlerMeldung(e, { praefix }));
     return { code: AUFRUF_EXIT };
   }
+}
+
+/** Titel des Sammeltickets für Sicherheits-Zeilen im Bezieher (factory#153): Zeilen ohne eigenes Ticket, im eigenen Repo, ohne 🔒, am Ende der Todo-Spalte. */
+export const REST_TITEL = "Sicherheit: Rest-Befunde (gesammelt)";
+const REST_BODY = "Sammelticket für Sicherheitsbefunde dieses Projekts ohne eigenes Ticket (Audit- und Code-Scanning-Zeilen unterhalb der Alarmschwelle). Die Befunde bleiben im eigenen Repo und gehen nie an das Eingangs-Repo der Fabrik. Befunde als Kommentar `- [ ] …` anhängen; abarbeiten und das Ticket schließen, der nächste Lauf legt es bei neuen Zeilen neu an.";
+
+/**
+ * Legt das Rest-Ticket im eigenen Repo an und sortiert es ans Ende der Todo-Spalte (ein Fehler dort nur als Warnung: das Ticket existiert).
+ * Davor die Zweitabfrage wie bei jedem Anlegen (`bestaetigeAnlegen`: die REST-Liste hinkt, gleichzeitige Läufe): kennt sie das Ticket schon oder scheitert sie, wird
+ * nichts angelegt (Warnung, Rückgabe `null`, der nächste Lauf versucht es erneut). Das Anlegen selbst läuft über `zielAktionen`; eine Nummer, die keine ganze Zahl > 0 ist, wirft mit der Rohausgabe. Rückgabe: `{ number }` oder `null`.
+ */
+function legeRestTicketAn({ libs, ziel, gh, log }) {
+  const aktion = zielAktionen({ gh, libs });
+  const zweit = () => libs.frischeOffeneIssues({ repo: ziel, anzahl: 50, mitBoard: false }, zielZugang(libs).zielOpt);
+  const e = bestaetigeAnlegen({ aktion: "anlegen", warnungen: [] }, { zweit, passt: (i) => i?.titel === REST_TITEL, was: `„${REST_TITEL}“` });
+  if (e.aktion === "nichts") {
+    log(`::warning::${[...e.warnungen, e.grund].join(" ")}`);
+    return null;
+  }
+  const roh = aktion.legeIssueAn(REST_TITEL, REST_BODY);
+  const nr = Number(roh);
+  if (!Number.isInteger(nr) || nr <= 0) throw new Error(`Rest-Ticket angelegt, aber die Nummer fehlt in der Ausgabe von gh issue create: ${JSON.stringify(roh)}`);
+  try {
+    libs.platziereAmEnde(nr);
+  } catch (e) {
+    log(`::warning::${REST_TITEL} #${nr} angelegt, aber nicht ans Ende der Todo-Spalte sortiert: ${fehlerText(e)}`);
+  }
+  return { number: nr };
+}
+
+/**
+ * Die Libs der Sicherheits-Inboxen (`audit-einordnung`, `codescanning-inbox`, `secret-inbox`) mit dem richtigen Ziel (factory#153): in der Fabrik unverändert (`libs` selbst, Ziel-Repo und Harness-Sammelticket),
+ * im Bezieher (`bezieher`, Standard: Sync-Stand vorhanden) das eigene Repo statt des öffentlichen Eingangs-Repos der Fabrik: `ZIEL`/`zielToken` zeigen auf das eigene Repo, `ladeSammelKontext` liest dort die
+ * Kommentare des Rest-Tickets (`REST_TITEL`), `waehleSammelticket` liefert das Rest-Ticket (fehlt es: wird es angelegt und ans Ende der Todo-Spalte sortiert; nur beim Posten aufgerufen, nie im Trockenlauf),
+ * `postZeilen` postet dorthin, und das Rest-Ticket zählt als Sammelticket (deckt keinen Alert ab). `gh` (`{ text }`) und `log` sind Test-Nähte.
+ */
+export function sicherheitsLibs(libs, { bezieher = istBezieher(WURZEL), gh = { text: ghText }, log = console.log } = {}) {
+  if (!bezieher) return libs;
+  const ziel = libs.REPO;
+  const neu = {
+    ...libs,
+    ZIEL: ziel,
+    zielToken: () => libs.zielToken(ziel),
+    ladeSammelKontext: (io) => libs.ladeSammelKontext({ repo: ziel, titel: REST_TITEL, ...io }),
+    postZeilen: (nr, text, repo = ziel, token = libs.zielToken(repo)) => libs.postZeilen(nr, text, repo, token),
+    waehleSammelticket: (offene) => libs.waehleSammelticket(offene, ziel, undefined, REST_TITEL) ?? legeRestTicketAn({ libs: neu, ziel, gh, log }),
+    SAMMELTICKET_TITEL_LISTE: [...(libs.SAMMELTICKET_TITEL_LISTE ?? []), REST_TITEL],
+  };
+  return neu;
 }
 
 /**

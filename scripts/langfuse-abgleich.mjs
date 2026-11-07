@@ -14,7 +14,7 @@
  * Das Präfix trifft sonst nur das Projekt selbst und seine Worktree-Ordner (`<präfix>--claude-worktrees-…`), nie Geschwister-Repos
  * mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`, `langfuse-abgleich-kern`, `flag-lib`), damit es
  * später als Hook laufen kann, ohne die gh-/git-Kette von `token-baseline.mjs` mitzuziehen. Aufruf und Einordnung:
- * docs/model-routing.md › Checkliste Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
+ * docs/model-routing.md (Fabrik) › Langfuse-Status überprüfen, Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
  */
 
 import { fileURLToPath } from "node:url";
@@ -182,7 +182,7 @@ function preisZeilen(festeSessions) {
   }
   const ueberpreis = festeSessions.filter((x) => x.hinweisUeberpreis);
   if (ueberpreis.length) {
-    out.push("", `Hinweis Überpreis: ${ueberpreis.length} Session(s) mit gleichen Calls und Tokens, Langfuse-Kosten über ${Math.round((1 + PREIS_TOLERANZ) * 100)} % des Transkripts (${kuerzel(ueberpreis)}): Modelldefinition der Instanz prüfen (docs/langfuse-hook-patch.md › Modelldefinitionen der Instanz).`);
+    out.push("", `Hinweis Überpreis: ${ueberpreis.length} Session(s) mit gleichen Calls und Tokens, Langfuse-Kosten über ${Math.round((1 + PREIS_TOLERANZ) * 100)} % des Transkripts (${kuerzel(ueberpreis)}): Modelldefinition der Instanz prüfen (${factorySeiteIn(WURZEL, "docs/langfuse-hook-patch.md", "modelldefinitionen-der-instanz")}).`);
   }
   return out;
 }
@@ -223,7 +223,7 @@ export function renderMarkdown(bewertungen, sum) {
   }
   const unterpreis = festeSessions.filter((x) => x.hinweisModellpreis);
   if (unterpreis.length) {
-    out.push("", `Hinweis Modellpreis: ${unterpreis.length} Session(s) mit gleichen Calls, Langfuse-Kosten unter ${Math.round((1 - PREIS_TOLERANZ) * 100)} % des Transkripts (${kuerzel(unterpreis)}): Modelldefinition der Instanz prüfen (docs/langfuse-hook-patch.md › Modelldefinitionen der Instanz).`);
+    out.push("", `Hinweis Modellpreis: ${unterpreis.length} Session(s) mit gleichen Calls, Langfuse-Kosten unter ${Math.round((1 - PREIS_TOLERANZ) * 100)} % des Transkripts (${kuerzel(unterpreis)}): Modelldefinition der Instanz prüfen (${factorySeiteIn(WURZEL, "docs/langfuse-hook-patch.md", "modelldefinitionen-der-instanz")}).`);
   }
   out.push(...preisZeilen(festeSessions));
   out.push("", `Hinweis: Aufzeichnungen ohne TTL-Aufteilung der Cache-Writes (vor dem Hook-Patch, vor ${STICHTAG.slice(0, 10)}) passen nicht auf den Fingerabdruck und erscheinen als fehlend plus Dublette.`);
@@ -231,7 +231,8 @@ export function renderMarkdown(bewertungen, sum) {
 }
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]";
-export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count mit zusätzlichem Filter providedModelName none of [\"claude\"] (Typ stringOptions; schließt die leeren Hook-GENERATIONs aus); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; Kosten: Dimension sessionId, Metrik totalCost (sum); jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe docs/model-routing.md › Checkliste Punkt 1.";
+/** Hinweis ohne Langfuse-Zugang; eine Funktion statt Konstante, damit der Modul-Import keine Sync-Stand-Datei liest (Muster `natives()` in `sandbox-doctor.mjs`). */
+export const ohneZugang = () => "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count mit zusätzlichem Filter providedModelName none of [\"claude\"] (Typ stringOptions; schließt die leeren Hook-GENERATIONs aus); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; Kosten: Dimension sessionId, Metrik totalCost (sum); jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe " + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-status-überprüfen-1293") + ", Punkt 1.";
 
 export function parseArgs(argv) {
   const optionen = { pruefen: { type: "boolean" }, json: { type: "boolean" }, seit: { type: "string" }, session: { type: "string" }, ist: { type: "string", multiple: true } };
@@ -276,7 +277,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
   // Mit `--ist` bleibt der Lauf offline (Export-Weg), auch wenn Schlüssel gesetzt sind: kein Zugang laden, keine Requests.
   if (!args.ist.length) {
     try {
-      zugang = langfuseZugang(env, OHNE_ZUGANG);
+      zugang = langfuseZugang(env, ohneZugang());
     } catch (e) {
       return { exitCode: 2, text: e.message };
     }
