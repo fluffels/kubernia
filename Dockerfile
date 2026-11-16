@@ -14,7 +14,7 @@
 
 # --- Stage 1: Build (Node-Toolchain, erzeugt dist/) ---
 # Patch-genau gepinnt, mindestens engines.node (Wächter: test/harness/devcontainer.test.ts); Minor/Patch hebt Dependabot.
-FROM node:22.23.4-bookworm-slim AS build
+FROM node:22.23.5-bookworm-slim AS build
 WORKDIR /app
 # package*.json zuerst kopieren → Schicht wird bei reinen Code-Änderungen gecacht
 COPY package*.json ./
